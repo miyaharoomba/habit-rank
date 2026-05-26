@@ -1,0 +1,175 @@
+import LiveTimer from "@/app/components/LiveTimer";
+import Container from "@/app/components/ui/Container";
+import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import Button from "@/app/components/ui/Button";
+
+import { createClient } from "@/lib/supabase/server";
+import { startSession, finishSession } from "./actions";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+
+function formatDuration(ms: number) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return { days, hours, minutes, seconds };
+}
+
+export default async function AppPage() {
+  const supabase = await createClient();
+
+  // ログイン中ユーザー
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    // ここはログインページに飛ばしてもOK
+    return (
+      <Container>
+        <div className="text-sm text-destructive">ログイン情報が取れません</div>
+      </Container>
+    );
+  }
+
+  // 表示名
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const displayName = profile?.display_name?.trim() || "";
+
+  // 初回：名前未設定なら onboarding へ
+  if (!displayName) {
+    redirect("/onboarding");
+  }
+
+  // 継続中セッション（自分のもの）
+  const { data: active } = await supabase
+    .from("streak_sessions")
+    .select("id, started_at")
+    .eq("user_id", user.id)
+    .is("ended_at", null)
+    .maybeSingle();
+
+  const startedAt = active?.started_at ?? null;
+
+  // 履歴（終了済み）最新10件
+  const { data: history } = await supabase
+    .from("streak_sessions")
+    .select("id, started_at, ended_at, end_reason")
+    .eq("user_id", user.id)
+    .not("ended_at", "is", null)
+    .order("ended_at", { ascending: false })
+    .limit(10);
+
+  return (
+    <Container>
+      {/* ヘッダー */}
+      <header className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
+          <p className="text-sm text-muted-foreground">
+            ダーク × ブルーで統一
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-muted-foreground">👤 {displayName}</div>
+          <Link
+            href="/settings"
+            className="text-sm text-primary hover:underline"
+          >
+            設定
+          </Link>
+        </div>
+      </header>
+
+      <div className="mt-6 grid gap-4">
+        {/* 現在の継続 */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">現在の継続</h2>
+              <span className="text-xs text-muted-foreground">リアルタイム</span>
+            </div>
+          </CardHeader>
+
+          <CardBody>
+            <div className="text-4xl font-extrabold tracking-tight">
+              <LiveTimer startedAt={startedAt} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <form action={startSession}>
+                <Button type="submit" disabled={!!startedAt}>
+                  開始
+                </Button>
+              </form>
+
+              <form action={finishSession}>
+                <Button type="submit" variant="ghost" disabled={!startedAt}>
+                  終了
+                </Button>
+              </form>
+            </div>
+
+            <div className="mt-3 text-xs text-muted-foreground">
+              started_at: {startedAt ?? "(未開始)"}
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* 履歴 */}
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold">履歴（最新10件）</h2>
+          </CardHeader>
+
+          <CardBody>
+            {history && history.length > 0 ? (
+              <ul className="space-y-3">
+                {history.map((row) => {
+                  const s = new Date(row.started_at);
+                  const e = row.ended_at ? new Date(row.ended_at) : null;
+                  const diff = e ? e.getTime() - s.getTime() : 0;
+                  const { days, hours, minutes, seconds } = formatDuration(diff);
+
+                  return (
+                    <li
+                      key={row.id}
+                      className="rounded-lg border border-border bg-secondary/40 px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-semibold">
+                          {days}日 {hours}時間 {minutes}分 {seconds}秒
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {row.end_reason ?? "finished"}
+                        </span>
+                      </div>
+
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        開始: {s.toLocaleString()} / 終了:{" "}
+                        {e ? e.toLocaleString() : "-"}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                まだ履歴がありません。開始→終了してみて！
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </Container>
+  );
+}
