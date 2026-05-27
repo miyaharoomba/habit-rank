@@ -11,21 +11,29 @@ type Row = {
   user_id: string;
   display_name: string;
   best_seconds: number;
+  current_seconds: number;
+  score_seconds: number;
+  is_active: boolean;
 };
 
 type Meta = {
   participant_count: number;
   my_rank: number | null;
   my_best_seconds: number;
+  my_current_seconds: number;
+  my_score_seconds: number;
+  my_is_active: boolean;
 };
 
 type Participant = {
-  id: string;
-  display_name: string | null;
+  user_id: string;
+  display_name: string;
   created_at: string;
+  is_active: boolean;
+  current_seconds: number;
 };
 
-function formatBest(sec: number) {
+function formatTime(sec: number) {
   const s = Math.max(0, Math.floor(sec));
   const days = Math.floor(s / 86400);
   const hours = Math.floor((s % 86400) / 3600);
@@ -44,20 +52,15 @@ export default async function RankingPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/sign-in");
 
-  // ① ランキング
-  const { data: leaderboard, error: lbErr } = await supabase.rpc("get_best_leaderboard", {
+  const { data: leaderboard, error: lbErr } = await supabase.rpc("get_leaderboard_v2", {
     limit_count: 50,
   });
 
-  // ② 上の小カード用メタ（参加人数/自分の順位/自分のベスト）
-  const { data: metaData, error: metaErr } = await supabase.rpc("get_leaderboard_meta");
+  const { data: metaData, error: metaErr } = await supabase.rpc("get_leaderboard_meta_v2");
 
-  // ③ 参加者一覧
-  const { data: participants, error: pErr } = await supabase
-    .from("profiles")
-    .select("id, display_name, created_at")
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const { data: participants, error: pErr } = await supabase.rpc("get_participants_status", {
+    limit_count: 200,
+  });
 
   if (lbErr || metaErr || pErr) {
     const msg = lbErr?.message || metaErr?.message || pErr?.message || "unknown";
@@ -81,23 +84,32 @@ export default async function RankingPage() {
   }
 
   const rows = (leaderboard ?? []) as Row[];
-  const meta = (metaData?.[0] ?? { participant_count: 0, my_rank: null, my_best_seconds: 0 }) as Meta;
+  const meta = (metaData?.[0] ?? {
+    participant_count: 0,
+    my_rank: null,
+    my_best_seconds: 0,
+    my_current_seconds: 0,
+    my_score_seconds: 0,
+    my_is_active: false,
+  }) as Meta;
+
   const people = (participants ?? []) as Participant[];
 
   return (
     <Container>
-      {/* ヘッダー（スマホは縦積み） */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ランキング</h1>
-          <p className="text-sm text-muted-foreground">ベスト継続時間（最高記録）</p>
+          <p className="text-sm text-muted-foreground">
+            スコア = max(ベスト, 現在継続)
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link href="/app" className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm hover:bg-secondary whitespace-nowrap">
+          <Link href="/app" className="px-3 py-2 rounded-lg border border-border bg-secondary/40 text-sm whitespace-nowrap">
             ← /app
           </Link>
-          <Link href="/settings" className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm hover:bg-secondary whitespace-nowrap">
+          <Link href="/settings" className="px-3 py-2 rounded-lg border border-border bg-secondary/40 text-sm whitespace-nowrap">
             設定
           </Link>
         </div>
@@ -114,7 +126,7 @@ export default async function RankingPage() {
 
         <Card>
           <CardBody>
-            <div className="text-xs text-muted-foreground">あなたの順位</div>
+            <div className="text-xs text-muted-foreground">あなたの順位（スコア）</div>
             <div className="mt-1 text-2xl font-bold tabular-nums">
               {meta.my_rank ? `#${meta.my_rank}` : "-"}
             </div>
@@ -123,9 +135,19 @@ export default async function RankingPage() {
 
         <Card>
           <CardBody>
-            <div className="text-xs text-muted-foreground">あなたのベスト</div>
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">あなたのスコア</div>
+              {meta.my_is_active && (
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
+                  継続中
+                </span>
+              )}
+            </div>
             <div className="mt-1 text-2xl font-bold tabular-nums whitespace-nowrap">
-              {formatBest(Number(meta.my_best_seconds))}
+              {formatTime(Number(meta.my_score_seconds))}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              ベスト: {formatTime(Number(meta.my_best_seconds))} / 現在: {formatTime(Number(meta.my_current_seconds))}
             </div>
           </CardBody>
         </Card>
@@ -137,19 +159,20 @@ export default async function RankingPage() {
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">TOP {Math.min(rows.length, 50)}</h2>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">ベスト順</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">スコア順</span>
             </div>
           </CardHeader>
 
           <CardBody>
             {rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                まだ「終了した記録」がありません。開始→終了で記録を作ってみて！
+                まだ記録がありません。開始→終了 or 継続中でスコアが付きます！
               </p>
             ) : (
               <ul className="space-y-2">
                 {rows.map((r) => {
                   const isMe = r.user_id === user.id;
+
                   return (
                     <li
                       key={r.user_id}
@@ -164,16 +187,30 @@ export default async function RankingPage() {
                           <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
                             {r.rank_no}
                           </span>
-                          <span className={"font-semibold truncate " + (isMe ? "text-primary" : "")}>
-                            {r.display_name}{isMe ? "（あなた）" : ""}
-                          </span>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={"font-semibold truncate " + (isMe ? "text-primary" : "")}>
+                                {r.display_name}{isMe ? "（あなた）" : ""}
+                              </span>
+
+                              {r.is_active && (
+                                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary whitespace-nowrap">
+                                  継続中
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-xs text-muted-foreground">
+                              ベスト: {formatTime(Number(r.best_seconds))} / 現在: {formatTime(Number(r.current_seconds))}
+                            </div>
+                          </div>
                         </div>
 
                         <div className="text-right">
                           <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
-                            {formatBest(Number(r.best_seconds))}
+                            スコア: {formatTime(Number(r.score_seconds))}
                           </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap">ベスト</div>
                         </div>
                       </div>
                     </li>
@@ -184,7 +221,7 @@ export default async function RankingPage() {
           </CardBody>
         </Card>
 
-        {/* 参加者一覧 */}
+        {/* 参加者一覧（検索付き） */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -200,3 +237,4 @@ export default async function RankingPage() {
     </Container>
   );
 }
+``
