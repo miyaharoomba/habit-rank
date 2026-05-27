@@ -18,22 +18,23 @@ function formatBest(sec: number) {
   const hours = Math.floor((s % 86400) / 3600);
   const minutes = Math.floor((s % 3600) / 60);
   const seconds = s % 60;
-  return `${days}日 ${hours}時間 ${minutes}分 ${seconds}秒`;
+
+  // スマホで見やすいように「0日」は省略してもOK（好み）
+  if (days > 0) return `${days}日 ${hours}時間 ${minutes}分 ${seconds}秒`;
+  if (hours > 0) return `${hours}時間 ${minutes}分 ${seconds}秒`;
+  if (minutes > 0) return `${minutes}分 ${seconds}秒`;
+  return `${seconds}秒`;
 }
 
 export default async function RankingPage() {
   const supabase = await createClient();
 
-  // ログイン必須にする（ランキングは全員見る前提でも、まずは安全に）
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/sign-in"); // redirect は Server Component で使える [1](https://ihogehoge.hatenablog.com/entry/2025/04/21/153229)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/sign-in");
 
-  // DB関数（RPC）でランキング取得（limit_count はSQLで作った引数名）
   const { data, error } = await supabase.rpc("get_best_leaderboard", {
     limit_count: 50,
-  }); // SupabaseはDB関数をRPCとして呼べる [2](https://github.com/vercel-labs)[3](https://github.com/orgs/vercel/repositories)
+  });
 
   if (error) {
     return (
@@ -43,11 +44,9 @@ export default async function RankingPage() {
             <h1 className="text-xl font-bold tracking-tight">ランキング</h1>
           </CardHeader>
           <CardBody>
-            <p className="text-sm text-destructive">
-              取得エラー: {error.message}
-            </p>
+            <p className="text-sm text-destructive">取得エラー: {error.message}</p>
             <div className="mt-3">
-              <Link href="/app" className="text-sm text-muted-foreground hover:underline">
+              <Link href="/app" className="text-sm text-primary hover:underline">
                 ← アプリへ戻る
               </Link>
             </div>
@@ -61,7 +60,8 @@ export default async function RankingPage() {
 
   return (
     <Container>
-      <header className="flex items-end justify-between">
+      {/* ✅ スマホは縦積み、sm以上で横並び */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ランキング</h1>
           <p className="text-sm text-muted-foreground">
@@ -69,11 +69,18 @@ export default async function RankingPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link href="/app" className="text-sm text-muted-foreground hover:underline">
-            /app
+        {/* ✅ スマホで折り返しても崩れないボタン群 */}
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/app"
+            className="whitespace-nowrap rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm font-semibold hover:bg-secondary"
+          >
+            ← /app
           </Link>
-          <Link href="/settings" className="text-sm text-muted-foreground hover:underline">
+          <Link
+            href="/settings"
+            className="whitespace-nowrap rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm font-semibold hover:bg-secondary"
+          >
             設定
           </Link>
         </div>
@@ -82,7 +89,12 @@ export default async function RankingPage() {
       <div className="mt-6">
         <Card>
           <CardHeader>
-            <h2 className="font-semibold">TOP {Math.min(rows.length, 50)}</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold">TOP {Math.min(rows.length, 50)}</h2>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                ベスト記録順
+              </span>
+            </div>
           </CardHeader>
 
           <CardBody>
@@ -94,29 +106,59 @@ export default async function RankingPage() {
               <ul className="space-y-2">
                 {rows.map((r) => {
                   const isMe = r.user_id === user.id;
+
                   return (
                     <li
                       key={r.user_id}
-                      className={
-                        "flex items-center justify-between rounded-lg border border-border px-4 py-3 " +
-                        (isMe ? "bg-primary/10" : "bg-secondary/40")
-                      }
+                      className={[
+                        "rounded-xl border border-border px-4 py-3",
+                        "bg-secondary/40",
+                        isMe ? "ring-1 ring-primary/40 bg-primary/10" : "",
+                      ].join(" ")}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="w-10 text-sm font-bold">#{r.rank_no}</span>
-                        <div className="leading-tight">
-                          <div className={"font-semibold " + (isMe ? "text-primary" : "")}>
-                            {r.display_name}
-                            {isMe ? "（あなた）" : ""}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {r.user_id.slice(0, 8)}…
+                      {/* ✅ スマホは縦、sm以上は横 */}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        {/* 左側：順位＋名前 */}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
+                            {r.rank_no}
+                          </span>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={[
+                                  "font-semibold truncate",
+                                  isMe ? "text-primary" : "",
+                                ].join(" ")}
+                                title={r.display_name}
+                              >
+                                {r.display_name}
+                              </span>
+
+                              {isMe && (
+                                <span className="whitespace-nowrap rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">
+                                  あなた
+                                </span>
+                              )}
+                            </div>
+
+                            {/* ✅ スマホではID非表示、sm以上で表示 */}
+                            <div className="hidden sm:block text-xs text-muted-foreground">
+                              {r.user_id.slice(0, 8)}…
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="text-sm font-semibold">
-                        {formatBest(Number(r.best_seconds))}
+                        {/* 右側：時間（数字が揃うと気持ちいい） */}
+                        <div className="text-right sm:text-right">
+                          <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
+                            {formatBest(Number(r.best_seconds))}
+                          </div>
+                          <div className="text-xs text-muted-foreground whitespace-nowrap">
+                            ベスト
+                          </div>
+                        </div>
                       </div>
                     </li>
                   );
