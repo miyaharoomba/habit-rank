@@ -15,14 +15,18 @@ type Message = {
   created_at: string;
 };
 
-export default async function DmThreadPage({ params }: { params: Promise<{ threadId: string }> }) {
+export default async function DmThreadPage({
+  params,
+}: {
+  params: Promise<{ threadId: string }>;
+}) {
   const { threadId } = await params;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/sign-in");
+  if (!user) redirect("/auth/sign-in"); // サーバー側redirectOK [2](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
 
-  const { data: msgs, error } = await supabase
+  const { data, error } = await supabase
     .from("dm_messages")
     .select("id, sender_id, body, created_at")
     .eq("thread_id", threadId)
@@ -33,21 +37,27 @@ export default async function DmThreadPage({ params }: { params: Promise<{ threa
       <Container>
         <Card>
           <CardHeader><h1 className="text-xl font-bold">DM</h1></CardHeader>
-          <CardBody><p className="text-sm text-destructive">取得エラー: {error.message}</p></CardBody>
+          <CardBody>
+            <p className="text-sm text-destructive">取得エラー: {error.message}</p>
+          </CardBody>
         </Card>
       </Container>
     );
   }
 
-  const messages = (msgs ?? []) as Message[];
+  const messages = (data ?? []) as Message[];
 
   return (
     <Container>
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight">DM</h1>
-        <div className="flex gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/dm">←一覧</Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">/app</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/dm">
+            ← 一覧
+          </Link>
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/app">
+            /app
+          </Link>
         </div>
       </header>
 
@@ -59,7 +69,7 @@ export default async function DmThreadPage({ params }: { params: Promise<{ threa
               {messages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">まだメッセージがありません。</p>
               ) : (
-                messages.map(m => {
+                messages.map((m) => {
                   const mine = m.sender_id === user.id;
                   return (
                     <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
@@ -85,3 +95,4 @@ export default async function DmThreadPage({ params }: { params: Promise<{ threa
     </Container>
   );
 }
+``

@@ -14,15 +14,20 @@ type ThreadRow = {
 
 export default async function DmListPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/sign-in");
 
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/sign-in"); // サーバー側redirectOK [2](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
+
+  // RPCでスレッド一覧を取得（get_my_dm_threadsがDBにある前提） [3](https://github.com/orgs/supabase/discussions/28380)
   const { data, error } = await supabase.rpc("get_my_dm_threads", { limit_count: 50 });
+
   if (error) {
     return (
       <Container>
         <Card>
-          <CardHeader><h1 className="text-xl font-bold">DM</h1></CardHeader>
+          <CardHeader>
+            <h1 className="text-xl font-bold">DM</h1>
+          </CardHeader>
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {error.message}</p>
           </CardBody>
@@ -35,17 +40,25 @@ export default async function DmListPage() {
 
   return (
     <Container>
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight">DM</h1>
-        <div className="flex gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">/app</Link>
-          <Link className="text-sm text-primary hover:underline" href="/ranking">/ranking</Link>
+
+        <div className="flex flex-wrap gap-2">
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/app">
+            /app
+          </Link>
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/ranking">
+            /ranking
+          </Link>
         </div>
       </header>
 
       <div className="mt-6">
         <Card>
-          <CardHeader><h2 className="font-semibold">スレッド一覧</h2></CardHeader>
+          <CardHeader>
+            <h2 className="font-semibold">スレッド一覧</h2>
+          </CardHeader>
+
           <CardBody>
             {threads.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -53,18 +66,26 @@ export default async function DmListPage() {
               </p>
             ) : (
               <ul className="space-y-2">
-                {threads.map(t => (
-                  <li key={t.thread_id} className="rounded-lg border border-border bg-secondary/40 px-4 py-3">
+                {threads.map((t) => (
+                  <li
+                    key={t.thread_id}
+                    className="rounded-lg border border-border bg-secondary/40 px-4 py-3"
+                  >
                     <Link href={`/dm/${t.thread_id}`} className="block">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-semibold truncate">{t.other_display_name}</div>
+                          <div className="font-semibold truncate">
+                            {t.other_display_name}
+                          </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {t.last_message ?? "（まだメッセージがありません）"}
                           </div>
                         </div>
+
                         <div className="text-xs text-muted-foreground whitespace-nowrap">
-                          {t.last_message_at ? new Date(t.last_message_at).toLocaleString() : ""}
+                          {t.last_message_at
+                            ? new Date(t.last_message_at).toLocaleString()
+                            : ""}
                         </div>
                       </div>
                     </Link>
