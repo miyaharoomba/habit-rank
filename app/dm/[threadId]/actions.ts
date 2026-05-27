@@ -12,16 +12,14 @@ export async function sendDm(threadId: string, formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return;
 
-  const { error } = await supabase.from("dm_messages").insert({
-    thread_id: threadId,
-    sender_id: user.id,
-    body,
+  // ✅ INSERTはRPCに任せる（sender_idも参加者チェックもDB側で確定）
+  const { error } = await supabase.rpc("send_dm_message", {
+    p_thread_id: threadId,
+    p_body: body,
   });
 
   if (error) throw new Error(error.message);
 
-  // ✅ dm_threadsの更新はDBトリガーがやるので不要
   revalidatePath(`/dm/${threadId}`);
   revalidatePath("/dm");
 }
-``
