@@ -27,7 +27,6 @@ export default async function AppPage() {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    // ここはログインページに飛ばしてもOK
     return (
       <Container>
         <div className="text-sm text-destructive">ログイン情報が取れません</div>
@@ -74,17 +73,18 @@ export default async function AppPage() {
       <header className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
-          <p className="text-sm text-muted-foreground">
-            ダーク × ブルーで統一
-          </p>
+          <p className="text-sm text-muted-foreground">ダーク × ブルーで統一</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="text-sm text-muted-foreground">👤 {displayName}</div>
-          <Link
-            href="/settings"
-            className="text-sm text-primary hover:underline"
-          >
+
+          {/* ★追加：ランキングリンク */}
+          <Link href="/ranking" className="text-sm text-primary hover:underline">
+            ランキング
+          </Link>
+
+          <Link href="/settings" className="text-sm text-primary hover:underline">
             設定
           </Link>
         </div>
@@ -155,8 +155,7 @@ export default async function AppPage() {
                       </div>
 
                       <div className="mt-1 text-xs text-muted-foreground">
-                        開始: {s.toLocaleString()} / 終了:{" "}
-                        {e ? e.toLocaleString() : "-"}
+                        開始: {s.toLocaleString()} / 終了: {e ? e.toLocaleString() : "-"}
                       </div>
                     </li>
                   );
@@ -173,3 +172,4 @@ export default async function AppPage() {
     </Container>
   );
 }
+``
