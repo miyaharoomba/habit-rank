@@ -20,7 +20,8 @@ export async function sendDm(threadId: string, formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  // ✅ dm_threads の更新はトリガーがやるので不要
+  // ✅ dm_threadsの更新はDBトリガーがやるので不要
   revalidatePath(`/dm/${threadId}`);
   revalidatePath("/dm");
 }
+``
