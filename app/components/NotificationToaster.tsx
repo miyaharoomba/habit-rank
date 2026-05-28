@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type NotifItem = {
   id: string;
-  type: "dm" | "streak_end" | string;
+  type: string;
   created_at: string;
   message_preview: string;
   thread_id: string | null;
@@ -21,7 +21,7 @@ type ApiResponse = {
 };
 
 type Toast = {
-  id: string; // notification id
+  id: string;
   title: string;
   body: string;
   href: string;
@@ -56,12 +56,24 @@ export default function NotificationToaster({
   showMs?: number;
   maxToasts?: number;
 }) {
-  const router = useRouter(); // クリックで遷移（push）[1](https://qiita.com/H-Iida/items/fe4fe5f18b2ca5bbf6d4)
+  const router = useRouter();
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
+
   const timersRef = useRef<Map<string, number>>(new Map());
+  const inFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const dismiss = (id: string) => {
+    const t = timersRef.current.get(id);
+    if (t) {
+      window.clearTimeout(t);
+      timersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((x) => x.id !== id));
+  };
 
   const enqueue = (t: Toast) => {
     setToasts((prev) => {
@@ -70,20 +82,8 @@ export default function NotificationToaster({
       return next.slice(0, maxToasts);
     });
 
-    // auto-dismiss
-    const timer = window.setTimeout(() => {
-      dismiss(t.id);
-    }, showMs);
+    const timer = window.setTimeout(() => dismiss(t.id), showMs);
     timersRef.current.set(t.id, timer);
-  };
-
-  const dismiss = (id: string) => {
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   const markRead = async (id: string) => {
@@ -99,33 +99,56 @@ export default function NotificationToaster({
   };
 
   const fetchNotifs = async () => {
-    const res = await fetch(`/api/notifications?limit=${limit}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const json = (await res.json()) as ApiResponse;
-    const items = json.items ?? [];
+    // 同時多発防止
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
 
-    // 初回は既存を「既知」として登録して、トーストを出さない（いきなり連発防止）
-    if (!initializedRef.current) {
-      items.forEach((n) => seenRef.current.add(n.id));
-      initializedRef.current = true;
-      return;
-    }
+    // 前回の fetch が残ってたら中断
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
 
-    // 2回目以降：未知IDだけトースト
-    for (const n of items) {
-      if (seenRef.current.has(n.id)) continue;
-      seenRef.current.add(n.id);
-
-      enqueue({
-        id: n.id,
-        title: titleFor(n),
-        body: bodyFor(n),
-        href: routeFor(n),
+    try {
+      const res = await fetch(`/api/notifications?limit=${limit}`, {
+        cache: "no-store",
+        signal: ac.signal,
       });
+
+      // 401等も例外にはしない（res.okで弾く）
+      if (!res.ok) return;
+
+      const json = (await res.json()) as ApiResponse;
+      const items = json.items ?? [];
+
+      // 初回は既存通知を “既知” として登録（トースト連発防止）
+      if (!initializedRef.current) {
+        items.forEach((n) => seenRef.current.add(n.id));
+        initializedRef.current = true;
+        return;
+      }
+
+      // 新規IDだけトースト
+      for (const n of items) {
+        if (seenRef.current.has(n.id)) continue;
+        seenRef.current.add(n.id);
+
+        enqueue({
+          id: n.id,
+          title: titleFor(n),
+          body: bodyFor(n),
+          href: routeFor(n),
+        });
+      }
+    } catch (e: any) {
+      // Abort / ネットワーク揺れは無視（ここが unhandledRejection を止める）
+      if (e?.name === "AbortError") return;
+      // それ以外も落とさない
+      // console.warn("notification fetch failed:", e);
+    } finally {
+      inFlightRef.current = false;
     }
   };
 
-  // ポーリング開始（全ページ常駐前提）
   useEffect(() => {
     let alive = true;
 
@@ -140,7 +163,8 @@ export default function NotificationToaster({
     return () => {
       alive = false;
       window.clearInterval(id);
-      // clear timers
+      abortRef.current?.abort();
+
       timersRef.current.forEach((t) => window.clearTimeout(t));
       timersRef.current.clear();
     };
@@ -150,7 +174,7 @@ export default function NotificationToaster({
   const onClickToast = async (t: Toast) => {
     dismiss(t.id);
     await markRead(t.id);
-    router.push(t.href); // pushで遷移[1](https://qiita.com/H-Iida/items/fe4fe5f18b2ca5bbf6d4)
+    router.push(t.href);
   };
 
   if (toasts.length === 0) return null;
@@ -171,9 +195,7 @@ export default function NotificationToaster({
               aria-label="通知を開く"
             >
               <div className="text-sm font-semibold truncate">{t.title}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground break-words">
-                {t.body}
-              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground break-words">{t.body}</div>
             </button>
 
             <button
