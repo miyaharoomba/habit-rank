@@ -30,19 +30,23 @@ export async function startSession() {
 }
 
 /**
- * 継続終了
+ * 継続終了（理由を受け取って保存）
+ * - <form action={finishSession}> から FormData が渡ってくる想定 [1](https://github-api-bice.vercel.app/)
  */
-export async function finishSession() {
+export async function finishSession(formData: FormData) {
   const supabase = await createClient()
 
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   if (userError || !user) throw new Error('ログイン情報が取れません')
 
+  const raw = String(formData.get('end_reason') ?? '')
+  const reason = raw.trim().slice(0, 200) || 'finished'
+
   const { error } = await supabase
     .from('streak_sessions')
     .update({
       ended_at: new Date().toISOString(),
-      end_reason: 'finished',
+      end_reason: reason,
     })
     .eq('user_id', user.id)
     .is('ended_at', null)
@@ -82,4 +86,3 @@ export async function setDisplayName(formData: FormData) {
   // /app を更新してヘッダーの名前を即反映
   revalidatePath('/app')
 }
-``

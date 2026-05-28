@@ -9,7 +9,6 @@ import { startSession, finishSession } from "./actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-// ✅ JST固定フォーマッタ（内部で timeZone: "Asia/Tokyo" を指定している想定）
 import { formatJst, formatJstStartLabel } from "@/lib/time";
 
 function formatDuration(ms: number) {
@@ -24,6 +23,7 @@ function formatDuration(ms: number) {
 export default async function AppPage() {
   const supabase = await createClient();
 
+  // ログイン中ユーザー
   const {
     data: { user },
     error: userError,
@@ -46,11 +46,12 @@ export default async function AppPage() {
 
   const displayName = profile?.display_name?.trim() || "";
 
+  // 初回：名前未設定なら onboarding へ
   if (!displayName) {
     redirect("/onboarding");
   }
 
-  // 継続中セッション
+  // 継続中セッション（自分のもの）
   const { data: active } = await supabase
     .from("streak_sessions")
     .select("id, started_at")
@@ -77,6 +78,7 @@ export default async function AppPage() {
           <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
         </div>
 
+        {/* 右側：ユーザー名 + ベル + メニュー */}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="text-sm text-muted-foreground mr-1 whitespace-nowrap">
             👤 {displayName}
@@ -84,19 +86,31 @@ export default async function AppPage() {
 
           <NotificationBell />
 
-          <Link href="/participants" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link
+            href="/participants"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
             参加者
           </Link>
 
-          <Link href="/dm" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link
+            href="/dm"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
             DM
           </Link>
 
-          <Link href="/ranking" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link
+            href="/ranking"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
             ランキング
           </Link>
 
-          <Link href="/settings" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link
+            href="/settings"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
             設定
           </Link>
         </div>
@@ -117,23 +131,44 @@ export default async function AppPage() {
               <LiveTimer startedAt={startedAt} />
             </div>
 
-            {/* ✅ 開始日時（JST固定） */}
             <div className="mt-2 text-sm text-muted-foreground tabular-nums">
-              {startedAt ? <span>開始：{formatJstStartLabel(startedAt)}</span> : <span>開始：未開始</span>}
+              {startedAt ? (
+                <span>開始：{formatJstStartLabel(startedAt)}</span>
+              ) : (
+                <span>開始：未開始</span>
+              )}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <form action={startSession}>
-                <Button type="submit" disabled={!!startedAt}>
-                  開始
-                </Button>
-              </form>
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex flex-wrap gap-3">
+                <form action={startSession}>
+                  <Button type="submit" disabled={!!startedAt}>
+                    開始
+                  </Button>
+                </form>
 
-              <form action={finishSession}>
-                <Button type="submit" variant="ghost" disabled={!startedAt}>
-                  終了
-                </Button>
-              </form>
+                {/* ✅ 終了：理由入力付き（finishSession は FormData を受け取る） [1](https://github-api-bice.vercel.app/) */}
+                <form action={finishSession} className="flex-1 min-w-[260px]">
+                  <input type="hidden" name="end_reason" value="" />
+                  <div className="flex flex-col gap-2">
+                    <textarea
+                      name="end_reason"
+                      placeholder="終了理由（任意：200文字以内）例：仕事が忙しい、体調不良、達成した など"
+                      className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
+                      rows={2}
+                      maxLength={200}
+                      disabled={!startedAt}
+                    />
+                    <Button type="submit" variant="ghost" disabled={!startedAt}>
+                      終了（理由を保存）
+                    </Button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="text-xs text-muted-foreground tabular-nums">
+                started_at: {startedAt ? formatJst(startedAt) : "(未開始)"}
+              </div>
             </div>
           </CardBody>
         </Card>
@@ -163,11 +198,12 @@ export default async function AppPage() {
                           {days}日 {hours}時間 {minutes}分 {seconds}秒
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {row.end_reason ?? "finished"}
+                          {row.end_reason && row.end_reason.trim()
+                            ? `理由: ${row.end_reason}`
+                            : "理由: finished"}
                         </span>
                       </div>
 
-                      {/* ✅ ここが今回の本題：開始/終了をJST固定で表示 */}
                       <div className="mt-1 text-xs text-muted-foreground tabular-nums">
                         開始: {formatJst(row.started_at)} / 終了:{" "}
                         {row.ended_at ? formatJst(row.ended_at) : "-"}
