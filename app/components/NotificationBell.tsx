@@ -86,7 +86,8 @@ export default function NotificationBell({
 
   const markRead = async (ids: string[]) => {
     if (ids.length === 0) return;
-    // 先にUI側で既読っぽくして体験を良くする（楽観更新）
+
+    // 楽観更新
     setItems((prev) =>
       prev.map((it) => (ids.includes(it.id) ? { ...it, read: true } : it))
     );
@@ -99,29 +100,28 @@ export default function NotificationBell({
     });
 
     if (!res.ok) {
-      // 失敗したら取り直し（整合性優先）
+      // 失敗したら整合性優先で再取得
       await fetchNotifs();
     }
   };
 
-  // ドロップダウンを開いたら最新を取りにいく
+  // 開いたら最新取得
   useEffect(() => {
     if (!open) return;
     fetchNotifs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // 定期ポーリング（未読数を更新したい）
+  // 定期ポーリング（未読数更新）
   useEffect(() => {
     const id = setInterval(() => {
-      // 開いてなくても未読数は更新したいので取得
       fetchNotifs();
     }, pollMs);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollMs, limit]);
 
-  // 外側クリックで閉じる
+  // 外側クリックで閉じる（PCドロップダウン用）
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!open) return;
@@ -133,6 +133,16 @@ export default function NotificationBell({
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  // Escで閉じる（モバイルシートでも使える）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!open) return;
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const unreadIds = useMemo(
     () => items.filter((x) => !x.read).map((x) => x.id),
     [items]
@@ -140,7 +150,6 @@ export default function NotificationBell({
 
   const routeFor = (n: NotifItem) => {
     if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
-    // 継続終了はランキングへ（将来「誰が終了したかの詳細」ページを作ってもOK）
     return "/ranking";
   };
 
@@ -162,7 +171,7 @@ export default function NotificationBell({
       >
         {bellIcon("h-5 w-5")}
 
-        {/* 未読バッジ */}
+        {/* 未読バッジ（未読数でOKとのことなので数字） */}
         {unread > 0 && (
           <span
             className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground
@@ -174,20 +183,68 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* ドロップダウン */}
+      {/* =========================
+          PC: 右上ドロップダウン (sm以上)
+         ========================= */}
       {open && (
         <div
-          className="absolute right-0 mt-2 w-[320px] sm:w-[360px] rounded-xl border border-border bg-card text-card-foreground shadow-glow z-50"
+          className="hidden sm:block absolute right-0 mt-2 w-[360px] rounded-xl border border-border bg-card text-card-foreground shadow-glow z-50"
           role="dialog"
           aria-label="通知一覧"
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="font-semibold">通知</div>
-            <div className="flex items-center gap-2">
+          <HeaderBar
+            loading={loading}
+            error={error}
+            unreadCount={unreadIds.length}
+            onRefresh={fetchNotifs}
+            onMarkAll={() => markRead(unreadIds)}
+          />
+          <ListArea
+            items={items}
+            loading={loading}
+            error={error}
+            onClickItem={(id) => markRead([id])}
+            titleFor={titleFor}
+            routeFor={routeFor}
+            timeAgo={timeAgo}
+            close={() => setOpen(false)}
+          />
+          <FooterHint />
+        </div>
+      )}
+
+      {/* =========================
+          Mobile: フルスクリーン/ボトムシート (sm未満)
+         ========================= */}
+      {open && (
+        <div className="sm:hidden fixed inset-0 z-50">
+          {/* オーバーレイ */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* 下から出るシート */}
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border border-border bg-card text-card-foreground shadow-glow">
+            {/* シート上部（ドラッグっぽい見た目） */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="font-semibold">通知</div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-sm text-muted-foreground hover:text-foreground"
+                aria-label="閉じる"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-4 py-2 border-b border-border flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => fetchNotifs()}
-                className="text-xs text-primary hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 更新
               </button>
@@ -195,80 +252,157 @@ export default function NotificationBell({
                 type="button"
                 onClick={() => markRead(unreadIds)}
                 disabled={unreadIds.length === 0}
-                className="text-xs text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-sm text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 全部既読
               </button>
             </div>
-          </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
-            {loading && (
-              <div className="px-4 py-3 text-sm text-muted-foreground">
-                読み込み中...
-              </div>
-            )}
-
-            {error && (
-              <div className="px-4 py-3 text-sm text-destructive">
-                エラー: {error}
-              </div>
-            )}
-
-            {!loading && !error && items.length === 0 && (
-              <div className="px-4 py-8 text-sm text-muted-foreground">
-                通知はまだありません。
-              </div>
-            )}
-
-            {!loading && !error && items.length > 0 && (
-              <ul className="divide-y divide-border">
-                {items.map((n) => (
-                  <li key={n.id} className={n.read ? "" : "bg-primary/5"}>
-                    {/* Linkでページ遷移（Next.js推奨の内部ナビ）[2](https://nodejs.org/ja/download) */}
-                    <Link
-                      href={routeFor(n)}
-                      onClick={() => {
-                        // クリックした通知は既読にする
-                        if (!n.read) markRead([n.id]);
-                        setOpen(false);
-                      }}
-                      className="block px-4 py-3 hover:bg-secondary/40 transition"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold truncate">
-                            {titleFor(n)}
-                          </div>
-                          <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                            {n.type === "dm"
-                              ? n.message_preview
-                              : `理由: ${n.message_preview || "finished"}`}
-                          </div>
-                        </div>
-
-                        <div className="text-xs text-muted-foreground whitespace-nowrap">
-                          {timeAgo(n.created_at)}
-                        </div>
-                      </div>
-
-                      {!n.read && (
-                        <div className="mt-2 text-[11px] text-primary font-semibold">
-                          未読
-                        </div>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-            DM通知はDM画面へ、継続終了通知はランキングへ飛びます。
+            {/* 本文（スクロール） */}
+            <div className="max-h-[70dvh] overflow-y-auto">
+              <ListArea
+                items={items}
+                loading={loading}
+                error={error}
+                onClickItem={(id) => markRead([id])}
+                titleFor={titleFor}
+                routeFor={routeFor}
+                timeAgo={timeAgo}
+                close={() => setOpen(false)}
+              />
+              <FooterHint />
+            </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** ヘッダー（PC用） */
+function HeaderBar({
+  loading,
+  error,
+  unreadCount,
+  onRefresh,
+  onMarkAll,
+}: {
+  loading: boolean;
+  error: string | null;
+  unreadCount: number;
+  onRefresh: () => void;
+  onMarkAll: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="font-semibold">通知</div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-xs text-primary hover:underline"
+        >
+          更新
+        </button>
+        <button
+          type="button"
+          onClick={onMarkAll}
+          disabled={unreadCount === 0}
+          className="text-xs text-primary hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          全部既読
+        </button>
+        <span className="text-xs text-muted-foreground">
+          {loading ? "…" : error ? "!" : unreadCount > 0 ? `未読${unreadCount}` : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** 通知リスト */
+function ListArea({
+  items,
+  loading,
+  error,
+  onClickItem,
+  titleFor,
+  routeFor,
+  timeAgo,
+  close,
+}: {
+  items: NotifItem[];
+  loading: boolean;
+  error: string | null;
+  onClickItem: (id: string) => void;
+  titleFor: (n: NotifItem) => string;
+  routeFor: (n: NotifItem) => string;
+  timeAgo: (iso: string) => string;
+  close: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="px-4 py-8 text-sm text-muted-foreground">
+        通知はまだありません。
+      </div>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-border">
+      {items.map((n) => (
+        <li key={n.id} className={n.read ? "" : "bg-primary/5"}>
+          {/* Next.js内部遷移はLinkが基本 [1](https://nodejs.org/ja/download) */}
+          <Link
+            href={routeFor(n)}
+            onClick={() => {
+              if (!n.read) onClickItem(n.id);
+              close();
+            }}
+            className="block px-4 py-3 hover:bg-secondary/40 transition"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate">{titleFor(n)}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground break-words">
+                  {n.type === "dm"
+                    ? n.message_preview
+                    : `理由: ${n.message_preview || "finished"}`}
+                </div>
+              </div>
+
+              <div className="text-xs text-muted-foreground whitespace-nowrap">
+                {timeAgo(n.created_at)}
+              </div>
+            </div>
+
+            {!n.read && (
+              <div className="mt-2 text-[11px] text-primary font-semibold">未読</div>
+            )}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** フッターのヒント */
+function FooterHint() {
+  return (
+    <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
+      DM通知はDM画面へ、継続終了通知はランキングへ飛びます。
     </div>
   );
 }
