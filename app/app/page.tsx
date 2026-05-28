@@ -46,7 +46,7 @@ export default async function AppPage() {
 
   // 初回：名前未設定なら onboarding へ
   if (!displayName) {
-    redirect("/onboarding"); // Server Componentでredirect可能 [2](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
+    redirect("/onboarding"); // サーバー側でredirect可能 [2](https://nextjs.org/docs/app/getting-started/route-handlers)
   }
 
   // 継続中セッション（自分のもの）
@@ -83,10 +83,18 @@ export default async function AppPage() {
             👤 {displayName}
           </div>
 
-          {/* ✅ 追加：通知ベル（未読バッジ＋ドロップダウン） */}
+          {/* 通知ベル */}
           <NotificationBell />
 
-          {/* ✅ 既存：DM */}
+          {/* ✅ 追加：参加者一覧 */}
+          <Link
+            href="/participants"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
+            参加者
+          </Link>
+
+          {/* 既存：DM */}
           <Link
             href="/dm"
             className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -94,7 +102,7 @@ export default async function AppPage() {
             DM
           </Link>
 
-          {/* ✅ 既存：ランキング */}
+          {/* 既存：ランキング */}
           <Link
             href="/ranking"
             className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -102,7 +110,7 @@ export default async function AppPage() {
             ランキング
           </Link>
 
-          {/* ✅ 既存：設定 */}
+          {/* 既存：設定 */}
           <Link
             href="/settings"
             className="text-sm text-primary hover:underline whitespace-nowrap"
