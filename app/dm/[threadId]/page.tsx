@@ -1,12 +1,11 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Input from "@/app/components/ui/Input";
-import Button from "@/app/components/ui/Button";
 
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { sendDm } from "./actions";
+
+import DmChatClient from "./DmChatClient";
 
 type Message = {
   id: string;
@@ -23,76 +22,124 @@ export default async function DmThreadPage({
   const { threadId } = await params;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/sign-in"); // サーバー側redirectOK [2](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
 
-  const { data, error } = await supabase
-    .from("dm_messages")
-    .select("id, sender_id, body, created_at")
-    .eq("thread_id", threadId)
-    .order("created_at", { ascending: true });
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (error) {
+  if (userError || !user) redirect("/auth/sign-in"); // Server Componentでredirect可能 [1](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
+
+  // 1) スレッド情報（相手ID決定）
+  const { data: thread, error: threadErr } = await supabase
+    .from("dm_threads")
+    .select("id, user_low, user_high")
+    .eq("id", threadId)
+    .maybeSingle();
+
+  if (threadErr || !thread) {
     return (
       <Container>
         <Card>
-          <CardHeader><h1 className="text-xl font-bold">DM</h1></CardHeader>
+          <CardHeader>
+            <h1 className="text-xl font-bold tracking-tight">DM</h1>
+          </CardHeader>
           <CardBody>
-            <p className="text-sm text-destructive">取得エラー: {error.message}</p>
+            <p className="text-sm text-destructive">
+              スレッドが見つかりません（または権限がありません）。
+            </p>
+            <div className="mt-3 flex gap-3">
+              <Link href="/dm" className="text-sm text-primary hover:underline">
+                ← DM一覧へ
+              </Link>
+              <Link href="/ranking" className="text-sm text-primary hover:underline">
+                ランキングへ
+              </Link>
+            </div>
           </CardBody>
         </Card>
       </Container>
     );
   }
 
-  const messages = (data ?? []) as Message[];
+  const otherUserId =
+    thread.user_low === user.id ? thread.user_high : thread.user_low;
+
+  // 2) 相手の名前
+  const { data: otherProfile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", otherUserId)
+    .maybeSingle();
+
+  const otherName = otherProfile?.display_name?.trim() || "NoName";
+
+  // 3) メッセージ一覧（時系列）
+  const { data: msgs, error: msgErr } = await supabase
+    .from("dm_messages")
+    .select("id, sender_id, body, created_at")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
+
+  if (msgErr) {
+    return (
+      <Container>
+        <Card>
+          <CardHeader>
+            <h1 className="text-xl font-bold tracking-tight">DM</h1>
+          </CardHeader>
+          <CardBody>
+            <p className="text-sm text-destructive">取得エラー: {msgErr.message}</p>
+            <div className="mt-3">
+              <Link href="/dm" className="text-sm text-primary hover:underline">
+                ← DM一覧へ
+              </Link>
+            </div>
+          </CardBody>
+        </Card>
+      </Container>
+    );
+  }
+
+  const messages = (msgs ?? []) as Message[];
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">DM</h1>
+      {/* ヘッダー：相手の名前 */}
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-sm text-muted-foreground">DM</div>
+          <h1 className="text-2xl font-bold tracking-tight truncate">
+            {otherName}
+          </h1>
+        </div>
+
         <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/dm">
-            ← 一覧
+          <Link href="/dm" className="text-sm text-primary hover:underline whitespace-nowrap">
+            ← DM一覧
           </Link>
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/app">
+          <Link href="/app" className="text-sm text-primary hover:underline whitespace-nowrap">
             /app
           </Link>
         </div>
       </header>
 
-      <div className="mt-6 grid gap-4">
+      <div className="mt-6">
         <Card>
-          <CardHeader><h2 className="font-semibold">メッセージ</h2></CardHeader>
-          <CardBody>
-            <div className="space-y-2">
-              {messages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">まだメッセージがありません。</p>
-              ) : (
-                messages.map((m) => {
-                  const mine = m.sender_id === user.id;
-                  return (
-                    <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[80%] rounded-xl px-3 py-2 border border-border ${mine ? "bg-primary/10" : "bg-secondary/40"}`}>
-                        <div className="text-sm whitespace-pre-wrap">{m.body}</div>
-                        <div className="mt-1 text-[11px] text-muted-foreground text-right">
-                          {new Date(m.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+          <CardHeader>
+            <h2 className="font-semibold">チャット</h2>
+          </CardHeader>
 
-            <form action={sendDm.bind(null, threadId)} className="mt-4 flex gap-2">
-              <Input name="body" placeholder="メッセージ..." />
-              <Button type="submit">送信</Button>
-            </form>
+          <CardBody>
+            {/* ✅ ここから先はClient Componentに任せる（固定フォーム＆自動スクロール） */}
+            <DmChatClient
+              threadId={threadId}
+              myUserId={user.id}
+              messages={messages}
+            />
           </CardBody>
         </Card>
       </div>
     </Container>
   );
 }
-``

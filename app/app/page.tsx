@@ -70,21 +70,45 @@ export default async function AppPage() {
   return (
     <Container>
       {/* ヘッダー */}
-      <header className="flex items-end justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
           <p className="text-sm text-muted-foreground">ダーク × ブルーで統一</p>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-muted-foreground">👤 {displayName}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-sm text-muted-foreground mr-1">👤 {displayName}</div>
 
-          {/* ★追加：ランキングリンク */}
-          <Link href="/ranking" className="text-sm text-primary hover:underline">
+          {/* ✅ 追加：DMスレッド一覧 */}
+          <Link
+            href="/dm"
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold
+                       bg-primary text-primary-foreground hover:bg-primary/90
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            DM
+          </Link>
+
+          {/* 既存：ランキング */}
+          <Link
+            href="/ranking"
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold
+                       border border-border bg-transparent hover:bg-secondary
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
             ランキング
           </Link>
 
-          <Link href="/settings" className="text-sm text-primary hover:underline">
+          {/* 既存：設定 */}
+          <Link
+            href="/settings"
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold
+                       border border-border bg-transparent hover:bg-secondary
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
             設定
           </Link>
         </div>
@@ -155,7 +179,8 @@ export default async function AppPage() {
                       </div>
 
                       <div className="mt-1 text-xs text-muted-foreground">
-                        開始: {s.toLocaleString()} / 終了: {e ? e.toLocaleString() : "-"}
+                        開始: {s.toLocaleString()} / 終了:{" "}
+                        {e ? e.toLocaleString() : "-"}
                       </div>
                     </li>
                   );
@@ -172,4 +197,3 @@ export default async function AppPage() {
     </Container>
   );
 }
-``
