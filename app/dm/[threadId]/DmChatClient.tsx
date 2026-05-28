@@ -15,19 +15,65 @@ type Message = {
   body: string;
   created_at: string;
 
-  // 画像対応
-  message_type?: "text" | "image";
-  image_path?: string | null;
-  image_url?: string | null; // ← page.tsxでsigned URLを付与して渡してくる
+  message_type?: "text" | "image" | "video" | "file";
+
+  image_url?: string | null; // signed URL（image）
+  file_url?: string | null;  // signed URL（video/file）
+  file_name?: string | null;
+  file_mime?: string | null;
+  file_size?: number | null;
 };
 
-type LocalImage = {
+type LocalUpload = {
   id: string;
   sender_id: string;
   created_at: string;
+  type: "image" | "video" | "file";
   signedUrl: string;
   caption: string;
+  fileName: string;
+  mime: string;
+  size: number;
 };
+
+function bytes(size: number) {
+  if (!Number.isFinite(size)) return "";
+  const kb = size / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(1)} GB`;
+}
+
+function SubmitButton({ onSettled }: { onSettled: () => void }) {
+  const { pending } = useFormStatus();
+  const prev = useRef(false);
+
+  useEffect(() => {
+    if (prev.current && !pending) onSettled();
+    prev.current = pending;
+  }, [pending, onSettled]);
+
+  return (
+    <Button type="submit" disabled={pending} className="whitespace-nowrap">
+      {pending ? "送信中…" : "送信"}
+    </Button>
+  );
+}
+
+function BubbleMeta({ mine, createdAt }: { mine: boolean; createdAt: string }) {
+  return (
+    <div
+      className={[
+        "mt-1 text-[11px] text-muted-foreground tabular-nums",
+        mine ? "text-right" : "text-left",
+      ].join(" ")}
+    >
+      {formatJst(createdAt)}
+    </div>
+  );
+}
 
 function BubbleText({
   mine,
@@ -50,14 +96,7 @@ function BubbleText({
         >
           {body}
         </div>
-        <div
-          className={[
-            "mt-1 text-[11px] text-muted-foreground tabular-nums",
-            mine ? "text-right" : "text-left",
-          ].join(" ")}
-        >
-          {formatJst(createdAt)}
-        </div>
+        <BubbleMeta mine={mine} createdAt={createdAt} />
       </div>
     </div>
   );
@@ -74,15 +113,14 @@ function BubbleImage({
   url: string;
   caption?: string;
   createdAt: string;
-  onOpen: (url: string) => void;
+  onOpen: (kind: "image" | "video", url: string) => void;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[85%] sm:max-w-[70%]">
-        {/* プレビュー（タップで拡大） */}
         <button
           type="button"
-          onClick={() => onOpen(url)}
+          onClick={() => onOpen("image", url)}
           className={[
             "block overflow-hidden rounded-2xl border border-border",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -93,13 +131,12 @@ function BubbleImage({
         >
           <img
             src={url}
-            alt="送信された画像"
-            className="block w-full h-auto max-h-[260px] object-cover"
+            alt="image"
+            className="block w-full h-auto max-h-[360px] object-cover"
             loading="lazy"
           />
         </button>
 
-        {/* キャプション（任意） */}
         {caption ? (
           <div
             className={[
@@ -111,32 +148,127 @@ function BubbleImage({
           </div>
         ) : null}
 
-        <div
-          className={[
-            "mt-1 text-[11px] text-muted-foreground tabular-nums",
-            mine ? "text-right" : "text-left",
-          ].join(" ")}
-        >
-          {formatJst(createdAt)}
-        </div>
+        <BubbleMeta mine={mine} createdAt={createdAt} />
       </div>
     </div>
   );
 }
 
-function SubmitButton({ onSettled }: { onSettled: () => void }) {
-  const { pending } = useFormStatus();
-  const prev = useRef(false);
+function BubbleVideo({
+  mine,
+  url,
+  caption,
+  createdAt,
+  onOpen,
+}: {
+  mine: boolean;
+  url: string;
+  caption?: string;
+  createdAt: string;
+  onOpen: (kind: "image" | "video", url: string) => void;
+}) {
+  return (
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[85%] sm:max-w-[70%]">
+        <div
+          className={[
+            "overflow-hidden rounded-2xl border border-border",
+            mine ? "bg-primary/10" : "bg-secondary/30",
+          ].join(" ")}
+        >
+          <video
+            src={url}
+            className="block w-full h-auto max-h-[360px] bg-black"
+            controls
+            playsInline
+            preload="metadata"
+          />
+          <button
+            type="button"
+            onClick={() => onOpen("video", url)}
+            className="w-full text-xs text-primary hover:underline px-3 py-2 text-left"
+          >
+            大きく表示
+          </button>
+        </div>
 
-  useEffect(() => {
-    if (prev.current && !pending) onSettled();
-    prev.current = pending;
-  }, [pending, onSettled]);
+        {caption ? (
+          <div
+            className={[
+              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+              mine ? "bg-primary/15" : "bg-secondary/40",
+            ].join(" ")}
+          >
+            {caption}
+          </div>
+        ) : null}
+
+        <BubbleMeta mine={mine} createdAt={createdAt} />
+      </div>
+    </div>
+  );
+}
+
+function BubbleFile({
+  mine,
+  url,
+  fileName,
+  mime,
+  size,
+  caption,
+  createdAt,
+}: {
+  mine: boolean;
+  url: string;
+  fileName: string;
+  mime: string;
+  size: number;
+  caption?: string;
+  createdAt: string;
+}) {
+  const label = mime?.includes("pdf") ? "PDF" : "FILE";
 
   return (
-    <Button type="submit" disabled={pending} className="whitespace-nowrap">
-      {pending ? "送信中…" : "送信"}
-    </Button>
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[85%] sm:max-w-[70%]">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className={[
+            "block rounded-2xl border border-border px-4 py-3",
+            "hover:bg-secondary/40 transition",
+            mine ? "bg-primary/10" : "bg-secondary/30",
+          ].join(" ")}
+          title="新しいタブで開く"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">{fileName}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+              </div>
+            </div>
+            <div className="text-xs text-primary font-semibold whitespace-nowrap">
+              開く
+            </div>
+          </div>
+        </a>
+
+        {caption ? (
+          <div
+            className={[
+              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+              mine ? "bg-primary/15" : "bg-secondary/40",
+            ].join(" ")}
+          >
+            {caption}
+          </div>
+        ) : null}
+
+        <BubbleMeta mine={mine} createdAt={createdAt} />
+      </div>
+    </div>
   );
 }
 
@@ -152,40 +284,34 @@ export default function DmChatClient({
   const router = useRouter();
 
   const [draft, setDraft] = useState("");
-
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // 送った直後にすぐ出す（APIがsignedUrlを返す想定）
-  const [localImages, setLocalImages] = useState<LocalImage[]>([]);
-
-  // モーダル（拡大表示）
-  const [modalUrl, setModalUrl] = useState<string | null>(null);
+  const [localUploads, setLocalUploads] = useState<LocalUpload[]>([]);
+  const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const filePickerRef = useRef<HTMLInputElement | null>(null);
+  const mediaPickerRef = useRef<HTMLInputElement | null>(null);
 
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, localImages.length]);
+  }, [messages.length, localUploads.length]);
 
   const openFilePicker = () => {
     setUploadError(null);
-    fileRef.current?.click();
+    filePickerRef.current?.click();
   };
 
-  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  const openMediaPicker = () => {
+    setUploadError(null);
+    mediaPickerRef.current?.click();
+  };
 
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setUploadError("画像ファイルだけ送れます。");
-      return;
-    }
-
+  const uploadFile = async (file: File) => {
     setUploading(true);
     setUploadError(null);
 
@@ -195,27 +321,29 @@ export default function DmChatClient({
       fd.append("file", file);
       if (draft.trim()) fd.append("caption", draft.trim());
 
-      const res = await fetch("/api/dm/upload-image", {
-        method: "POST",
-        body: fd,
-      });
-
+      const res = await fetch("/api/dm/upload-image", { method: "POST", body: fd });
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error ?? `Upload failed (HTTP ${res.status})`);
       }
 
-      // 即プレビュー（LINEっぽい）
-      if (json.signedUrl) {
-        setLocalImages((prev) => [
+      const signedUrl = json.signedUrl as string | null;
+      const messageType = json.messageType as "image" | "video" | "file";
+
+      if (signedUrl) {
+        setLocalUploads((prev) => [
           ...prev,
           {
             id: json.messageId ?? `local-${Date.now()}`,
             sender_id: myUserId,
             created_at: json.createdAt ?? new Date().toISOString(),
-            signedUrl: json.signedUrl,
+            type: messageType,
+            signedUrl,
             caption: draft.trim(),
+            fileName: json.fileName ?? file.name,
+            mime: json.mime ?? file.type ?? "",
+            size: json.size ?? file.size ?? 0,
           },
         ]);
       }
@@ -223,10 +351,17 @@ export default function DmChatClient({
       setDraft("");
       router.refresh();
     } catch (err: any) {
-      setUploadError(err?.message ?? "画像の送信に失敗しました。");
+      setUploadError(err?.message ?? "送信に失敗しました。");
     } finally {
       setUploading(false);
     }
+  };
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    await uploadFile(file);
   };
 
   return (
@@ -238,64 +373,100 @@ export default function DmChatClient({
         "max-h-[75vh] sm:max-h-[72vh]",
       ].join(" ")}
     >
-      {/* 画像拡大モーダル */}
-      {modalUrl && (
+      {modal && (
         <div className="fixed inset-0 z-[60]">
-          <div
-            className="absolute inset-0 bg-black/70"
-            onClick={() => setModalUrl(null)}
-            aria-hidden="true"
-          />
+          <div className="absolute inset-0 bg-black/70" onClick={() => setModal(null)} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="relative max-w-[95vw] max-h-[85vh]">
+            <div className="relative max-w-[95vw] max-h-[85vh] w-full">
               <button
                 type="button"
-                onClick={() => setModalUrl(null)}
+                onClick={() => setModal(null)}
                 className="absolute -top-10 right-0 text-white/90 hover:text-white text-sm"
               >
                 閉じる ✕
               </button>
-              <img
-                src={modalUrl}
-                alt="拡大画像"
-                className="block max-w-[95vw] max-h-[85vh] object-contain rounded-lg"
-              />
+
+              {modal.kind === "image" ? (
+                <img
+                  src={modal.url}
+                  alt="image"
+                  className="block max-w-[95vw] max-h-[85vh] object-contain mx-auto"
+                />
+              ) : (
+                <video
+                  src={modal.url}
+                  className="block w-full max-w-[95vw] max-h-[85vh] bg-black"
+                  controls
+                  autoPlay
+                  playsInline
+                />
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* メッセージ一覧 */}
+      <input
+        ref={filePickerRef}
+        type="file"
+        accept=".pdf,application/pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/*,text/*"
+        className="hidden"
+        onChange={onPickFile}
+      />
+      <input
+        ref={mediaPickerRef}
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={onPickFile}
+      />
+
       <div className="flex-1 overflow-y-auto pr-1 space-y-3">
-        {messages.length === 0 && localImages.length === 0 ? (
+        {messages.length === 0 && localUploads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            まだメッセージがありません。最初の一言（または画像）を送ってみよう。
+            まだメッセージがありません。最初の一言（またはメディア）を送ってみよう。
           </p>
         ) : (
           <>
             {messages.map((m) => {
               const mine = m.sender_id === myUserId;
 
-              // ✅ 過去の画像メッセージも表示（page.tsxが signed URL を付けて渡す）
-              if (m.message_type === "image") {
-                if (m.image_url) {
-                  return (
-                    <BubbleImage
-                      key={m.id}
-                      mine={mine}
-                      url={m.image_url}
-                      caption={m.body || ""}
-                      createdAt={m.created_at}
-                      onOpen={(url) => setModalUrl(url)}
-                    />
-                  );
-                }
-                // signed URLが作れなかった場合のフォールバック
+              if (m.message_type === "image" && m.image_url) {
                 return (
-                  <BubbleText
+                  <BubbleImage
                     key={m.id}
                     mine={mine}
-                    body={m.body || "（画像）"}
+                    url={m.image_url}
+                    caption={m.body || ""}
+                    createdAt={m.created_at}
+                    onOpen={(kind, url) => setModal({ kind, url })}
+                  />
+                );
+              }
+
+              if (m.message_type === "video" && m.file_url) {
+                return (
+                  <BubbleVideo
+                    key={m.id}
+                    mine={mine}
+                    url={m.file_url}
+                    caption={m.body || ""}
+                    createdAt={m.created_at}
+                    onOpen={(kind, url) => setModal({ kind, url })}
+                  />
+                );
+              }
+
+              if (m.message_type === "file" && m.file_url) {
+                return (
+                  <BubbleFile
+                    key={m.id}
+                    mine={mine}
+                    url={m.file_url}
+                    fileName={m.file_name ?? "file"}
+                    mime={m.file_mime ?? ""}
+                    size={m.file_size ?? 0}
+                    caption={m.body || ""}
                     createdAt={m.created_at}
                   />
                 );
@@ -305,44 +476,72 @@ export default function DmChatClient({
                 <BubbleText
                   key={m.id}
                   mine={mine}
-                  body={m.body}
+                  body={
+                    m.body ||
+                    (m.message_type === "file"
+                      ? "（ファイル）"
+                      : m.message_type === "video"
+                      ? "（動画）"
+                      : m.message_type === "image"
+                      ? "（画像）"
+                      : "")
+                  }
                   createdAt={m.created_at}
                 />
               );
             })}
 
-            {/* 送った直後に即表示（リロード前でも見える） */}
-            {localImages.map((im) => (
-              <BubbleImage
-                key={im.id}
-                mine={im.sender_id === myUserId}
-                url={im.signedUrl}
-                caption={im.caption}
-                createdAt={im.created_at}
-                onOpen={(url) => setModalUrl(url)}
-              />
-            ))}
+            {localUploads.map((u) => {
+              const mine = u.sender_id === myUserId;
+
+              if (u.type === "image") {
+                return (
+                  <BubbleImage
+                    key={u.id}
+                    mine={mine}
+                    url={u.signedUrl}
+                    caption={u.caption}
+                    createdAt={u.created_at}
+                    onOpen={(kind, url) => setModal({ kind, url })}
+                  />
+                );
+              }
+
+              if (u.type === "video") {
+                return (
+                  <BubbleVideo
+                    key={u.id}
+                    mine={mine}
+                    url={u.signedUrl}
+                    caption={u.caption}
+                    createdAt={u.created_at}
+                    onOpen={(kind, url) => setModal({ kind, url })}
+                  />
+                );
+              }
+
+              return (
+                <BubbleFile
+                  key={u.id}
+                  mine={mine}
+                  url={u.signedUrl}
+                  fileName={u.fileName}
+                  mime={u.mime}
+                  size={u.size}
+                  caption={u.caption}
+                  createdAt={u.created_at}
+                />
+              );
+            })}
           </>
         )}
 
         <div ref={bottomRef} />
       </div>
 
-      {/* 送信エリア */}
       <div className="sticky bottom-0 pt-3 bg-background/80 backdrop-blur">
-        {uploadError && (
-          <div className="mb-2 text-xs text-destructive">{uploadError}</div>
-        )}
+        {uploadError && <div className="mb-2 text-xs text-destructive">{uploadError}</div>}
 
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onPickFile}
-        />
-
-        {/* ✅ Server Action は form action に渡す */}
         <form
           action={async (fd: FormData) => {
             fd.set("body", draft);
@@ -358,28 +557,35 @@ export default function DmChatClient({
             disabled={uploading}
             className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2
                        hover:bg-secondary/50 transition disabled:opacity-50"
-            aria-label="画像を送る"
-            title="画像を送る"
+            aria-label="ファイルを送る"
+            title="ファイルを送る"
           >
-            {uploading ? "…" : "📷"}
+            📎
+          </button>
+
+          <button
+            type="button"
+            onClick={openMediaPicker}
+            disabled={uploading}
+            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2
+                       hover:bg-secondary/50 transition disabled:opacity-50"
+            aria-label="画像・動画を送る"
+            title="画像・動画を送る"
+          >
+            🎞️
           </button>
 
           <div className="flex-1">
             <Input
               name="body"
-              placeholder="メッセージ…（画像ならキャプションにもなる）"
+              placeholder="メッセージ…（メディア/ファイルならキャプションにもなる）"
               autoComplete="off"
               value={draft}
               onChange={(e: any) => setDraft(e.target.value)}
             />
           </div>
 
-          <SubmitButton
-            onSettled={() => {
-              // 送信完了でUIを整える
-              router.refresh();
-            }}
-          />
+          <SubmitButton onSettled={() => router.refresh()} />
         </form>
       </div>
     </div>

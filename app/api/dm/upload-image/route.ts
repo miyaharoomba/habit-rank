@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Nodeでも動く簡易UUID（依存なし）
+// Nodeでも動く簡易UUID
 function uuidLike() {
-  // crypto.randomUUID があれば使う（Node 18+ / ブラウザ）
-  // なければ簡易生成
   // @ts-ignore
   if (globalThis.crypto?.randomUUID) {
     // @ts-ignore
@@ -17,6 +15,12 @@ function uuidLike() {
   });
 }
 
+function safeExt(filename: string) {
+  const last = filename.split(".").pop() || "";
+  const ext = last.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return ext || "bin";
+}
+
 export async function POST(req: Request) {
   const supabase = await createClient();
 
@@ -27,88 +31,102 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  // multipart/form-data を受け取る
+  // multipart/form-data
   const form = await req.formData();
   const threadId = String(form.get("threadId") ?? "");
   const caption = String(form.get("caption") ?? "").trim();
   const file = form.get("file");
 
   if (!threadId) {
-    return NextResponse.json({ error: "threadId is required" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "threadId is required" }, { status: 400 });
   }
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "file is required" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "file is required" }, { status: 400 });
   }
 
-  // 画像だけ許可（必要なら増やせる）
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "only image files allowed" }, { status: 400 });
-  }
+  // 種別判定（image / video / file）
+  const mime = (file.type || "application/octet-stream").toLowerCase();
+  const isImage = mime.startsWith("image/");
+  const isVideo = mime.startsWith("video/");
+  const messageType = isImage ? "image" : isVideo ? "video" : "file";
 
   // 保存パス: "{threadId}/{uuid}.{ext}"
-  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const ext = safeExt(file.name);
   const objectPath = `${threadId}/${uuidLike()}.${ext}`;
 
-  // 1) Storageにアップロード（dm-mediaはPrivate bucket想定）
-  // storage upload API: from(bucket).upload(path, fileBody) [2](https://github.com/orgs/vercel/repositories)
+  // 1) Storage にアップロード（dm-media: private bucket）
+  // upload(path, fileBody) [1](https://github.com/orgs/vercel/repositories)
   const { error: upErr } = await supabase.storage
     .from("dm-media")
     .upload(objectPath, file, {
-      contentType: file.type,
+      contentType: mime,
       upsert: false,
     });
 
   if (upErr) {
-    // ここでRLS違反なら storage.objects のポリシーを疑う（参加者判定など）
-    return NextResponse.json({ error: upErr.message }, { status: 400 });
+    // RLS違反や容量制限など
+    return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
   }
 
-  // 2) dm_messages に「画像メッセージ」をINSERT
-  // message_type='image' / image_path 必須（あなたが追加した制約に合わせる）
+  // 2) dm_messages に保存（あなたが拡張したカラムに合わせる）
+  // text: bodyのみ
+  // image: image_path/image_mime/image_size
+  // video/file: file_path/file_name/file_mime/file_size
+  const insertPayload: any = {
+    thread_id: threadId,
+    sender_id: user.id,
+    body: caption || "", // not null対策（空文字OK）
+    message_type: messageType,
+  };
+
+  if (messageType === "image") {
+    insertPayload.image_path = objectPath;
+    insertPayload.image_mime = mime;
+    insertPayload.image_size = file.size;
+    insertPayload.file_path = null;
+    insertPayload.file_name = null;
+    insertPayload.file_mime = null;
+    insertPayload.file_size = null;
+  } else {
+    insertPayload.file_path = objectPath;
+    insertPayload.file_name = file.name;
+    insertPayload.file_mime = mime;
+    insertPayload.file_size = file.size;
+    insertPayload.image_path = null;
+    insertPayload.image_mime = null;
+    insertPayload.image_size = null;
+  }
+
   const { data: inserted, error: insErr } = await supabase
     .from("dm_messages")
-    .insert({
-      thread_id: threadId,
-      sender_id: user.id,
-      body: caption || "", // bodyはnot null対策（空文字OK）
-      message_type: "image",
-      image_path: objectPath,
-      image_mime: file.type,
-      image_size: file.size,
-    })
+    .insert(insertPayload)
     .select("id, created_at")
     .maybeSingle();
 
   if (insErr) {
-    return NextResponse.json({ error: insErr.message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: insErr.message }, { status: 400 });
   }
 
-  // 3) 表示用に signed URL を返す（Private bucketの表示向け）
-  // createSignedUrl(path, expiresIn) [3](https://ihogehoge.hatenablog.com/entry/2025/04/21/153229)[4](https://supabase.com/docs/guides/auth/quickstarts/nextjs)
+  // 3) 表示用 signed URL を返す（Private bucketのプレビュー用）
+  // createSignedUrl(path, expiresIn) [2](https://ihogehoge.hatenablog.com/entry/2025/04/21/153229)[3](https://supabase.com/docs/guides/auth/quickstarts/nextjs)
   const { data: signed, error: sErr } = await supabase.storage
     .from("dm-media")
     .createSignedUrl(objectPath, 60 * 60); // 1時間
 
-  if (sErr) {
-    // signed URL が失敗しても、パス自体は保存できているので返す
-    return NextResponse.json({
-      ok: true,
-      messageId: inserted?.id ?? null,
-      createdAt: inserted?.created_at ?? null,
-      path: objectPath,
-      signedUrl: null,
-      warning: sErr.message,
-    });
-  }
-
+  // signed URL生成に失敗しても、DB保存・アップロードは完了している
   return NextResponse.json({
     ok: true,
+    messageType,
     messageId: inserted?.id ?? null,
     createdAt: inserted?.created_at ?? null,
     path: objectPath,
-    signedUrl: signed?.signedUrl ?? null,
+    signedUrl: sErr ? null : signed?.signedUrl ?? null,
+    fileName: file.name,
+    mime,
+    size: file.size,
+    warning: sErr ? sErr.message : null,
   });
 }
