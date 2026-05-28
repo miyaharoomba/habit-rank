@@ -16,7 +16,6 @@ type Message = {
   created_at: string;
 
   message_type?: "text" | "image" | "video" | "file";
-
   image_url?: string | null; // signed URL（image）
   file_url?: string | null;  // signed URL（video/file）
   file_name?: string | null;
@@ -25,7 +24,7 @@ type Message = {
 };
 
 type LocalUpload = {
-  id: string;
+  id: string; // できれば messageId を入れる（重複除去の鍵）
   sender_id: string;
   created_at: string;
   type: "image" | "video" | "file";
@@ -34,6 +33,7 @@ type LocalUpload = {
   fileName: string;
   mime: string;
   size: number;
+  fingerprint: string; // 多重送信防止用
 };
 
 function bytes(size: number) {
@@ -129,12 +129,7 @@ function BubbleImage({
           aria-label="画像を拡大表示"
           title="タップで拡大"
         >
-          <img
-            src={url}
-            alt="image"
-            className="block w-full h-auto max-h-[360px] object-cover"
-            loading="lazy"
-          />
+          <img src={url} alt="image" className="w-full h-auto block" />
         </button>
 
         {caption ? (
@@ -176,13 +171,7 @@ function BubbleVideo({
             mine ? "bg-primary/10" : "bg-secondary/30",
           ].join(" ")}
         >
-          <video
-            src={url}
-            className="block w-full h-auto max-h-[360px] bg-black"
-            controls
-            playsInline
-            preload="metadata"
-          />
+          <video src={url} controls className="w-full h-auto block" />
           <button
             type="button"
             onClick={() => onOpen("video", url)}
@@ -236,9 +225,9 @@ function BubbleFile({
           target="_blank"
           rel="noreferrer"
           className={[
-            "block rounded-2xl border border-border px-4 py-3",
-            "hover:bg-secondary/40 transition",
+            "block rounded-2xl border border-border px-3 py-3",
             mine ? "bg-primary/10" : "bg-secondary/30",
+            "hover:bg-secondary/40 transition",
           ].join(" ")}
           title="新しいタブで開く"
         >
@@ -249,9 +238,7 @@ function BubbleFile({
                 {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
               </div>
             </div>
-            <div className="text-xs text-primary font-semibold whitespace-nowrap">
-              開く
-            </div>
+            <div className="text-xs text-primary font-semibold whitespace-nowrap">開く</div>
           </div>
         </a>
 
@@ -295,7 +282,16 @@ export default function DmChatClient({
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
 
+  // 多重送信防止（同じファイルを短時間に連打した時用）
+  const lastUploadKeyRef = useRef<{ key: string; at: number } | null>(null);
+
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
+
+  // ✅ サーバーから同じ message.id が来たら localUploads を消す（重複表示バグ潰し）
+  useEffect(() => {
+    const serverIds = new Set(messages.map((m) => m.id));
+    setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -303,15 +299,26 @@ export default function DmChatClient({
 
   const openFilePicker = () => {
     setUploadError(null);
-    filePickerRef.current?.click();
+    if (!uploading) filePickerRef.current?.click();
   };
 
   const openMediaPicker = () => {
     setUploadError(null);
-    mediaPickerRef.current?.click();
+    if (!uploading) mediaPickerRef.current?.click();
   };
 
   const uploadFile = async (file: File) => {
+    if (uploading) return;
+
+    const fp = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+    const last = lastUploadKeyRef.current;
+    const now = Date.now();
+    if (last && last.key === fp && now - last.at < 2500) {
+      // 2.5秒以内の同一ファイル連打は無視
+      return;
+    }
+    lastUploadKeyRef.current = { key: fp, at: now };
+
     setUploading(true);
     setUploadError(null);
 
@@ -330,20 +337,22 @@ export default function DmChatClient({
 
       const signedUrl = json.signedUrl as string | null;
       const messageType = json.messageType as "image" | "video" | "file";
+      const messageId = (json.messageId as string | null) ?? null;
 
       if (signedUrl) {
         setLocalUploads((prev) => [
           ...prev,
           {
-            id: json.messageId ?? `local-${Date.now()}`,
+            id: messageId ?? `local-${Date.now()}`, // できるだけmessageIdを使う
             sender_id: myUserId,
-            created_at: json.createdAt ?? new Date().toISOString(),
+            created_at: (json.createdAt as string | null) ?? new Date().toISOString(),
             type: messageType,
             signedUrl,
             caption: draft.trim(),
-            fileName: json.fileName ?? file.name,
-            mime: json.mime ?? file.type ?? "",
-            size: json.size ?? file.size ?? 0,
+            fileName: (json.fileName as string | null) ?? file.name,
+            mime: (json.mime as string | null) ?? file.type ?? "",
+            size: (json.size as number | null) ?? file.size ?? 0,
+            fingerprint: fp,
           },
         ]);
       }
@@ -387,19 +396,9 @@ export default function DmChatClient({
               </button>
 
               {modal.kind === "image" ? (
-                <img
-                  src={modal.url}
-                  alt="image"
-                  className="block max-w-[95vw] max-h-[85vh] object-contain mx-auto"
-                />
+                <img src={modal.url} alt="image" className="max-h-[85vh] w-auto mx-auto rounded-lg" />
               ) : (
-                <video
-                  src={modal.url}
-                  className="block w-full max-w-[95vw] max-h-[85vh] bg-black"
-                  controls
-                  autoPlay
-                  playsInline
-                />
+                <video src={modal.url} controls className="max-h-[85vh] w-full rounded-lg" />
               )}
             </div>
           </div>
@@ -412,6 +411,7 @@ export default function DmChatClient({
         accept=".pdf,application/pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/*,text/*"
         className="hidden"
         onChange={onPickFile}
+        disabled={uploading}
       />
       <input
         ref={mediaPickerRef}
@@ -419,6 +419,7 @@ export default function DmChatClient({
         accept="image/*,video/*"
         className="hidden"
         onChange={onPickFile}
+        disabled={uploading}
       />
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-3">
@@ -582,6 +583,7 @@ export default function DmChatClient({
               autoComplete="off"
               value={draft}
               onChange={(e: any) => setDraft(e.target.value)}
+              disabled={uploading}
             />
           </div>
 
@@ -591,3 +593,4 @@ export default function DmChatClient({
     </div>
   );
 }
+``
