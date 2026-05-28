@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 
@@ -17,14 +17,14 @@ type Message = {
 
   message_type?: "text" | "image" | "video" | "file";
   image_url?: string | null; // signed URL（image）
-  file_url?: string | null;  // signed URL（video/file）
+  file_url?: string | null; // signed URL（video/file）
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
 };
 
 type LocalUpload = {
-  id: string; // できれば messageId を入れる（重複除去の鍵）
+  id: string; // messageId を優先
   sender_id: string;
   created_at: string;
   type: "image" | "video" | "file";
@@ -129,7 +129,7 @@ function BubbleImage({
           aria-label="画像を拡大表示"
           title="タップで拡大"
         >
-          <img src={url} alt="image" className="w-full h-auto block" />
+          <img src={url} alt="image" className="block w-full h-auto" loading="lazy" />
         </button>
 
         {caption ? (
@@ -171,7 +171,7 @@ function BubbleVideo({
             mine ? "bg-primary/10" : "bg-secondary/30",
           ].join(" ")}
         >
-          <video src={url} controls className="w-full h-auto block" />
+          <video src={url} controls playsInline className="block w-full h-auto" />
           <button
             type="button"
             onClick={() => onOpen("video", url)}
@@ -224,11 +224,7 @@ function BubbleFile({
           href={url}
           target="_blank"
           rel="noreferrer"
-          className={[
-            "block rounded-2xl border border-border px-3 py-3",
-            mine ? "bg-primary/10" : "bg-secondary/30",
-            "hover:bg-secondary/40 transition",
-          ].join(" ")}
+          className="block rounded-2xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
           title="新しいタブで開く"
         >
           <div className="flex items-start justify-between gap-3">
@@ -277,24 +273,39 @@ export default function DmChatClient({
   const [localUploads, setLocalUploads] = useState<LocalUpload[]>([]);
   const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-
+  const listRef = useRef<HTMLDivElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
 
-  // 多重送信防止（同じファイルを短時間に連打した時用）
   const lastUploadKeyRef = useRef<{ key: string; at: number } | null>(null);
 
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
 
-  // ✅ サーバーから同じ message.id が来たら localUploads を消す（重複表示バグ潰し）
+  const scrollToBottom = (smooth: boolean) => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  };
+
+  // リロード直後（初回マウント）も必ず最下部へ
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => {
+      scrollToBottom(false);
+      requestAnimationFrame(() => scrollToBottom(false));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // サーバーに反映されたら localUploads を消す（重複表示防止）
   useEffect(() => {
     const serverIds = new Set(messages.map((m) => m.id));
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  // 受信/送信で更新されたら最下部へ（リロード後も含む）
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => scrollToBottom(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, localUploads.length]);
 
   const openFilePicker = () => {
@@ -313,10 +324,7 @@ export default function DmChatClient({
     const fp = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
     const last = lastUploadKeyRef.current;
     const now = Date.now();
-    if (last && last.key === fp && now - last.at < 2500) {
-      // 2.5秒以内の同一ファイル連打は無視
-      return;
-    }
+    if (last && last.key === fp && now - last.at < 2500) return;
     lastUploadKeyRef.current = { key: fp, at: now };
 
     setUploading(true);
@@ -343,7 +351,7 @@ export default function DmChatClient({
         setLocalUploads((prev) => [
           ...prev,
           {
-            id: messageId ?? `local-${Date.now()}`, // できるだけmessageIdを使う
+            id: messageId ?? `local-${Date.now()}`,
             sender_id: myUserId,
             created_at: (json.createdAt as string | null) ?? new Date().toISOString(),
             type: messageType,
@@ -359,6 +367,7 @@ export default function DmChatClient({
 
       setDraft("");
       router.refresh();
+      requestAnimationFrame(() => scrollToBottom(true));
     } catch (err: any) {
       setUploadError(err?.message ?? "送信に失敗しました。");
     } finally {
@@ -396,9 +405,9 @@ export default function DmChatClient({
               </button>
 
               {modal.kind === "image" ? (
-                <img src={modal.url} alt="image" className="max-h-[85vh] w-auto mx-auto rounded-lg" />
+                <img src={modal.url} alt="image" className="block max-h-[85vh] w-auto mx-auto" />
               ) : (
-                <video src={modal.url} controls className="max-h-[85vh] w-full rounded-lg" />
+                <video src={modal.url} controls playsInline className="block max-h-[85vh] w-full" />
               )}
             </div>
           </div>
@@ -422,7 +431,7 @@ export default function DmChatClient({
         disabled={uploading}
       />
 
-      <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+      <div ref={listRef} className="flex-1 overflow-y-auto pr-1 space-y-3">
         {messages.length === 0 && localUploads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             まだメッセージがありません。最初の一言（またはメディア）を送ってみよう。
@@ -536,19 +545,18 @@ export default function DmChatClient({
             })}
           </>
         )}
-
-        <div ref={bottomRef} />
       </div>
 
       <div className="sticky bottom-0 pt-3 bg-background/80 backdrop-blur">
         {uploadError && <div className="mb-2 text-xs text-destructive">{uploadError}</div>}
 
         <form
-          action={async (fd: FormData) => {
+          action={async (fd) => {
             fd.set("body", draft);
             await textAction(fd);
             setDraft("");
             router.refresh();
+            requestAnimationFrame(() => scrollToBottom(true));
           }}
           className="flex gap-2"
         >
@@ -593,4 +601,3 @@ export default function DmChatClient({
     </div>
   );
 }
-``
