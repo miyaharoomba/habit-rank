@@ -1,10 +1,8 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
 import DmChatClient from "./DmChatClient";
 
 type MessageRow = {
@@ -23,7 +21,6 @@ type MessageRow = {
   file_size: number | null;
 };
 
-// Clientに渡す形（signed URLを追加）
 type MessageForClient = {
   id: string;
   sender_id: string;
@@ -44,10 +41,13 @@ type MessageForClient = {
 
 export default async function DmThreadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ threadId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { threadId } = await params;
+  const sp = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -56,7 +56,37 @@ export default async function DmThreadPage({
   } = await supabase.auth.getUser();
   if (userErr || !user) redirect("/auth/sign-in");
 
-  // 1) スレッド情報（相手ID）
+  // ✅ 通報送信（Server Action）
+  // form の action に渡すのが正しい（JSX の子に置かない）[1](https://attendence-system-1910.vercel.app/users/login)[2](https://techstudywork.jp/articles/vercel-deployment-complete-guide)
+  async function submitReport(formData: FormData): Promise<void> {
+    "use server";
+
+    const reason = String(formData.get("reason") ?? "").trim();
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) redirect("/auth/sign-in");
+
+    if (reason.length < 3) {
+      redirect(`/dm/${threadId}?report=error`);
+    }
+
+    const { error } = await supabase.from("dm_reports").insert({
+      reporter_id: user.id,
+      thread_id: threadId,
+      reason,
+    });
+
+    if (error) {
+      redirect(`/dm/${threadId}?report=error`);
+    }
+
+    redirect(`/dm/${threadId}?report=ok`);
+  }
+
+  // 1) スレッド情報
   const { data: thread, error: threadErr } = await supabase
     .from("dm_threads")
     .select("id, user_low, user_high")
@@ -75,10 +105,10 @@ export default async function DmThreadPage({
               スレッドが見つかりません（または権限がありません）。
             </p>
             <div className="mt-3 flex gap-3">
-              <Link href="/dm" className="text-sm text-primary hover:underline">
+              <Link className="text-sm text-primary hover:underline" href="/dm">
                 ← DM一覧へ
               </Link>
-              <Link href="/ranking" className="text-sm text-primary hover:underline">
+              <Link className="text-sm text-primary hover:underline" href="/ranking">
                 ランキングへ
               </Link>
             </div>
@@ -100,7 +130,7 @@ export default async function DmThreadPage({
 
   const otherName = otherProfile?.display_name?.trim() || "NoName";
 
-  // 3) メッセージ取得（画像/動画/ファイル情報も含める）
+  // 3) メッセージ取得（画像/動画/ファイル含む）
   const { data: msgs, error: msgErr } = await supabase
     .from("dm_messages")
     .select(
@@ -119,7 +149,7 @@ export default async function DmThreadPage({
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {msgErr.message}</p>
             <div className="mt-3">
-              <Link href="/dm" className="text-sm text-primary hover:underline">
+              <Link className="text-sm text-primary hover:underline" href="/dm">
                 ← DM一覧へ
               </Link>
             </div>
@@ -131,12 +161,9 @@ export default async function DmThreadPage({
 
   const rows = (msgs ?? []) as MessageRow[];
 
-  // 4) Private bucket なので、表示用に signed URL を作る
-  // 画像/動画/ファイルすべてに対応
-  // createSignedUrl(path, expiresIn) が公式API。[1](https://ihogehoge.hatenablog.com/entry/2025/04/21/153229)[2](https://supabase.com/docs/guides/auth/quickstarts/nextjs)
+  // 4) signed URL 生成（image/video/file）
   const messages: MessageForClient[] = await Promise.all(
     rows.map(async (m) => {
-      // 共通部分
       const base: MessageForClient = {
         id: m.id,
         sender_id: m.sender_id,
@@ -152,52 +179,85 @@ export default async function DmThreadPage({
         file_url: null,
       };
 
-      // text はURL不要
       if (m.message_type === "text") return base;
 
-      // image は image_path を signed URL 化
       if (m.message_type === "image" && m.image_path) {
         const { data: signed, error: sErr } = await supabase.storage
           .from("dm-media")
-          .createSignedUrl(m.image_path, 60 * 60); // 1時間
-        return {
-          ...base,
-          image_url: sErr ? null : signed?.signedUrl ?? null,
-        };
+          .createSignedUrl(m.image_path, 60 * 60);
+        return { ...base, image_url: sErr ? null : signed?.signedUrl ?? null };
       }
 
-      // video / file は file_path を signed URL 化
       if ((m.message_type === "video" || m.message_type === "file") && m.file_path) {
         const { data: signed, error: sErr } = await supabase.storage
           .from("dm-media")
-          .createSignedUrl(m.file_path, 60 * 60); // 1時間
-        return {
-          ...base,
-          file_url: sErr ? null : signed?.signedUrl ?? null,
-        };
+          .createSignedUrl(m.file_path, 60 * 60);
+        return { ...base, file_url: sErr ? null : signed?.signedUrl ?? null };
       }
 
-      // パスが無いなどの異常系はそのまま返す
       return base;
     })
   );
 
+  const reportStatus = typeof sp.report === "string" ? sp.report : "";
+
   return (
     <Container>
-      {/* ヘッダー */}
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <div className="text-sm text-muted-foreground">DM</div>
           <h1 className="text-2xl font-bold tracking-tight truncate">{otherName}</h1>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link href="/dm" className="text-sm text-primary hover:underline whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link className="text-sm text-primary hover:underline" href="/dm">
             ← DM一覧
           </Link>
-          <Link href="/app" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link className="text-sm text-primary hover:underline" href="/app">
             /app
           </Link>
+
+          {/* ✅ 通報UI */}
+          <details className="relative">
+            <summary className="cursor-pointer select-none rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary/40">
+              通報
+            </summary>
+
+            <div className="absolute right-0 mt-2 w-[320px] rounded-xl border border-border bg-card p-3 shadow-glow z-50">
+              {reportStatus === "ok" && (
+                <div className="mb-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
+                  通報しました。ご協力ありがとうございます。
+                </div>
+              )}
+              {reportStatus === "error" && (
+                <div className="mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  通報に失敗しました（理由は3文字以上で入力）
+                </div>
+              )}
+
+              {/* ✅ 正しい：form action に Server Action を渡す [1](https://attendence-system-1910.vercel.app/users/login)[2](https://techstudywork.jp/articles/vercel-deployment-complete-guide) */}
+              <form action={submitReport}>
+                <textarea
+                  name="reason"
+                  className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
+                  placeholder="通報理由（例：迷惑行為、スパム、暴言など）"
+                  rows={3}
+                  required
+                  minLength={3}
+                />
+                <button
+                  type="submit"
+                  className="mt-2 w-full rounded-lg bg-destructive text-destructive-foreground px-3 py-2 text-sm font-semibold hover:opacity-90"
+                >
+                  通報を送信
+                </button>
+              </form>
+
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                ※ 通報は管理者の「通報一覧」に送られます。
+              </div>
+            </div>
+          </details>
         </div>
       </header>
 
@@ -207,15 +267,11 @@ export default async function DmThreadPage({
             <h2 className="font-semibold">チャット</h2>
           </CardHeader>
           <CardBody>
-            {/* ✅ image_url / file_url を含めて渡す */}
-            <DmChatClient
-              threadId={threadId}
-              myUserId={user.id}
-              messages={messages as any}
-            />
+            <DmChatClient threadId={threadId} myUserId={user.id} messages={messages as any} />
           </CardBody>
         </Card>
       </div>
     </Container>
   );
 }
+``
