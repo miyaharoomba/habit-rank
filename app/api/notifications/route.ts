@@ -1,0 +1,121 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+/**
+ * GET /api/notifications?limit=20
+ * - notifications を新しい順で返す
+ * - notification_reads を見て未読数を返す
+ *
+ * POST /api/notifications
+ * body: { ids: string[] }
+ * - 指定IDを既読にする（notification_reads に挿入）
+ */
+export async function GET(request: Request) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 50);
+
+  // 1) 通知を取得（RLSで「自分宛 or 全体通知」しか返らない想定）[2](https://www.tekural.com/blog/supabase-auth-nextjs-guide)[3](https://qiita.com/ryosuke_tsuda/items/e31efc789b1f1e544524)
+  const { data: notifs, error: nErr } = await supabase
+    .from("notifications")
+    .select("id, type, actor_id, recipient_id, thread_id, session_id, message_preview, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (nErr) {
+    return NextResponse.json({ error: nErr.message }, { status: 500 });
+  }
+
+  const notifications = notifs ?? [];
+  const ids = notifications.map((n) => n.id);
+
+  // 2) 既読情報を取得（このユーザーが既読にした通知）
+  const { data: reads, error: rErr } = await supabase
+    .from("notification_reads")
+    .select("notification_id")
+    .eq("user_id", user.id)
+    .in("notification_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+
+  if (rErr) {
+    return NextResponse.json({ error: rErr.message }, { status: 500 });
+  }
+
+  const readSet = new Set((reads ?? []).map((r) => r.notification_id));
+
+  // 3) actor の display_name をまとめて取得（任意だけど見栄えUP）
+  const actorIds = Array.from(new Set(notifications.map((n) => n.actor_id).filter(Boolean))) as string[];
+
+  let actorMap = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const { data: actors } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", actorIds);
+
+    (actors ?? []).forEach((a) => {
+      actorMap.set(a.id, (a.display_name ?? "").trim() || "NoName");
+    });
+  }
+
+  const items = notifications.map((n) => ({
+    id: n.id,
+    type: n.type,
+    created_at: n.created_at,
+    message_preview: n.message_preview ?? "",
+    thread_id: n.thread_id,
+    session_id: n.session_id,
+    actor_id: n.actor_id,
+    actor_name: n.actor_id ? actorMap.get(n.actor_id) ?? "NoName" : null,
+    read: readSet.has(n.id),
+  }));
+
+  const unreadCount = items.reduce((acc, it) => acc + (it.read ? 0 : 1), 0);
+
+  return NextResponse.json({ unreadCount, items });
+}
+
+export async function POST(request: Request) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const ids = (body?.ids ?? []) as string[];
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ ok: true, inserted: 0 });
+  }
+
+  // 既読を upsert（同じ通知を何回押してもOK）
+  const payload = ids.map((notification_id) => ({
+    notification_id,
+    user_id: user.id,
+  }));
+
+  const { error } = await supabase
+    .from("notification_reads")
+    .upsert(payload, { onConflict: "notification_id,user_id" });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, inserted: ids.length });
+}

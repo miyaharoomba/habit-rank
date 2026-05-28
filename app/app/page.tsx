@@ -2,6 +2,7 @@ import LiveTimer from "@/app/components/LiveTimer";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Button from "@/app/components/ui/Button";
+import NotificationBell from "@/app/components/NotificationBell";
 
 import { createClient } from "@/lib/supabase/server";
 import { startSession, finishSession } from "./actions";
@@ -45,7 +46,7 @@ export default async function AppPage() {
 
   // 初回：名前未設定なら onboarding へ
   if (!displayName) {
-    redirect("/onboarding");
+    redirect("/onboarding"); // Server Componentでredirect可能 [2](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
   }
 
   // 継続中セッション（自分のもの）
@@ -76,38 +77,35 @@ export default async function AppPage() {
           <p className="text-sm text-muted-foreground">ダーク × ブルーで統一</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-sm text-muted-foreground mr-1">👤 {displayName}</div>
+        {/* 右側：ユーザー名 + ベル + メニュー */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="text-sm text-muted-foreground mr-1 whitespace-nowrap">
+            👤 {displayName}
+          </div>
 
-          {/* ✅ 追加：DMスレッド一覧 */}
+          {/* ✅ 追加：通知ベル（未読バッジ＋ドロップダウン） */}
+          <NotificationBell />
+
+          {/* ✅ 既存：DM */}
           <Link
             href="/dm"
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold
-                       bg-primary text-primary-foreground hover:bg-primary/90
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                       focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
           >
             DM
           </Link>
 
-          {/* 既存：ランキング */}
+          {/* ✅ 既存：ランキング */}
           <Link
             href="/ranking"
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold
-                       border border-border bg-transparent hover:bg-secondary
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                       focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
           >
             ランキング
           </Link>
 
-          {/* 既存：設定 */}
+          {/* ✅ 既存：設定 */}
           <Link
             href="/settings"
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold
-                       border border-border bg-transparent hover:bg-secondary
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                       focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
           >
             設定
           </Link>
