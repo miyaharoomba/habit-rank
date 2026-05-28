@@ -9,6 +9,9 @@ import { startSession, finishSession } from "./actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+// ✅ JST固定フォーマッタ（内部で timeZone: "Asia/Tokyo" を指定している想定）
+import { formatJst, formatJstStartLabel } from "@/lib/time";
+
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const days = Math.floor(totalSeconds / 86400);
@@ -18,22 +21,9 @@ function formatDuration(ms: number) {
   return { days, hours, minutes, seconds };
 }
 
-function formatStartedAt(iso: string) {
-  const d = new Date(iso);
-  // 「何日の何時から」→ 月/日(曜) 時:分
-  return d.toLocaleString("ja-JP", {
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default async function AppPage() {
   const supabase = await createClient();
 
-  // ログイン中ユーザー
   const {
     data: { user },
     error: userError,
@@ -56,12 +46,11 @@ export default async function AppPage() {
 
   const displayName = profile?.display_name?.trim() || "";
 
-  // 初回：名前未設定なら onboarding へ
   if (!displayName) {
-    redirect("/onboarding"); // サーバー側でredirect可能 [1](https://v3.tailwindcss.com/docs/theme)
+    redirect("/onboarding");
   }
 
-  // 継続中セッション（自分のもの）
+  // 継続中セッション
   const { data: active } = await supabase
     .from("streak_sessions")
     .select("id, started_at")
@@ -70,7 +59,6 @@ export default async function AppPage() {
     .maybeSingle();
 
   const startedAt = active?.started_at ?? null;
-  const startedAtLabel = startedAt ? formatStartedAt(startedAt) : null;
 
   // 履歴（終了済み）最新10件
   const { data: history } = await supabase
@@ -87,10 +75,8 @@ export default async function AppPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
-          {/* 「ダーク × ブルーで統一」は削除 */}
         </div>
 
-        {/* 右側：ユーザー名 + ベル + メニュー */}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="text-sm text-muted-foreground mr-1 whitespace-nowrap">
             👤 {displayName}
@@ -98,31 +84,19 @@ export default async function AppPage() {
 
           <NotificationBell />
 
-          <Link
-            href="/participants"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
+          <Link href="/participants" className="text-sm text-primary hover:underline whitespace-nowrap">
             参加者
           </Link>
 
-          <Link
-            href="/dm"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
+          <Link href="/dm" className="text-sm text-primary hover:underline whitespace-nowrap">
             DM
           </Link>
 
-          <Link
-            href="/ranking"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
+          <Link href="/ranking" className="text-sm text-primary hover:underline whitespace-nowrap">
             ランキング
           </Link>
 
-          <Link
-            href="/settings"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
+          <Link href="/settings" className="text-sm text-primary hover:underline whitespace-nowrap">
             設定
           </Link>
         </div>
@@ -143,13 +117,9 @@ export default async function AppPage() {
               <LiveTimer startedAt={startedAt} />
             </div>
 
-            {/* ✅ 開始日時を分かりやすく表示 */}
-            <div className="mt-2 text-sm text-muted-foreground">
-              {startedAtLabel ? (
-                <span className="tabular-nums">開始：{startedAtLabel}</span>
-              ) : (
-                <span>開始：未開始</span>
-              )}
+            {/* ✅ 開始日時（JST固定） */}
+            <div className="mt-2 text-sm text-muted-foreground tabular-nums">
+              {startedAt ? <span>開始：{formatJstStartLabel(startedAt)}</span> : <span>開始：未開始</span>}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-3">
@@ -164,10 +134,6 @@ export default async function AppPage() {
                   終了
                 </Button>
               </form>
-            </div>
-
-            <div className="mt-3 text-xs text-muted-foreground">
-              started_at: {startedAt ?? "(未開始)"}
             </div>
           </CardBody>
         </Card>
@@ -193,7 +159,7 @@ export default async function AppPage() {
                       className="rounded-lg border border-border bg-secondary/40 px-4 py-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="font-semibold">
+                        <div className="font-semibold tabular-nums">
                           {days}日 {hours}時間 {minutes}分 {seconds}秒
                         </div>
                         <span className="text-xs text-muted-foreground">
@@ -201,9 +167,10 @@ export default async function AppPage() {
                         </span>
                       </div>
 
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        開始: {s.toLocaleString()} / 終了:{" "}
-                        {e ? e.toLocaleString() : "-"}
+                      {/* ✅ ここが今回の本題：開始/終了をJST固定で表示 */}
+                      <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                        開始: {formatJst(row.started_at)} / 終了:{" "}
+                        {row.ended_at ? formatJst(row.ended_at) : "-"}
                       </div>
                     </li>
                   );
@@ -220,4 +187,3 @@ export default async function AppPage() {
     </Container>
   );
 }
-``

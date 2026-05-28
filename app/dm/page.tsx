@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+// ✅ JST固定フォーマッタ（lib/time.ts）
+import { formatJst } from "@/lib/time";
+
 type ThreadRow = {
   thread_id: string;
   other_user_id: string;
@@ -15,11 +18,14 @@ type ThreadRow = {
 export default async function DmListPage() {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/sign-in"); // サーバー側redirectOK [2](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/sign-in");
 
-  // RPCでスレッド一覧を取得（get_my_dm_threadsがDBにある前提） [3](https://github.com/orgs/supabase/discussions/28380)
-  const { data, error } = await supabase.rpc("get_my_dm_threads", { limit_count: 50 });
+  const { data, error } = await supabase.rpc("get_my_dm_threads", {
+    limit_count: 50,
+  });
 
   if (error) {
     return (
@@ -74,18 +80,15 @@ export default async function DmListPage() {
                     <Link href={`/dm/${t.thread_id}`} className="block">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-semibold truncate">
-                            {t.other_display_name}
-                          </div>
+                          <div className="font-semibold truncate">{t.other_display_name}</div>
                           <div className="text-xs text-muted-foreground truncate">
                             {t.last_message ?? "（まだメッセージがありません）"}
                           </div>
                         </div>
 
-                        <div className="text-xs text-muted-foreground whitespace-nowrap">
-                          {t.last_message_at
-                            ? new Date(t.last_message_at).toLocaleString()
-                            : ""}
+                        {/* ✅ ここをJST固定で表示 */}
+                        <div className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                          {t.last_message_at ? formatJst(t.last_message_at) : ""}
                         </div>
                       </div>
                     </Link>
@@ -99,3 +102,4 @@ export default async function DmListPage() {
     </Container>
   );
 }
+``

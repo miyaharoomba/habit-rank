@@ -7,6 +7,10 @@ import Input from "@/app/components/ui/Input";
 import Button from "@/app/components/ui/Button";
 import { sendDm } from "./actions";
 
+// ✅ JST固定フォーマッタ（timeZone: Asia/Tokyo を内部で指定）
+// toLocaleString() は環境のローカルTZに依存するため、固定するのが正解。[1](https://github.com/orgs/vercel/repositories)[2](https://attendence-system-1910.vercel.app/users/login)
+import { formatJst } from "@/lib/time";
+
 type Message = {
   id: string;
   sender_id: string;
@@ -35,13 +39,15 @@ function Bubble({
         >
           {body}
         </div>
+
+        {/* ✅ JST固定の表示（サーバ/ブラウザ環境差が出ない） */}
         <div
           className={[
-            "mt-1 text-[11px] text-muted-foreground",
+            "mt-1 text-[11px] text-muted-foreground tabular-nums",
             mine ? "text-right" : "text-left",
           ].join(" ")}
         >
-          {new Date(createdAt).toLocaleString()}
+          {formatJst(createdAt)}
         </div>
       </div>
     </div>
@@ -66,7 +72,6 @@ export default function DmChatClient({
   myUserId: string;
   messages: Message[];
 }) {
-  const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -88,7 +93,7 @@ export default function DmChatClient({
       ].join(" ")}
     >
       {/* メッセージ一覧 */}
-      <div ref={listRef} className="flex-1 overflow-y-auto pr-1 space-y-3">
+      <div className="flex-1 overflow-y-auto pr-1 space-y-3">
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             まだメッセージがありません。最初の一言を送ってみよう。
@@ -112,6 +117,7 @@ export default function DmChatClient({
           ref={formRef}
           action={async (fd) => {
             await action(fd);
+            // 送信後に入力をクリア
             setTimeout(() => formRef.current?.reset(), 0);
           }}
           className="flex gap-2"

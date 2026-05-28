@@ -5,6 +5,9 @@ import Link from "next/link";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 
+// ✅ JST固定フォーマッタ（前に作った lib/time.ts を使う）
+import { formatJstStartLabel } from "@/lib/time";
+
 type BestRow = {
   rank_no: number;
   user_id: string;
@@ -45,7 +48,6 @@ export default async function RankingPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/sign-in");
 
-  // タブに応じてRPC呼び分け（DB関数はrpcで呼べる）[1](https://attendence-system-1910.vercel.app/users/login)[2](https://qiita.com/H-Iida/items/fe4fe5f18b2ca5bbf6d4)
   const limit_count = 50;
 
   const bestRes =
@@ -69,10 +71,10 @@ export default async function RankingPage({
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {error.message}</p>
             <div className="mt-3 flex gap-3">
-              <Link href="/app" className="text-sm text-primary hover:underline">
+              <Link className="text-sm text-primary hover:underline" href="/app">
                 ← /app
               </Link>
-              <Link href="/settings" className="text-sm text-primary hover:underline">
+              <Link className="text-sm text-primary hover:underline" href="/settings">
                 設定
               </Link>
             </div>
@@ -92,20 +94,18 @@ export default async function RankingPage({
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ランキング</h1>
           <p className="text-sm text-muted-foreground">
-            {activeTab === "best"
-              ? "ベスト（過去最高）順"
-              : "継続中（現在経過）順"}
+            {activeTab === "best" ? "ベスト（過去最高）順" : "継続中（現在経過）順"}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link href="/app" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/app">
             ← /app
           </Link>
-          <Link href="/dm" className="text-sm text-primary hover:underline whitespace-nowrap">
-            DM
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/dm">
+            /dm
           </Link>
-          <Link href="/settings" className="text-sm text-primary hover:underline whitespace-nowrap">
+          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/settings">
             設定
           </Link>
         </div>
@@ -116,10 +116,8 @@ export default async function RankingPage({
         <Link
           href="/ranking?tab=best"
           className={[
-            "rounded-lg border px-3 py-2 text-sm font-semibold whitespace-nowrap",
-            activeTab === "best"
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border bg-secondary/40 text-foreground hover:bg-secondary/60",
+            "rounded-lg border border-border px-3 py-2 text-sm font-semibold whitespace-nowrap",
+            activeTab === "best" ? "bg-primary text-primary-foreground" : "bg-secondary/40",
           ].join(" ")}
         >
           ベスト
@@ -128,10 +126,8 @@ export default async function RankingPage({
         <Link
           href="/ranking?tab=current"
           className={[
-            "rounded-lg border px-3 py-2 text-sm font-semibold whitespace-nowrap",
-            activeTab === "current"
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border bg-secondary/40 text-foreground hover:bg-secondary/60",
+            "rounded-lg border border-border px-3 py-2 text-sm font-semibold whitespace-nowrap",
+            activeTab === "current" ? "bg-primary text-primary-foreground" : "bg-secondary/40",
           ].join(" ")}
         >
           継続中
@@ -144,7 +140,11 @@ export default async function RankingPage({
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">
-                TOP {Math.min(50, activeTab === "best" ? bestRows.length : currentRows.length)}
+                TOP{" "}
+                {Math.min(
+                  50,
+                  activeTab === "best" ? bestRows.length : currentRows.length
+                )}
               </h2>
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {activeTab === "best" ? "過去最高" : "現在経過"}
@@ -177,7 +177,12 @@ export default async function RankingPage({
                             </span>
 
                             <div className="min-w-0">
-                              <div className={"font-semibold truncate " + (isMe ? "text-primary" : "")}>
+                              <div
+                                className={
+                                  "font-semibold truncate " +
+                                  (isMe ? "text-primary" : "")
+                                }
+                              >
                                 {r.display_name}
                                 {isMe ? "（あなた）" : ""}
                               </div>
@@ -200,7 +205,7 @@ export default async function RankingPage({
               )
             ) : currentRows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                継続中の人がいません（誰も started_at が継続中状態ではない）。
+                継続中の人がいません（誰も継続中状態ではない）。
               </p>
             ) : (
               <ul className="space-y-2">
@@ -221,12 +226,19 @@ export default async function RankingPage({
                           </span>
 
                           <div className="min-w-0">
-                            <div className={"font-semibold truncate " + (isMe ? "text-primary" : "")}>
+                            <div
+                              className={
+                                "font-semibold truncate " +
+                                (isMe ? "text-primary" : "")
+                              }
+                            >
                               {r.display_name}
                               {isMe ? "（あなた）" : ""}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              開始: {new Date(r.started_at).toLocaleString()}
+
+                            {/* ✅ ここをJST固定表示に変更 */}
+                            <div className="text-xs text-muted-foreground tabular-nums">
+                              開始：{formatJstStartLabel(r.started_at)}
                             </div>
                           </div>
                         </div>
@@ -251,4 +263,3 @@ export default async function RankingPage({
     </Container>
   );
 }
-``

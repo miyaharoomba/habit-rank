@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+// ✅ JST固定フォーマッタ
+// formatJstStartLabel: 05/28(水) 13:05 みたいな表示（Asia/Tokyo固定）
+import { formatJstStartLabel } from "@/lib/time";
+
 type NotifItem = {
   id: string;
   type: "dm" | "streak_end";
@@ -19,19 +23,6 @@ type ApiResponse = {
   unreadCount: number;
   items: NotifItem[];
 };
-
-function timeAgo(iso: string) {
-  const t = new Date(iso).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const day = Math.floor(hr / 24);
-  return `${day}d`;
-}
 
 function bellIcon(className = "h-5 w-5") {
   return (
@@ -100,7 +91,6 @@ export default function NotificationBell({
     });
 
     if (!res.ok) {
-      // 失敗したら整合性優先で再取得
       await fetchNotifs();
     }
   };
@@ -112,7 +102,7 @@ export default function NotificationBell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // 定期ポーリング（未読数更新）
+  // 定期ポーリング
   useEffect(() => {
     const id = setInterval(() => {
       fetchNotifs();
@@ -133,7 +123,7 @@ export default function NotificationBell({
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  // Escで閉じる（モバイルシートでも使える）
+  // Escで閉じる
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!open) return;
@@ -171,7 +161,7 @@ export default function NotificationBell({
       >
         {bellIcon("h-5 w-5")}
 
-        {/* 未読バッジ（未読数でOKとのことなので数字） */}
+        {/* 未読バッジ */}
         {unread > 0 && (
           <span
             className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground
@@ -206,7 +196,6 @@ export default function NotificationBell({
             onClickItem={(id) => markRead([id])}
             titleFor={titleFor}
             routeFor={routeFor}
-            timeAgo={timeAgo}
             close={() => setOpen(false)}
           />
           <FooterHint />
@@ -227,7 +216,6 @@ export default function NotificationBell({
 
           {/* 下から出るシート */}
           <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border border-border bg-card text-card-foreground shadow-glow">
-            {/* シート上部（ドラッグっぽい見た目） */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="font-semibold">通知</div>
               <button
@@ -258,7 +246,6 @@ export default function NotificationBell({
               </button>
             </div>
 
-            {/* 本文（スクロール） */}
             <div className="max-h-[70dvh] overflow-y-auto">
               <ListArea
                 items={items}
@@ -267,7 +254,6 @@ export default function NotificationBell({
                 onClickItem={(id) => markRead([id])}
                 titleFor={titleFor}
                 routeFor={routeFor}
-                timeAgo={timeAgo}
                 close={() => setOpen(false)}
               />
               <FooterHint />
@@ -279,7 +265,6 @@ export default function NotificationBell({
   );
 }
 
-/** ヘッダー（PC用） */
 function HeaderBar({
   loading,
   error,
@@ -320,7 +305,6 @@ function HeaderBar({
   );
 }
 
-/** 通知リスト */
 function ListArea({
   items,
   loading,
@@ -328,7 +312,6 @@ function ListArea({
   onClickItem,
   titleFor,
   routeFor,
-  timeAgo,
   close,
 }: {
   items: NotifItem[];
@@ -337,7 +320,6 @@ function ListArea({
   onClickItem: (id: string) => void;
   titleFor: (n: NotifItem) => string;
   routeFor: (n: NotifItem) => string;
-  timeAgo: (iso: string) => string;
   close: () => void;
 }) {
   if (loading) {
@@ -364,7 +346,6 @@ function ListArea({
     <ul className="divide-y divide-border">
       {items.map((n) => (
         <li key={n.id} className={n.read ? "" : "bg-primary/5"}>
-          {/* Next.js内部遷移はLinkが基本 [1](https://nodejs.org/ja/download) */}
           <Link
             href={routeFor(n)}
             onClick={() => {
@@ -383,8 +364,9 @@ function ListArea({
                 </div>
               </div>
 
-              <div className="text-xs text-muted-foreground whitespace-nowrap">
-                {timeAgo(n.created_at)}
+              {/* ✅ 時刻表示をJST固定にする（相対ではなく絶対時刻へ） */}
+              <div className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                {formatJstStartLabel(n.created_at)}
               </div>
             </div>
 
@@ -398,7 +380,6 @@ function ListArea({
   );
 }
 
-/** フッターのヒント */
 function FooterHint() {
   return (
     <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
@@ -406,4 +387,3 @@ function FooterHint() {
     </div>
   );
 }
-``
