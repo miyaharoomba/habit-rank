@@ -31,7 +31,8 @@ export async function startSession() {
 
 /**
  * 継続終了（理由を受け取って保存）
- * - <form action={finishSession}> から FormData が渡ってくる想定 [1](https://github-api-bice.vercel.app/)
+ * - FormData.get は同名フィールドが複数あると先頭を拾うことがあるため、
+ *   getAll して「最後の非空」を採用する
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient()
@@ -39,8 +40,10 @@ export async function finishSession(formData: FormData) {
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   if (userError || !user) throw new Error('ログイン情報が取れません')
 
-  const raw = String(formData.get('end_reason') ?? '')
-  const reason = raw.trim().slice(0, 200) || 'finished'
+  // 同名 end_reason が複数ある場合に備えて、全部取って最後の非空を採用
+  const all = formData.getAll('end_reason').map(v => String(v ?? '').trim())
+  const lastNonEmpty = [...all].reverse().find(v => v.length > 0) ?? ''
+  const reason = (lastNonEmpty.slice(0, 200) || 'finished')
 
   const { error } = await supabase
     .from('streak_sessions')
@@ -83,6 +86,5 @@ export async function setDisplayName(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
-  // /app を更新してヘッダーの名前を即反映
   revalidatePath('/app')
 }
