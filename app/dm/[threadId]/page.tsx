@@ -7,11 +7,26 @@ import { redirect } from "next/navigation";
 
 import DmChatClient from "./DmChatClient";
 
-type Message = {
+type MessageRow = {
   id: string;
   sender_id: string;
   body: string;
   created_at: string;
+  message_type: "text" | "image";
+  image_path: string | null;
+};
+
+// Clientに渡す形（image_urlを追加する）
+type MessageForClient = {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  message_type?: "text" | "image";
+  image_path?: string | null;
+
+  // 追加：表示用URL（signed URL）
+  image_url?: string | null;
 };
 
 export default async function DmThreadPage({
@@ -22,15 +37,10 @@ export default async function DmThreadPage({
   const { threadId } = await params;
 
   const supabase = await createClient();
+  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !user) redirect("/auth/sign-in");
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) redirect("/auth/sign-in"); // Server Componentでredirect可能 [1](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
-
-  // 1) スレッド情報（相手ID決定）
+  // 1) スレッド情報（相手IDを決める）
   const { data: thread, error: threadErr } = await supabase
     .from("dm_threads")
     .select("id, user_low, user_high")
@@ -65,7 +75,7 @@ export default async function DmThreadPage({
   const otherUserId =
     thread.user_low === user.id ? thread.user_high : thread.user_low;
 
-  // 2) 相手の名前
+  // 2) 相手の表示名
   const { data: otherProfile } = await supabase
     .from("profiles")
     .select("display_name")
@@ -74,10 +84,10 @@ export default async function DmThreadPage({
 
   const otherName = otherProfile?.display_name?.trim() || "NoName";
 
-  // 3) メッセージ一覧（時系列）
+  // 3) メッセージを取得（画像用カラムも含める）
   const { data: msgs, error: msgErr } = await supabase
     .from("dm_messages")
-    .select("id, sender_id, body, created_at")
+    .select("id, sender_id, body, created_at, message_type, image_path")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 
@@ -101,7 +111,39 @@ export default async function DmThreadPage({
     );
   }
 
-  const messages = (msgs ?? []) as Message[];
+  const rows = (msgs ?? []) as MessageRow[];
+
+  // 4) 画像メッセージは signed URL を作って渡す（Private bucket対策）
+  // createSignedUrl(path, expiresIn) [1](https://ihogehoge.hatenablog.com/entry/2025/04/21/153229)[2](https://supabase.com/docs/guides/auth/quickstarts/nextjs)
+  const messages: MessageForClient[] = await Promise.all(
+    rows.map(async (m) => {
+      if (m.message_type !== "image" || !m.image_path) {
+        return {
+          id: m.id,
+          sender_id: m.sender_id,
+          body: m.body,
+          created_at: m.created_at,
+          message_type: m.message_type,
+          image_path: m.image_path,
+          image_url: null,
+        };
+      }
+
+      const { data: signed, error: sErr } = await supabase.storage
+        .from("dm-media")
+        .createSignedUrl(m.image_path, 60 * 60); // 1時間
+
+      return {
+        id: m.id,
+        sender_id: m.sender_id,
+        body: m.body,
+        created_at: m.created_at,
+        message_type: m.message_type,
+        image_path: m.image_path,
+        image_url: sErr ? null : signed?.signedUrl ?? null,
+      };
+    })
+  );
 
   return (
     <Container>
@@ -131,11 +173,11 @@ export default async function DmThreadPage({
           </CardHeader>
 
           <CardBody>
-            {/* ✅ ここから先はClient Componentに任せる（固定フォーム＆自動スクロール） */}
+            {/* ✅ image_url も含めて渡す（次のステップでクライアント側で表示に使う） */}
             <DmChatClient
               threadId={threadId}
               myUserId={user.id}
-              messages={messages}
+              messages={messages as any}
             />
           </CardBody>
         </Card>
