@@ -2,53 +2,35 @@ import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 
-type OutboxRow = {
-  id: number;
-  recipient_id: string | null;
-  payload: any;
-  attempts: number;
-};
-
-type SubRow = {
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-};
-
 function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
 
-// ✅ ブラウザで叩いて「ルートが存在する」確認用
 export async function GET() {
   return NextResponse.json({ ok: true, route: "/api/push/dispatch", methods: ["GET", "POST"] });
 }
 
 export async function POST(req: Request) {
-  // 0) dispatch endpoint 保護
   const secret = mustEnv("PUSH_DISPATCH_SECRET");
   const got = req.headers.get("x-push-secret");
   if (got !== secret) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
-  // 1) VAPID
   webpush.setVapidDetails(
     mustEnv("VAPID_SUBJECT"),
     mustEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
     mustEnv("VAPID_PRIVATE_KEY")
   );
 
-  // 2) service role でDBへ（サーバー専用）
   const supabase = createAdminClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
     { auth: { persistSession: false, autoRefreshToken: false } }
   );
 
-  // 3) outbox 未送信を取得（まずは 25 件）
   const { data: outbox, error: oErr } = await supabase
     .from("push_outbox")
     .select("id, recipient_id, payload, attempts")
@@ -59,12 +41,13 @@ export async function POST(req: Request) {
 
   if (oErr) return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 });
 
-  const rows = (outbox ?? []) as OutboxRow[];
-  if (rows.length === 0) return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0 });
+  if (!outbox || outbox.length === 0) {
+    return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0 });
+  }
 
   let processed = 0, sent = 0, failed = 0;
 
-  for (const row of rows) {
+  for (const row of outbox as any[]) {
     processed++;
 
     if (!row.recipient_id) {
@@ -91,8 +74,7 @@ export async function POST(req: Request) {
       continue;
     }
 
-    const subscriptions = (subs ?? []) as SubRow[];
-    if (subscriptions.length === 0) {
+    if (!subs || subs.length === 0) {
       await supabase.from("push_outbox").update({
         attempts: row.attempts + 1,
         last_error: "no subscriptions"
@@ -106,7 +88,7 @@ export async function POST(req: Request) {
     let anySent = false;
     let lastErr: string | null = null;
 
-    for (const sub of subscriptions) {
+    for (const sub of subs as any[]) {
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } } as any,
@@ -115,15 +97,6 @@ export async function POST(req: Request) {
         anySent = true;
       } catch (e: any) {
         lastErr = e?.body || e?.message || String(e);
-        const statusCode = e?.statusCode;
-
-        // 404/410 なら購読失効 → disabled=true
-        if (statusCode === 404 || statusCode === 410) {
-          await supabase.from("push_subscriptions").update({
-            disabled: true,
-            last_seen_at: new Date().toISOString()
-          }).eq("user_id", row.recipient_id).eq("endpoint", sub.endpoint);
-        }
       }
     }
 
@@ -144,4 +117,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, processed, sent, failed });
 }
-``
