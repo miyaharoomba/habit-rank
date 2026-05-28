@@ -76,24 +76,19 @@ export default function DmChatClient({
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messageCount]);
 
-  // Server Action（threadId固定）を作る
   const action = useMemo(() => sendDm.bind(null, threadId), [threadId]);
 
   return (
     <div
       className={[
-        // 画面高さに合わせてチャット領域を確保（モバイル向け）
         "flex flex-col",
         "min-h-[420px]",
         "h-[calc(100dvh-240px)]",
         "max-h-[75vh] sm:max-h-[72vh]",
       ].join(" ")}
     >
-      {/* メッセージ一覧（スクロール領域） */}
-      <div
-        ref={listRef}
-        className="flex-1 overflow-y-auto pr-1 space-y-3"
-      >
+      {/* メッセージ一覧 */}
+      <div ref={listRef} className="flex-1 overflow-y-auto pr-1 space-y-3">
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             まだメッセージがありません。最初の一言を送ってみよう。
@@ -111,31 +106,20 @@ export default function DmChatClient({
         <div ref={bottomRef} />
       </div>
 
-      {/* 送信フォーム（下に固定） */}
+      {/* 送信フォーム（下固定） */}
       <div className="sticky bottom-0 pt-3 bg-background/80 backdrop-blur">
         <form
           ref={formRef}
-          action={action}
-          className="flex gap-2"
-          onSubmit={() => {
-            // 送信後に入力をクリア（即時）
-            // Server Actionの遷移/再描画があっても邪魔しない
+          action={async (fd) => {
+            await action(fd);
             setTimeout(() => formRef.current?.reset(), 0);
           }}
+          className="flex gap-2"
         >
-          <Input
-            name="body"
-            placeholder="メッセージ…"
-            autoComplete="off"
-          />
+          <Input name="body" placeholder="メッセージ…" autoComplete="off" />
           <SubmitButton />
         </form>
-
-        <p className="mt-2 text-xs text-muted-foreground">
-          Enter送信は次で対応できる（今はボタン送信）。
-        </p>
       </div>
     </div>
   );
 }
-``

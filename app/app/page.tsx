@@ -18,6 +18,18 @@ function formatDuration(ms: number) {
   return { days, hours, minutes, seconds };
 }
 
+function formatStartedAt(iso: string) {
+  const d = new Date(iso);
+  // 「何日の何時から」→ 月/日(曜) 時:分
+  return d.toLocaleString("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default async function AppPage() {
   const supabase = await createClient();
 
@@ -46,7 +58,7 @@ export default async function AppPage() {
 
   // 初回：名前未設定なら onboarding へ
   if (!displayName) {
-    redirect("/onboarding"); // サーバー側でredirect可能 [2](https://nextjs.org/docs/app/getting-started/route-handlers)
+    redirect("/onboarding"); // サーバー側でredirect可能 [1](https://v3.tailwindcss.com/docs/theme)
   }
 
   // 継続中セッション（自分のもの）
@@ -58,6 +70,7 @@ export default async function AppPage() {
     .maybeSingle();
 
   const startedAt = active?.started_at ?? null;
+  const startedAtLabel = startedAt ? formatStartedAt(startedAt) : null;
 
   // 履歴（終了済み）最新10件
   const { data: history } = await supabase
@@ -74,7 +87,7 @@ export default async function AppPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
-          <p className="text-sm text-muted-foreground">ダーク × ブルーで統一</p>
+          {/* 「ダーク × ブルーで統一」は削除 */}
         </div>
 
         {/* 右側：ユーザー名 + ベル + メニュー */}
@@ -83,10 +96,8 @@ export default async function AppPage() {
             👤 {displayName}
           </div>
 
-          {/* 通知ベル */}
           <NotificationBell />
 
-          {/* ✅ 追加：参加者一覧 */}
           <Link
             href="/participants"
             className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -94,7 +105,6 @@ export default async function AppPage() {
             参加者
           </Link>
 
-          {/* 既存：DM */}
           <Link
             href="/dm"
             className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -102,7 +112,6 @@ export default async function AppPage() {
             DM
           </Link>
 
-          {/* 既存：ランキング */}
           <Link
             href="/ranking"
             className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -110,7 +119,6 @@ export default async function AppPage() {
             ランキング
           </Link>
 
-          {/* 既存：設定 */}
           <Link
             href="/settings"
             className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -133,6 +141,15 @@ export default async function AppPage() {
           <CardBody>
             <div className="text-4xl font-extrabold tracking-tight">
               <LiveTimer startedAt={startedAt} />
+            </div>
+
+            {/* ✅ 開始日時を分かりやすく表示 */}
+            <div className="mt-2 text-sm text-muted-foreground">
+              {startedAtLabel ? (
+                <span className="tabular-nums">開始：{startedAtLabel}</span>
+              ) : (
+                <span>開始：未開始</span>
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-3">
@@ -203,3 +220,4 @@ export default async function AppPage() {
     </Container>
   );
 }
+``
