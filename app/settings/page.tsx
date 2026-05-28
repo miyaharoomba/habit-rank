@@ -4,6 +4,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+import PushEnableCard from "@/app/components/PushEnableCard";
+
 export default async function SettingsPage() {
   const supabase = await createClient();
 
@@ -23,7 +25,7 @@ export default async function SettingsPage() {
 
   const displayName = profile?.display_name?.trim() || "NoName";
 
-  // ✅ 管理者判定：public.is_admin() をRPCで呼ぶ [2](https://tiger9810.github.io/2025/next_error/)
+  // 管理者判定：public.is_admin() をRPCで呼ぶ
   const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
   const admin = !adminErr && Boolean(isAdmin);
 
@@ -71,7 +73,10 @@ export default async function SettingsPage() {
           </CardBody>
         </Card>
 
-        {/* ✅ 追加：管理者コンソール（管理者だけ表示） */}
+        {/* ✅ 追加：端末通知（Web Push） */}
+        <PushEnableCard />
+
+        {/* ✅ 管理者コンソール（管理者だけ表示） */}
         {admin && (
           <Card>
             <CardHeader>
@@ -125,3 +130,4 @@ export default async function SettingsPage() {
     </Container>
   );
 }
+``
