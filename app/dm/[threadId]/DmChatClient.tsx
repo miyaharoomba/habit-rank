@@ -16,15 +16,15 @@ type Message = {
   created_at: string;
 
   message_type?: "text" | "image" | "video" | "file";
-  image_url?: string | null; // signed URL（image）
-  file_url?: string | null; // signed URL（video/file）
+  image_url?: string | null;
+  file_url?: string | null;
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
 };
 
 type LocalUpload = {
-  id: string; // messageId を優先
+  id: string;
   sender_id: string;
   created_at: string;
   type: "image" | "video" | "file";
@@ -33,7 +33,7 @@ type LocalUpload = {
   fileName: string;
   mime: string;
   size: number;
-  fingerprint: string; // 多重送信防止用
+  fingerprint: string;
 };
 
 function bytes(size: number) {
@@ -108,12 +108,14 @@ function BubbleImage({
   caption,
   createdAt,
   onOpen,
+  onMediaLoaded,
 }: {
   mine: boolean;
   url: string;
   caption?: string;
   createdAt: string;
   onOpen: (kind: "image" | "video", url: string) => void;
+  onMediaLoaded: () => void;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
@@ -129,7 +131,13 @@ function BubbleImage({
           aria-label="画像を拡大表示"
           title="タップで拡大"
         >
-          <img src={url} alt="image" className="block w-full h-auto" loading="lazy" />
+          <img
+            src={url}
+            alt="image"
+            className="block w-full h-auto max-h-[340px] object-cover"
+            loading="lazy"
+            onLoad={onMediaLoaded}
+          />
         </button>
 
         {caption ? (
@@ -155,12 +163,14 @@ function BubbleVideo({
   caption,
   createdAt,
   onOpen,
+  onMediaLoaded,
 }: {
   mine: boolean;
   url: string;
   caption?: string;
   createdAt: string;
   onOpen: (kind: "image" | "video", url: string) => void;
+  onMediaLoaded: () => void;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
@@ -171,7 +181,14 @@ function BubbleVideo({
             mine ? "bg-primary/10" : "bg-secondary/30",
           ].join(" ")}
         >
-          <video src={url} controls playsInline className="block w-full h-auto" />
+          <video
+            src={url}
+            className="block w-full h-auto max-h-[360px] bg-black"
+            controls
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={onMediaLoaded}
+          />
           <button
             type="button"
             onClick={() => onOpen("video", url)}
@@ -220,21 +237,17 @@ function BubbleFile({
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[85%] sm:max-w-[70%]">
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="block rounded-2xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
-          title="新しいタブで開く"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold truncate">{fileName}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+        <a href={url} target="_blank" rel="noreferrer">
+          <div className="rounded-2xl border border-border bg-secondary/30 px-3 py-3 hover:bg-secondary/40 transition">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate">{fileName}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+                </div>
               </div>
+              <div className="text-xs text-primary font-semibold whitespace-nowrap">開く</div>
             </div>
-            <div className="text-xs text-primary font-semibold whitespace-nowrap">開く</div>
           </div>
         </a>
 
@@ -274,39 +287,72 @@ export default function DmChatClient({
   const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
 
   const lastUploadKeyRef = useRef<{ key: string; at: number } | null>(null);
 
+  const pinnedRef = useRef(true);
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
 
   const scrollToBottom = (smooth: boolean) => {
-    const el = listRef.current;
+    const el = bottomRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "end" });
   };
 
-  // リロード直後（初回マウント）も必ず最下部へ
-  useLayoutEffect(() => {
-    requestAnimationFrame(() => {
+  const updatePinned = () => {
+    const el = listRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    pinnedRef.current = distance < 120;
+  };
+
+  const maybeStickBottom = () => {
+    if (pinnedRef.current) {
       scrollToBottom(false);
-      requestAnimationFrame(() => scrollToBottom(false));
-    });
+      setTimeout(() => pinnedRef.current && scrollToBottom(false), 60);
+      setTimeout(() => pinnedRef.current && scrollToBottom(false), 160);
+    }
+  };
+
+  useLayoutEffect(() => {
+    pinnedRef.current = true;
+    scrollToBottom(false);
+    setTimeout(() => scrollToBottom(false), 50);
+    setTimeout(() => scrollToBottom(false), 150);
+    setTimeout(() => scrollToBottom(false), 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // サーバーに反映されたら localUploads を消す（重複表示防止）
+  useLayoutEffect(() => {
+    maybeStickBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, localUploads.length]);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(() => {
+      if (pinnedRef.current) scrollToBottom(false);
+    });
+    ro.observe(el);
+
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const serverIds = new Set(messages.map((m) => m.id));
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
 
-  // 受信/送信で更新されたら最下部へ（リロード後も含む）
-  useLayoutEffect(() => {
-    requestAnimationFrame(() => scrollToBottom(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, localUploads.length]);
+  const onMediaLoaded = () => {
+    if (pinnedRef.current) scrollToBottom(false);
+  };
 
   const openFilePicker = () => {
     setUploadError(null);
@@ -339,15 +385,14 @@ export default function DmChatClient({
       const res = await fetch("/api/dm/upload-image", { method: "POST", body: fd });
       const json = await res.json().catch(() => ({}));
 
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? `Upload failed (HTTP ${res.status})`);
-      }
+      if (!res.ok || !json.ok) throw new Error(json.error ?? `Upload failed (HTTP ${res.status})`);
 
       const signedUrl = json.signedUrl as string | null;
       const messageType = json.messageType as "image" | "video" | "file";
       const messageId = (json.messageId as string | null) ?? null;
 
       if (signedUrl) {
+        pinnedRef.current = true;
         setLocalUploads((prev) => [
           ...prev,
           {
@@ -367,7 +412,8 @@ export default function DmChatClient({
 
       setDraft("");
       router.refresh();
-      requestAnimationFrame(() => scrollToBottom(true));
+      scrollToBottom(true);
+      setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
     } catch (err: any) {
       setUploadError(err?.message ?? "送信に失敗しました。");
     } finally {
@@ -405,9 +451,9 @@ export default function DmChatClient({
               </button>
 
               {modal.kind === "image" ? (
-                <img src={modal.url} alt="image" className="block max-h-[85vh] w-auto mx-auto" />
+                <img src={modal.url} alt="image" className="max-h-[85vh] w-full object-contain" />
               ) : (
-                <video src={modal.url} controls playsInline className="block max-h-[85vh] w-full" />
+                <video src={modal.url} className="max-h-[85vh] w-full" controls playsInline />
               )}
             </div>
           </div>
@@ -431,7 +477,7 @@ export default function DmChatClient({
         disabled={uploading}
       />
 
-      <div ref={listRef} className="flex-1 overflow-y-auto pr-1 space-y-3">
+      <div ref={listRef} className="flex-1 overflow-y-auto pr-1 space-y-3" onScroll={updatePinned}>
         {messages.length === 0 && localUploads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             まだメッセージがありません。最初の一言（またはメディア）を送ってみよう。
@@ -450,6 +496,7 @@ export default function DmChatClient({
                     caption={m.body || ""}
                     createdAt={m.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
+                    onMediaLoaded={onMediaLoaded}
                   />
                 );
               }
@@ -463,6 +510,7 @@ export default function DmChatClient({
                     caption={m.body || ""}
                     createdAt={m.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
+                    onMediaLoaded={onMediaLoaded}
                   />
                 );
               }
@@ -513,6 +561,7 @@ export default function DmChatClient({
                     caption={u.caption}
                     createdAt={u.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
+                    onMediaLoaded={onMediaLoaded}
                   />
                 );
               }
@@ -526,6 +575,7 @@ export default function DmChatClient({
                     caption={u.caption}
                     createdAt={u.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
+                    onMediaLoaded={onMediaLoaded}
                   />
                 );
               }
@@ -543,6 +593,8 @@ export default function DmChatClient({
                 />
               );
             })}
+
+            <div ref={bottomRef} />
           </>
         )}
       </div>
@@ -551,12 +603,14 @@ export default function DmChatClient({
         {uploadError && <div className="mb-2 text-xs text-destructive">{uploadError}</div>}
 
         <form
-          action={async (fd) => {
+          action={async (fd: FormData) => {
             fd.set("body", draft);
             await textAction(fd);
             setDraft("");
+            pinnedRef.current = true;
             router.refresh();
-            requestAnimationFrame(() => scrollToBottom(true));
+            scrollToBottom(true);
+            setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
           }}
           className="flex gap-2"
         >
@@ -564,8 +618,7 @@ export default function DmChatClient({
             type="button"
             onClick={openFilePicker}
             disabled={uploading}
-            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2
-                       hover:bg-secondary/50 transition disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 hover:bg-secondary/50 transition disabled:opacity-50"
             aria-label="ファイルを送る"
             title="ファイルを送る"
           >
@@ -576,8 +629,7 @@ export default function DmChatClient({
             type="button"
             onClick={openMediaPicker}
             disabled={uploading}
-            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2
-                       hover:bg-secondary/50 transition disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 hover:bg-secondary/50 transition disabled:opacity-50"
             aria-label="画像・動画を送る"
             title="画像・動画を送る"
           >
