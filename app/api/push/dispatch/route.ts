@@ -166,16 +166,27 @@ async function runDispatch() {
   return NextResponse.json({ ok: true, processed, sent, failed });
 }
 
-// ✅ Cron用GET：Authorization: Bearer <CRON_SECRET> で実行
+/**
+ * GET:
+ * - Authorizationヘッダ無し → healthcheck
+ * - Authorizationあり
+ *   - 正しい CRON_SECRET → dispatch 実行
+ *   - 間違い / env未設定 → 401
+ */
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    // Authorizationヘッダがあるなら、Cron認証として厳密判定
+    if (authHeader) {
+      if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+      }
       return await runDispatch();
     }
 
+    // ブラウザで開いた時などは healthcheck
     return NextResponse.json({
       ok: true,
       route: "/api/push/dispatch",
@@ -189,7 +200,10 @@ export async function GET(request: Request) {
   }
 }
 
-// ✅ 手動実行用POST：x-push-secret
+/**
+ * POST:
+ * - 手動実行 / 内部実行用（x-push-secret）
+ */
 export async function POST(req: Request) {
   try {
     const secret = mustEnv("PUSH_DISPATCH_SECRET");
@@ -206,3 +220,4 @@ export async function POST(req: Request) {
     );
   }
 }
+``
