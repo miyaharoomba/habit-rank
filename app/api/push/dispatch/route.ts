@@ -15,7 +15,7 @@ type SubRow = {
   auth: string;
 };
 
-const DISPATCH_VERSION = "dispatch_v2026-05-29_14:35";
+const DISPATCH_VERSION = "dispatch_v2026_05_29_step1";
 
 function mustEnv(name: string) {
   const v = process.env[name];
@@ -128,7 +128,10 @@ async function runDispatch() {
         await webpush.sendNotification(
           {
             endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            },
           } as any,
           payload
         );
@@ -181,9 +184,9 @@ async function runDispatch() {
 }
 
 /**
- * GET = Cron専用
- * Authorization がない / 間違ってる → 必ず 401
- * Authorization が正しい → dispatch 実行
+ * GET = Cron用
+ * Authorization が無い / 間違い → 401
+ * 正しい → dispatch 実行
  */
 export async function GET(request: Request) {
   try {
