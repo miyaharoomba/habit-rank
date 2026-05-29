@@ -1,32 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// ✅ 追加：send-nowの結果を返す
-async function pushDmNow(origin: string, threadId: string) {
-  try {
-    const resp = await fetch(`${origin}/api/push/send-now`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
-      },
-      body: JSON.stringify({ thread_id: threadId }),
-      cache: "no-store",
-    });
+async function triggerDispatchSoon(origin: string) {
+  // notifications / push_outbox がDB側で確定するのを少し待つ
+  await new Promise((r) => setTimeout(r, 500));
 
-    const text = await resp.text();
-    return {
-      ok: resp.ok,
-      status: resp.status,
-      body: text,
-    };
-  } catch (e: any) {
-    return {
-      ok: false,
-      status: 0,
-      body: e?.message ?? String(e),
-    };
-  }
+  const resp = await fetch(`${origin}/api/push/dispatch`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
+    },
+    cache: "no-store",
+  });
+
+  const text = await resp.text().catch(() => "");
+  return {
+    ok: resp.ok,
+    status: resp.status,
+    body: text,
+  };
 }
 
 // Nodeでも動く簡易UUID
@@ -52,6 +45,7 @@ function safeExt(filename: string) {
 export async function POST(req: Request) {
   const supabase = await createClient();
 
+  // ログインチェック
   const {
     data: { user },
     error: userError,
@@ -61,6 +55,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  // multipart/form-data
   const form = await req.formData();
   const threadId = String(form.get("threadId") ?? "");
   const caption = String(form.get("caption") ?? "").trim();
@@ -73,14 +68,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "file is required" }, { status: 400 });
   }
 
+  // 種別判定（image / video / file）
   const mime = (file.type || "application/octet-stream").toLowerCase();
   const isImage = mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
   const messageType = isImage ? "image" : isVideo ? "video" : "file";
 
+  // 保存パス
   const ext = safeExt(file.name);
   const objectPath = `${threadId}/${uuidLike()}.${ext}`;
 
+  // 1) Storage にアップロード
   const { error: upErr } = await supabase.storage
     .from("dm-media")
     .upload(objectPath, file, {
@@ -92,6 +90,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
   }
 
+  // 2) dm_messages に保存
   const insertPayload: any = {
     thread_id: threadId,
     sender_id: user.id,
@@ -127,10 +126,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: insErr.message }, { status: 400 });
   }
 
-  // ✅ 即時Pushの結果を取得して返す
+  // ✅ 即時通知：動作実績のある dispatch を叩く
   const origin = new URL(req.url).origin;
-  const sendNow = await pushDmNow(origin, threadId);
+  let dispatchResult: { ok: boolean; status: number; body: string } | null = null;
+  try {
+    dispatchResult = await triggerDispatchSoon(origin);
+    console.log("upload-image triggerDispatchSoon:", dispatchResult.status, dispatchResult.body);
+  } catch (e) {
+    console.error("upload-image triggerDispatchSoon failed:", e);
+  }
 
+  // 3) 表示用 signed URL を返す
   const { data: signed, error: sErr } = await supabase.storage
     .from("dm-media")
     .createSignedUrl(objectPath, 60 * 60);
@@ -147,7 +153,8 @@ export async function POST(req: Request) {
     size: file.size,
     warning: sErr ? sErr.message : null,
 
-    // ✅ これが重要：send-now の結果をそのまま見る
-    sendNow,
+    // 確認用：あとで不要になったら消してOK
+    dispatchResult,
   });
 }
+``
