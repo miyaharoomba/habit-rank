@@ -8,8 +8,10 @@ function mustEnv(name: string) {
   return v;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 type Body = {
-  thread_id: string; // DMスレッドID
+  thread_id: string;
 };
 
 type OutboxRow = {
@@ -28,7 +30,6 @@ type SubRow = {
 
 export async function POST(req: Request) {
   try {
-    // --- 1) 認証（合言葉）
     const secret = mustEnv("PUSH_DISPATCH_SECRET");
     const got = req.headers.get("x-push-secret");
     if (got !== secret) {
@@ -41,21 +42,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "thread_id required" }, { status: 400 });
     }
 
-    // --- 2) VAPID（subject + public + private）
     webpush.setVapidDetails(
       mustEnv("VAPID_SUBJECT"),
       mustEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
       mustEnv("VAPID_PRIVATE_KEY")
-    ); // web-push の基本設定 [2](https://qiita.com/junko5/items/1d548583b949cf5c624c)[6](https://eastondev.com/blog/ja/posts/dev/20260421-supabase-auth-oauth-sso-rls/)
+    );
 
-    // --- 3) Supabase admin（service_role）
     const supabase = createAdminClient(
       mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
       mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
       { auth: { persistSession: false, autoRefreshToken: false } }
-    ); // service_role はRLSをバイパスできる特権キーなのでサーバー専用 [7](https://unwiredlearning.com/blog/extend-tailwind-css)[8](https://deepwiki.com/vercel/vercel/3.2-deploy-command)
+    );
 
-    // --- 4) この thread_id のDM通知（最新いくつか）を探す
+    // 1) このthreadのDM通知を探す
     const { data: notifs, error: nErr } = await supabase
       .from("notifications")
       .select("id")
@@ -67,31 +66,40 @@ export async function POST(req: Request) {
     if (nErr) {
       return NextResponse.json({ ok: false, error: nErr.message }, { status: 500 });
     }
+
     const notifIds = (notifs ?? []).map((x: any) => x.id);
-    if (notifIds.length === 0) {
-      return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0, note: "no dm notifications" });
+
+    // ✅ ここが重要：
+    // outboxがトリガーで作られるのを少し待つ（最大2秒）
+    let rows: OutboxRow[] = [];
+    for (let i = 0; i < 10; i++) {
+      if (notifIds.length > 0) {
+        const { data: outbox } = await supabase
+          .from("push_outbox")
+          .select("id, notification_id, recipient_id, payload, attempts")
+          .in("notification_id", notifIds)
+          .is("sent_at", null)
+          .lt("attempts", 8)
+          .order("created_at", { ascending: true })
+          .limit(25);
+
+        rows = (outbox ?? []) as OutboxRow[];
+        if (rows.length > 0) break;
+      }
+
+      await sleep(200);
     }
 
-    // --- 5) その通知IDに紐づく outbox（未送信）だけ取得
-    const { data: outbox, error: oErr } = await supabase
-      .from("push_outbox")
-      .select("id, notification_id, recipient_id, payload, attempts")
-      .in("notification_id", notifIds)
-      .is("sent_at", null)
-      .lt("attempts", 8)
-      .order("created_at", { ascending: true })
-      .limit(25);
-
-    if (oErr) {
-      return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 });
-    }
-
-    const rows = (outbox ?? []) as OutboxRow[];
     if (rows.length === 0) {
-      return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0, note: "no pending outbox" });
+      return NextResponse.json({
+        ok: true,
+        processed: 0,
+        sent: 0,
+        failed: 0,
+        note: "no pending outbox yet",
+      });
     }
 
-    // --- 6) 送信
     let processed = 0;
     let sent = 0;
     let failed = 0;
@@ -133,7 +141,9 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const payload = JSON.stringify(row.payload ?? { title: "DM", body: "新しいDMがあります", url: `/dm/${threadId}` });
+      const payload = JSON.stringify(
+        row.payload ?? { title: "DM", body: "新しいDMがあります", url: `/dm/${threadId}` }
+      );
 
       let anySent = false;
       let lastErr: string | null = null;
@@ -141,15 +151,17 @@ export async function POST(req: Request) {
       for (const sub of subscriptions) {
         try {
           await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } } as any,
+            {
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth },
+            } as any,
             payload
-          ); // Web PushはPushSubscription(endpoint+keys)へ送る [1](https://zenn.dev/moton/articles/a9190b25faf3de)[2](https://qiita.com/junko5/items/1d548583b949cf5c624c)
+          );
           anySent = true;
         } catch (e: any) {
           lastErr = e?.body || e?.message || String(e);
           const statusCode = e?.statusCode;
 
-          // 404/410 は購読失効として無効化
           if (statusCode === 404 || statusCode === 410) {
             await supabase
               .from("push_subscriptions")
