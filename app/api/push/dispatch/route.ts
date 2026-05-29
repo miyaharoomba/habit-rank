@@ -15,6 +15,8 @@ type SubRow = {
   auth: string;
 };
 
+const DISPATCH_VERSION = "dispatch_v2026-05-29_14:35";
+
 function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -43,12 +45,21 @@ async function runDispatch() {
     .limit(25);
 
   if (oErr) {
-    return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, version: DISPATCH_VERSION, error: oErr.message },
+      { status: 500 }
+    );
   }
 
   const rows = (outbox ?? []) as OutboxRow[];
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0 });
+    return NextResponse.json({
+      ok: true,
+      version: DISPATCH_VERSION,
+      processed: 0,
+      sent: 0,
+      failed: 0,
+    });
   }
 
   let processed = 0;
@@ -117,10 +128,7 @@ async function runDispatch() {
         await webpush.sendNotification(
           {
             endpoint: sub.endpoint,
-            keys: {
-              p256dh: sub.p256dh,
-              auth: sub.auth,
-            },
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
           } as any,
           payload
         );
@@ -163,61 +171,67 @@ async function runDispatch() {
     }
   }
 
-  return NextResponse.json({ ok: true, processed, sent, failed });
+  return NextResponse.json({
+    ok: true,
+    version: DISPATCH_VERSION,
+    processed,
+    sent,
+    failed,
+  });
 }
 
 /**
- * GET:
- * - Authorizationヘッダ無し → healthcheck
- * - Authorizationあり
- *   - 正しい CRON_SECRET → dispatch 実行
- *   - 間違い / env未設定 → 401
+ * GET = Cron専用
+ * Authorization がない / 間違ってる → 必ず 401
+ * Authorization が正しい → dispatch 実行
  */
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    // Authorizationヘッダがあるなら、Cron認証として厳密判定
-    if (authHeader) {
-      if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-      }
-      return await runDispatch();
+    if (!authHeader) {
+      return NextResponse.json(
+        { ok: false, version: DISPATCH_VERSION, error: "missing authorization" },
+        { status: 401 }
+      );
     }
 
-    // ブラウザで開いた時などは healthcheck
-    return NextResponse.json({
-      ok: true,
-      route: "/api/push/dispatch",
-      methods: ["GET", "POST"],
-    });
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { ok: false, version: DISPATCH_VERSION, error: "unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    return await runDispatch();
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? String(e) },
+      { ok: false, version: DISPATCH_VERSION, error: e?.message ?? String(e) },
       { status: 500 }
     );
   }
 }
 
 /**
- * POST:
- * - 手動実行 / 内部実行用（x-push-secret）
+ * POST = 手動実行 / 内部実行用
  */
 export async function POST(req: Request) {
   try {
     const secret = mustEnv("PUSH_DISPATCH_SECRET");
     const got = req.headers.get("x-push-secret");
     if (got !== secret) {
-      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { ok: false, version: DISPATCH_VERSION, error: "forbidden" },
+        { status: 403 }
+      );
     }
 
     return await runDispatch();
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? String(e) },
+      { ok: false, version: DISPATCH_VERSION, error: e?.message ?? String(e) },
       { status: 500 }
     );
   }
 }
-``
