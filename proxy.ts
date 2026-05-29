@@ -1,24 +1,22 @@
 import { updateSession } from "@/lib/supabase/proxy";
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-
-  // ✅ Web Push系APIは内部認証で守るのでログイン不要
-  if (pathname.startsWith("/api/push/")) {
-    return NextResponse.next();
-  }
-
-  // ✅ Cron系APIもログイン不要（CRON_SECRETで守る）
-  if (pathname.startsWith("/api/cron/")) {
-    return NextResponse.next();
-  }
-
+  // ここでは通常ルートだけ処理する
   return await updateSession(request);
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /**
+     * 除外するもの
+     * - /api/push/*      … Web Push系（dispatch / subscribe 等）
+     * - /api/cron/*      … Vercel Cron系
+     * - _next/static
+     * - _next/image
+     * - favicon.ico
+     * - 画像拡張子
+     */
+    "/((?!api/push|api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
