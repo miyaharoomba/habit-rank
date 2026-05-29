@@ -22,14 +22,12 @@ function mustEnv(name: string) {
 }
 
 async function runDispatch() {
-  // VAPID
   webpush.setVapidDetails(
     mustEnv("VAPID_SUBJECT"),
     mustEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
     mustEnv("VAPID_PRIVATE_KEY")
   );
 
-  // service_role でDBアクセス
   const supabase = createAdminClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
@@ -168,19 +166,16 @@ async function runDispatch() {
   return NextResponse.json({ ok: true, processed, sent, failed });
 }
 
-// ✅ ブラウザで開いた時は healthcheck
-// ✅ Vercel Cron からは Authorization: Bearer <CRON_SECRET> 付きの GET で実行
+// ✅ Cron用GET：Authorization: Bearer <CRON_SECRET> で実行
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    // Cron経由なら dispatch 実行
     if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
       return await runDispatch();
     }
 
-    // それ以外は healthcheck
     return NextResponse.json({
       ok: true,
       route: "/api/push/dispatch",
@@ -194,7 +189,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ✅ 手動実行 / 内部実行用
+// ✅ 手動実行用POST：x-push-secret
 export async function POST(req: Request) {
   try {
     const secret = mustEnv("PUSH_DISPATCH_SECRET");
