@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+// ✅ 追加：DM即時Pushを呼ぶヘルパ
+async function pushDmNow(origin: string, threadId: string) {
+  try {
+    // 既に作った /api/push/send-now を叩く（サーバー内部から）
+    await fetch(`${origin}/api/push/send-now`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // server-only secret（NEXT_PUBLIC_ は付けない）
+        "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
+      },
+      body: JSON.stringify({ thread_id: threadId }),
+      cache: "no-store",
+    });
+  } catch {
+    // 即時Pushに失敗しても、outbox + cron保険があるので無視でOK
+  }
+}
+
 // Nodeでも動く簡易UUID
 function uuidLike() {
   // @ts-ignore
@@ -58,7 +77,6 @@ export async function POST(req: Request) {
   const objectPath = `${threadId}/${uuidLike()}.${ext}`;
 
   // 1) Storage にアップロード（dm-media: private bucket）
-  // upload(path, fileBody) [1](https://github.com/orgs/vercel/repositories)
   const { error: upErr } = await supabase.storage
     .from("dm-media")
     .upload(objectPath, file, {
@@ -71,10 +89,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
   }
 
-  // 2) dm_messages に保存（あなたが拡張したカラムに合わせる）
-  // text: bodyのみ
-  // image: image_path/image_mime/image_size
-  // video/file: file_path/file_name/file_mime/file_size
+  // 2) dm_messages に保存
   const insertPayload: any = {
     thread_id: threadId,
     sender_id: user.id,
@@ -110,13 +125,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: insErr.message }, { status: 400 });
   }
 
+  // ✅ 追加：DM即時Push（outbox保険 + cron回収と併用）
+  // 同一オリジンを安全に取得
+  const origin = new URL(req.url).origin;
+  await pushDmNow(origin, threadId);
+
   // 3) 表示用 signed URL を返す（Private bucketのプレビュー用）
-  // createSignedUrl(path, expiresIn) [2](https://ihogehoge.hatenablog.com/entry/2025/04/21/153229)[3](https://supabase.com/docs/guides/auth/quickstarts/nextjs)
   const { data: signed, error: sErr } = await supabase.storage
     .from("dm-media")
     .createSignedUrl(objectPath, 60 * 60); // 1時間
 
-  // signed URL生成に失敗しても、DB保存・アップロードは完了している
   return NextResponse.json({
     ok: true,
     messageType,
