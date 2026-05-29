@@ -2,29 +2,34 @@ import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 
+type OutboxRow = {
+  id: number;
+  recipient_id: string | null;
+  payload: any;
+  attempts: number;
+};
+
+type SubRow = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+};
+
 function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: true, route: "/api/push/dispatch", methods: ["GET", "POST"] });
-}
-
-export async function POST(req: Request) {
-  const secret = mustEnv("PUSH_DISPATCH_SECRET");
-  const got = req.headers.get("x-push-secret");
-  if (got !== secret) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
-
+async function runDispatch() {
+  // VAPID
   webpush.setVapidDetails(
     mustEnv("VAPID_SUBJECT"),
     mustEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
     mustEnv("VAPID_PRIVATE_KEY")
   );
 
+  // service_role でDBアクセス
   const supabase = createAdminClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
@@ -39,22 +44,30 @@ export async function POST(req: Request) {
     .order("created_at", { ascending: true })
     .limit(25);
 
-  if (oErr) return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 });
+  if (oErr) {
+    return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 });
+  }
 
-  if (!outbox || outbox.length === 0) {
+  const rows = (outbox ?? []) as OutboxRow[];
+  if (rows.length === 0) {
     return NextResponse.json({ ok: true, processed: 0, sent: 0, failed: 0 });
   }
 
-  let processed = 0, sent = 0, failed = 0;
+  let processed = 0;
+  let sent = 0;
+  let failed = 0;
 
-  for (const row of outbox as any[]) {
+  for (const row of rows) {
     processed++;
 
     if (!row.recipient_id) {
-      await supabase.from("push_outbox").update({
-        attempts: row.attempts + 1,
-        last_error: "recipient_id is null (skip)"
-      }).eq("id", row.id);
+      await supabase
+        .from("push_outbox")
+        .update({
+          attempts: row.attempts + 1,
+          last_error: "recipient_id is null (skip)",
+        })
+        .eq("id", row.id);
       failed++;
       continue;
     }
@@ -66,54 +79,135 @@ export async function POST(req: Request) {
       .eq("disabled", false);
 
     if (sErr) {
-      await supabase.from("push_outbox").update({
-        attempts: row.attempts + 1,
-        last_error: sErr.message
-      }).eq("id", row.id);
+      await supabase
+        .from("push_outbox")
+        .update({
+          attempts: row.attempts + 1,
+          last_error: sErr.message,
+        })
+        .eq("id", row.id);
       failed++;
       continue;
     }
 
-    if (!subs || subs.length === 0) {
-      await supabase.from("push_outbox").update({
-        attempts: row.attempts + 1,
-        last_error: "no subscriptions"
-      }).eq("id", row.id);
+    const subscriptions = (subs ?? []) as SubRow[];
+    if (subscriptions.length === 0) {
+      await supabase
+        .from("push_outbox")
+        .update({
+          attempts: row.attempts + 1,
+          last_error: "no subscriptions",
+        })
+        .eq("id", row.id);
       failed++;
       continue;
     }
 
-    const payload = JSON.stringify(row.payload ?? { title: "通知", body: "新しい通知があります", url: "/app" });
+    const payload = JSON.stringify(
+      row.payload ?? {
+        title: "通知",
+        body: "新しい通知があります",
+        url: "/app",
+      }
+    );
 
     let anySent = false;
     let lastErr: string | null = null;
 
-    for (const sub of subs as any[]) {
+    for (const sub of subscriptions) {
       try {
         await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } } as any,
+          {
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            },
+          } as any,
           payload
         );
         anySent = true;
       } catch (e: any) {
         lastErr = e?.body || e?.message || String(e);
+        const statusCode = e?.statusCode;
+
+        if (statusCode === 404 || statusCode === 410) {
+          await supabase
+            .from("push_subscriptions")
+            .update({
+              disabled: true,
+              last_seen_at: new Date().toISOString(),
+            })
+            .eq("user_id", row.recipient_id)
+            .eq("endpoint", sub.endpoint);
+        }
       }
     }
 
     if (anySent) {
-      await supabase.from("push_outbox").update({
-        sent_at: new Date().toISOString(),
-        last_error: null
-      }).eq("id", row.id);
+      await supabase
+        .from("push_outbox")
+        .update({
+          sent_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("id", row.id);
       sent++;
     } else {
-      await supabase.from("push_outbox").update({
-        attempts: row.attempts + 1,
-        last_error: lastErr ?? "send failed"
-      }).eq("id", row.id);
+      await supabase
+        .from("push_outbox")
+        .update({
+          attempts: row.attempts + 1,
+          last_error: lastErr ?? "send failed",
+        })
+        .eq("id", row.id);
       failed++;
     }
   }
 
   return NextResponse.json({ ok: true, processed, sent, failed });
+}
+
+// ✅ ブラウザで開いた時は healthcheck
+// ✅ Vercel Cron からは Authorization: Bearer <CRON_SECRET> 付きの GET で実行
+export async function GET(request: Request) {
+  try {
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    // Cron経由なら dispatch 実行
+    if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+      return await runDispatch();
+    }
+
+    // それ以外は healthcheck
+    return NextResponse.json({
+      ok: true,
+      route: "/api/push/dispatch",
+      methods: ["GET", "POST"],
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? String(e) },
+      { status: 500 }
+    );
+  }
+}
+
+// ✅ 手動実行 / 内部実行用
+export async function POST(req: Request) {
+  try {
+    const secret = mustEnv("PUSH_DISPATCH_SECRET");
+    const got = req.headers.get("x-push-secret");
+    if (got !== secret) {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    }
+
+    return await runDispatch();
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? String(e) },
+      { status: 500 }
+    );
+  }
 }
