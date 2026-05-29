@@ -4,14 +4,16 @@ import { type NextRequest, NextResponse } from "next/server";
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // ✅ Web Push 系 API は「x-push-secret」やAPI内の認証で守るのでログイン不要
-  // curl / Cron など Cookie無しで叩けるように proxy を素通りさせる
+  // ✅ Web Push 系は合言葉認証で守るのでログイン不要
   if (pathname.startsWith("/api/push/")) {
     return NextResponse.next();
   }
 
-  // （必要なら通知APIも素通りにできる。通常はログイン必須でOK）
-  // if (pathname.startsWith("/api/notifications")) return NextResponse.next();
+  // ✅ 通知APIは “ログイン画面へリダイレクト” ではなく、
+  //    route側に401を返させる（APIを安定させる）
+  if (pathname.startsWith("/api/notifications")) {
+    return NextResponse.next();
+  }
 
   return await updateSession(request);
 }
