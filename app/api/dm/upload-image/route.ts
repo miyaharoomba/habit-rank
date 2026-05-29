@@ -1,22 +1,31 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// ✅ 追加：DM即時Pushを呼ぶヘルパ
+// ✅ 追加：send-nowの結果を返す
 async function pushDmNow(origin: string, threadId: string) {
   try {
-    // 既に作った /api/push/send-now を叩く（サーバー内部から）
-    await fetch(`${origin}/api/push/send-now`, {
+    const resp = await fetch(`${origin}/api/push/send-now`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // server-only secret（NEXT_PUBLIC_ は付けない）
         "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
       },
       body: JSON.stringify({ thread_id: threadId }),
       cache: "no-store",
     });
-  } catch {
-    // 即時Pushに失敗しても、outbox + cron保険があるので無視でOK
+
+    const text = await resp.text();
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      body: text,
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      status: 0,
+      body: e?.message ?? String(e),
+    };
   }
 }
 
@@ -43,7 +52,6 @@ function safeExt(filename: string) {
 export async function POST(req: Request) {
   const supabase = await createClient();
 
-  // ログインチェック（cookieセッション）
   const {
     data: { user },
     error: userError,
@@ -53,7 +61,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  // multipart/form-data
   const form = await req.formData();
   const threadId = String(form.get("threadId") ?? "");
   const caption = String(form.get("caption") ?? "").trim();
@@ -66,17 +73,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "file is required" }, { status: 400 });
   }
 
-  // 種別判定（image / video / file）
   const mime = (file.type || "application/octet-stream").toLowerCase();
   const isImage = mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
   const messageType = isImage ? "image" : isVideo ? "video" : "file";
 
-  // 保存パス: "{threadId}/{uuid}.{ext}"
   const ext = safeExt(file.name);
   const objectPath = `${threadId}/${uuidLike()}.${ext}`;
 
-  // 1) Storage にアップロード（dm-media: private bucket）
   const { error: upErr } = await supabase.storage
     .from("dm-media")
     .upload(objectPath, file, {
@@ -85,15 +89,13 @@ export async function POST(req: Request) {
     });
 
   if (upErr) {
-    // RLS違反や容量制限など
     return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
   }
 
-  // 2) dm_messages に保存
   const insertPayload: any = {
     thread_id: threadId,
     sender_id: user.id,
-    body: caption || "", // not null対策（空文字OK）
+    body: caption || "",
     message_type: messageType,
   };
 
@@ -125,15 +127,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: insErr.message }, { status: 400 });
   }
 
-  // ✅ 追加：DM即時Push（outbox保険 + cron回収と併用）
-  // 同一オリジンを安全に取得
+  // ✅ 即時Pushの結果を取得して返す
   const origin = new URL(req.url).origin;
-  await pushDmNow(origin, threadId);
+  const sendNow = await pushDmNow(origin, threadId);
 
-  // 3) 表示用 signed URL を返す（Private bucketのプレビュー用）
   const { data: signed, error: sErr } = await supabase.storage
     .from("dm-media")
-    .createSignedUrl(objectPath, 60 * 60); // 1時間
+    .createSignedUrl(objectPath, 60 * 60);
 
   return NextResponse.json({
     ok: true,
@@ -146,5 +146,8 @@ export async function POST(req: Request) {
     mime,
     size: file.size,
     warning: sErr ? sErr.message : null,
+
+    // ✅ これが重要：send-now の結果をそのまま見る
+    sendNow,
   });
 }
