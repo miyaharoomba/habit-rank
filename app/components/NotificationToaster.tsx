@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 
 type NotifItem = {
   id: string;
-  type: string;
+  type: "dm" | "streak_end" | "admin_broadcast" | string;
   created_at: string;
   message_preview: string;
   thread_id: string | null;
   session_id: string | null;
+  announcement_id?: string | null;
   actor_id: string | null;
   actor_name: string | null;
   read: boolean;
+  url?: string;
 };
 
 type ApiResponse = {
@@ -25,23 +27,46 @@ type Toast = {
   title: string;
   body: string;
   href: string;
+  sticky: boolean;
 };
 
+function isAdminBroadcast(n: NotifItem) {
+  return n.type === "admin_broadcast";
+}
+
 function routeFor(n: NotifItem) {
+  if (n.url && n.url.trim().length > 0) return n.url;
   if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
   if (n.type === "streak_end" && n.session_id) return `/results/${n.session_id}`;
+  if (n.type === "admin_broadcast" && n.announcement_id) {
+    return `/announcements/${n.announcement_id}`;
+  }
   return "/app";
 }
 
 function titleFor(n: NotifItem) {
   if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
   if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
+
+  // 管理者通知は message_preview をタイトルとして使う
+  if (n.type === "admin_broadcast") {
+    return (n.message_preview ?? "").trim() || "管理者からのお知らせ";
+  }
+
   return "通知";
 }
 
 function bodyFor(n: NotifItem) {
   const txt = (n.message_preview ?? "").trim();
-  if (n.type === "streak_end") return txt ? `理由: ${txt}` : "理由: -";
+
+  if (n.type === "streak_end") {
+    return txt ? `理由: ${txt}` : "理由: -";
+  }
+
+  if (n.type === "admin_broadcast") {
+    return "タップして詳細を確認してください。";
+  }
+
   return txt || "通知が届きました";
 }
 
@@ -78,12 +103,21 @@ export default function NotificationToaster({
   const enqueue = (t: Toast) => {
     setToasts((prev) => {
       if (prev.some((x) => x.id === t.id)) return prev;
+
       const next = [t, ...prev];
-      return next.slice(0, maxToasts);
+
+      // sticky は絶対に消さない
+      const sticky = next.filter((x) => x.sticky);
+      const normal = next.filter((x) => !x.sticky).slice(0, maxToasts);
+
+      return [...sticky, ...normal];
     });
 
-    const timer = window.setTimeout(() => dismiss(t.id), showMs);
-    timersRef.current.set(t.id, timer);
+    // sticky は自動で消さない
+    if (!t.sticky) {
+      const timer = window.setTimeout(() => dismiss(t.id), showMs);
+      timersRef.current.set(t.id, timer);
+    }
   };
 
   const markRead = async (id: string) => {
@@ -99,11 +133,9 @@ export default function NotificationToaster({
   };
 
   const fetchNotifs = async () => {
-    // 同時多発防止
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    // 前回の fetch が残ってたら中断
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -114,20 +146,34 @@ export default function NotificationToaster({
         signal: ac.signal,
       });
 
-      // 401等も例外にはしない（res.okで弾く）
       if (!res.ok) return;
 
       const json = (await res.json()) as ApiResponse;
       const items = json.items ?? [];
 
-      // 初回は既存通知を “既知” として登録（トースト連発防止）
+      // 初回ロード:
+      // - 既存通知を全部 seen 扱いにする
+      // - ただし unread な admin_broadcast は sticky で表示する
       if (!initializedRef.current) {
-        items.forEach((n) => seenRef.current.add(n.id));
+        for (const n of items) {
+          seenRef.current.add(n.id);
+
+          if (isAdminBroadcast(n) && !n.read) {
+            enqueue({
+              id: n.id,
+              title: titleFor(n),
+              body: bodyFor(n),
+              href: routeFor(n),
+              sticky: true,
+            });
+          }
+        }
+
         initializedRef.current = true;
         return;
       }
 
-      // 新規IDだけトースト
+      // 2回目以降: 新規IDだけ表示
       for (const n of items) {
         if (seenRef.current.has(n.id)) continue;
         seenRef.current.add(n.id);
@@ -137,13 +183,11 @@ export default function NotificationToaster({
           title: titleFor(n),
           body: bodyFor(n),
           href: routeFor(n),
+          sticky: isAdminBroadcast(n),
         });
       }
     } catch (e: any) {
-      // Abort / ネットワーク揺れは無視（ここが unhandledRejection を止める）
       if (e?.name === "AbortError") return;
-      // それ以外も落とさない
-      // console.warn("notification fetch failed:", e);
     } finally {
       inFlightRef.current = false;
     }
@@ -184,7 +228,12 @@ export default function NotificationToaster({
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="rounded-xl border border-border bg-card/90 backdrop-blur shadow-glow px-4 py-3"
+          className={[
+            "rounded-xl border shadow-glow px-4 py-3 backdrop-blur",
+            t.sticky
+              ? "border-primary/40 bg-card/95"
+              : "border-border bg-card/90",
+          ].join(" ")}
           role="status"
         >
           <div className="flex items-start justify-between gap-3">
@@ -195,21 +244,27 @@ export default function NotificationToaster({
               aria-label="通知を開く"
             >
               <div className="text-sm font-semibold truncate">{t.title}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground break-words">{t.body}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground break-words">
+                {t.body}
+              </div>
             </button>
 
-            <button
-              type="button"
-              onClick={() => dismiss(t.id)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-              aria-label="閉じる"
-              title="閉じる"
-            >
-              ✕
-            </button>
+            {/* 管理者通知(sticky)は、詳細確認前に消せないように×を出さない */}
+            {!t.sticky && (
+              <button
+                type="button"
+                onClick={() => dismiss(t.id)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+                aria-label="閉じる"
+                title="閉じる"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
       ))}
     </div>
   );
 }
+``
