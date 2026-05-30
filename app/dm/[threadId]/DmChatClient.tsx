@@ -349,6 +349,18 @@ export default function DmChatClient({
     const serverIds = new Set(messages.map((m) => m.id));
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
+  
+  // 相手からの新着を数秒ごとに取り込む
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      // タブが見えてるときだけ更新
+      if (document.visibilityState !== "visible") return;
+
+      router.refresh();
+    }, 2500);
+
+    return () => window.clearInterval(id);
+  }, [router, threadId]);
 
   const onMediaLoaded = () => {
     if (pinnedRef.current) scrollToBottom(false);
