@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
  * GET /api/notifications?limit=20
  * - notifications を新しい順で返す
  * - notification_reads を見て未読数を返す
+ * - 各通知に url を付けて返す
  *
  * POST /api/notifications
  * body: { ids: string[] }
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 50);
 
-  // 1) 通知を取得（RLSで「自分宛 or 全体通知」しか返らない想定）[2](https://www.tekural.com/blog/supabase-auth-nextjs-guide)[3](https://qiita.com/ryosuke_tsuda/items/e31efc789b1f1e544524)
+  // 1) 通知を取得（RLSで「自分宛 or 全体通知」しか返らない想定）
   const { data: notifs, error: nErr } = await supabase
     .from("notifications")
     .select("id, type, actor_id, recipient_id, thread_id, session_id, message_preview, created_at")
@@ -52,10 +53,13 @@ export async function GET(request: Request) {
 
   const readSet = new Set((reads ?? []).map((r) => r.notification_id));
 
-  // 3) actor の display_name をまとめて取得（任意だけど見栄えUP）
-  const actorIds = Array.from(new Set(notifications.map((n) => n.actor_id).filter(Boolean))) as string[];
+  // 3) actor の display_name をまとめて取得
+  const actorIds = Array.from(
+    new Set(notifications.map((n) => n.actor_id).filter(Boolean))
+  ) as string[];
 
-  let actorMap = new Map<string, string>();
+  const actorMap = new Map<string, string>();
+
   if (actorIds.length > 0) {
     const { data: actors } = await supabase
       .from("profiles")
@@ -67,17 +71,32 @@ export async function GET(request: Request) {
     });
   }
 
-  const items = notifications.map((n) => ({
-    id: n.id,
-    type: n.type,
-    created_at: n.created_at,
-    message_preview: n.message_preview ?? "",
-    thread_id: n.thread_id,
-    session_id: n.session_id,
-    actor_id: n.actor_id,
-    actor_name: n.actor_id ? actorMap.get(n.actor_id) ?? "NoName" : null,
-    read: readSet.has(n.id),
-  }));
+  const items = notifications.map((n) => {
+    const notificationUrl =
+      n.type === "streak_end" && n.session_id
+        ? `/results/${n.session_id}`
+        : n.type === "dm" && n.thread_id
+        ? `/dm/${n.thread_id}`
+        : "/app";
+
+    return {
+      id: n.id,
+      type: n.type,
+      created_at: n.created_at,
+      message_preview: n.message_preview ?? "",
+      thread_id: n.thread_id,
+      session_id: n.session_id,
+      actor_id: n.actor_id,
+      actor_name: n.actor_id ? actorMap.get(n.actor_id) ?? "NoName" : null,
+      read: readSet.has(n.id),
+
+      // ✅ 通知クリック時の遷移先
+      // streak_end → /results/{session_id}
+      // dm → /dm/{thread_id}
+      // その他 → /app
+      url: notificationUrl,
+    };
+  });
 
   const unreadCount = items.reduce((acc, it) => acc + (it.read ? 0 : 1), 0);
 
@@ -119,3 +138,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, inserted: ids.length });
 }
+``
