@@ -30,6 +30,12 @@ type ProfileRow = {
   display_name: string | null;
 };
 
+function preview(text: string, max = 100) {
+  const t = (text ?? "").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max)}…`;
+}
+
 export default async function AdminSupportThreadPage({
   params,
 }: {
@@ -64,23 +70,76 @@ export default async function AdminSupportThreadPage({
       throw new Error("本文は必須です。");
     }
 
-    const { error } = await supabase.from("support_messages").insert({
+    // 対象スレッドを取得（通知先 user_id と件名が必要）
+    const { data: targetThread, error: threadErr } = await supabase
+      .from("support_threads")
+      .select("id, user_id, subject, status")
+      .eq("id", threadId)
+      .single();
+
+    if (threadErr || !targetThread) {
+      throw new Error(threadErr?.message ?? "support thread not found");
+    }
+
+    // 1) 返信を保存
+    const { error: msgErr } = await supabase.from("support_messages").insert({
       thread_id: threadId,
       sender_id: user.id,
       sender_role: "admin",
       body,
     });
 
-    if (error) {
-      throw new Error(error.message);
+    if (msgErr) {
+      throw new Error(msgErr.message);
     }
 
+    // 2) ユーザー向け通知を作成
+    const notifPreview = preview(body, 120);
+
+    const { data: notif, error: notifErr } = await supabase
+      .from("notifications")
+      .insert({
+        type: "support_reply",
+        actor_id: user.id,
+        recipient_id: targetThread.user_id,
+        thread_id: null,
+        session_id: null,
+        announcement_id: null,
+        support_thread_id: threadId,
+        message_preview: notifPreview,
+      })
+      .select("id")
+      .single();
+
+    if (notifErr || !notif) {
+      throw new Error(notifErr?.message ?? "support_reply notification insert failed");
+    }
+
+    // 3) push_outbox も作成
+    const { error: outboxErr } = await supabase.from("push_outbox").insert({
+      notification_id: notif.id,
+      recipient_id: targetThread.user_id,
+      payload: {
+        title: "管理者から返信",
+        body: notifPreview || "問い合わせに返信がありました",
+        url: `/support/${threadId}`,
+      },
+      attempts: 0,
+    });
+
+    if (outboxErr) {
+      throw new Error(outboxErr.message);
+    }
+
+    // 4) 監査ログ
     await supabase.from("admin_audit_logs").insert({
       actor_id: user.id,
       action: "SUPPORT_REPLY",
-      target_user_id: null,
+      target_user_id: targetThread.user_id,
       target_thread_id: threadId,
-      details: {},
+      details: {
+        preview: notifPreview,
+      },
     });
 
     redirect(`/admin/support/${threadId}`);

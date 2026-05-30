@@ -6,12 +6,13 @@ import { formatJstStartLabel } from "@/lib/time";
 
 type NotifItem = {
   id: string;
-  type: "dm" | "streak_end" | "admin_broadcast";
+  type: "dm" | "streak_end" | "admin_broadcast" | "support_reply";
   created_at: string;
   message_preview: string;
   thread_id: string | null;
   session_id: string | null;
   announcement_id?: string | null;
+  support_thread_id?: string | null;
   actor_id: string | null;
   actor_name: string | null;
   read: boolean;
@@ -59,7 +60,6 @@ export default function NotificationBell({
   const fetchNotifs = async () => {
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch(`/api/notifications?limit=${limit}`, {
         cache: "no-store",
@@ -80,7 +80,6 @@ export default function NotificationBell({
   const markRead = async (ids: string[]) => {
     if (ids.length === 0) return;
 
-    // 楽観更新
     setItems((prev) =>
       prev.map((it) => (ids.includes(it.id) ? { ...it, read: true } : it))
     );
@@ -156,13 +155,19 @@ export default function NotificationBell({
       return `/announcements/${n.announcement_id}`;
     }
 
+    if (n.type === "support_reply" && n.support_thread_id) {
+      return `/support/${n.support_thread_id}`;
+    }
+
     return "/app";
   };
 
   const titleFor = (n: NotifItem) => {
     if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
     if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
-    return "管理者からのお知らせ";
+    if (n.type === "admin_broadcast") return "管理者からのお知らせ";
+    if (n.type === "support_reply") return "管理者から返信";
+    return "通知";
   };
 
   return (
@@ -364,7 +369,7 @@ function ListArea({
                     ? n.message_preview
                     : n.type === "streak_end"
                     ? `理由: ${n.message_preview || "finished"}`
-                    : n.message_preview || "お知らせ"}
+                    : n.message_preview || "通知が届きました"}
                 </div>
               </div>
 
@@ -386,7 +391,9 @@ function ListArea({
 function FooterHint() {
   return (
     <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-      DM通知はDM画面へ、継続終了通知は継続リザルトへ、管理者通知はお知らせ詳細へ飛びます。
+      DM通知はDM画面へ、継続終了通知は継続リザルトへ、管理者通知はお知らせ詳細へ、
+      問い合わせ返信は問い合わせ画面へ飛びます。
     </div>
   );
 }
+``

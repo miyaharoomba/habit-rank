@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 
 type NotifItem = {
   id: string;
-  type: "dm" | "streak_end" | "admin_broadcast" | string;
+  type: string;
   created_at: string;
   message_preview: string;
   thread_id: string | null;
   session_id: string | null;
   announcement_id?: string | null;
+  support_thread_id?: string | null;
   actor_id: string | null;
   actor_name: string | null;
   read: boolean;
@@ -41,6 +42,9 @@ function routeFor(n: NotifItem) {
   if (n.type === "admin_broadcast" && n.announcement_id) {
     return `/announcements/${n.announcement_id}`;
   }
+  if (n.type === "support_reply" && n.support_thread_id) {
+    return `/support/${n.support_thread_id}`;
+  }
   return "/app";
 }
 
@@ -48,9 +52,12 @@ function titleFor(n: NotifItem) {
   if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
   if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
 
-  // 管理者通知は message_preview をタイトルとして使う
   if (n.type === "admin_broadcast") {
     return (n.message_preview ?? "").trim() || "管理者からのお知らせ";
+  }
+
+  if (n.type === "support_reply") {
+    return "管理者から返信";
   }
 
   return "通知";
@@ -65,6 +72,10 @@ function bodyFor(n: NotifItem) {
 
   if (n.type === "admin_broadcast") {
     return "タップして詳細を確認してください。";
+  }
+
+  if (n.type === "support_reply") {
+    return txt || "問い合わせに返信がありました。";
   }
 
   return txt || "通知が届きました";
@@ -105,15 +116,12 @@ export default function NotificationToaster({
       if (prev.some((x) => x.id === t.id)) return prev;
 
       const next = [t, ...prev];
-
-      // sticky は絶対に消さない
       const sticky = next.filter((x) => x.sticky);
       const normal = next.filter((x) => !x.sticky).slice(0, maxToasts);
 
       return [...sticky, ...normal];
     });
 
-    // sticky は自動で消さない
     if (!t.sticky) {
       const timer = window.setTimeout(() => dismiss(t.id), showMs);
       timersRef.current.set(t.id, timer);
@@ -151,9 +159,6 @@ export default function NotificationToaster({
       const json = (await res.json()) as ApiResponse;
       const items = json.items ?? [];
 
-      // 初回ロード:
-      // - 既存通知を全部 seen 扱いにする
-      // - ただし unread な admin_broadcast は sticky で表示する
       if (!initializedRef.current) {
         for (const n of items) {
           seenRef.current.add(n.id);
@@ -173,7 +178,6 @@ export default function NotificationToaster({
         return;
       }
 
-      // 2回目以降: 新規IDだけ表示
       for (const n of items) {
         if (seenRef.current.has(n.id)) continue;
         seenRef.current.add(n.id);
@@ -249,7 +253,6 @@ export default function NotificationToaster({
               </div>
             </button>
 
-            {/* 管理者通知(sticky)は、詳細確認前に消せないように×を出さない */}
             {!t.sticky && (
               <button
                 type="button"
@@ -267,4 +270,3 @@ export default function NotificationToaster({
     </div>
   );
 }
-``
