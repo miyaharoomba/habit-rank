@@ -31,11 +31,10 @@ export default async function AdminPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/sign-in");
 
-  // 管理者チェック（public.is_admin() をRPCで呼ぶ）
+  // 管理者チェック
   const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
-  if (adminErr || !isAdmin) redirect("/settings"); // RPC呼び出しは supabase.rpc() [2](https://medium.com/@anmjawad007/the-complete-guide-to-tailwind-configuration-custom-themes-layers-plugins-and-more-d4668f93cc1f)
+  if (adminErr || !isAdmin) redirect("/settings");
 
-  // 集計（失敗しても 0 扱い）
   const [usersRes, bannedRes, reportsRes, auditRes] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true } as any),
     supabase
@@ -59,7 +58,6 @@ export default async function AdminPage() {
 
   const auditRows = ((auditRes.data ?? []) as AuditRow[]) || [];
 
-  // actor 名をまとめて取得
   const ids = Array.from(new Set(auditRows.map((a) => a.actor_id).filter(Boolean))) as string[];
   const nameMap = new Map<string, string>();
   if (ids.length > 0) {
@@ -74,7 +72,7 @@ export default async function AdminPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">管理者コンソール</h1>
-          <p className="text-sm text-muted-foreground">ユーザー管理 / 通報対応 / 監査ログ</p>
+          <p className="text-sm text-muted-foreground">ユーザー管理 / 通報対応 / 監査ログ / お知らせ配信</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -116,7 +114,7 @@ export default async function AdminPage() {
             <h2 className="font-semibold">メニュー</h2>
           </CardHeader>
           <CardBody>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
               <Link
                 href="/admin/users"
                 className="rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
@@ -139,6 +137,14 @@ export default async function AdminPage() {
               >
                 <div className="font-semibold">監査ログ</div>
                 <div className="text-xs text-muted-foreground">管理操作の履歴</div>
+              </Link>
+
+              <Link
+                href="/admin/announcements"
+                className="rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
+              >
+                <div className="font-semibold">お知らせ配信</div>
+                <div className="text-xs text-muted-foreground">全員への通知 / 端末通知 / 詳細画面</div>
               </Link>
             </div>
           </CardBody>
