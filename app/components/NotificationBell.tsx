@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-// ✅ JST固定フォーマッタ
-// formatJstStartLabel: 05/28(水) 13:05 みたいな表示（Asia/Tokyo固定）
 import { formatJstStartLabel } from "@/lib/time";
 
 type NotifItem = {
@@ -17,6 +14,7 @@ type NotifItem = {
   actor_id: string | null;
   actor_name: string | null;
   read: boolean;
+  url?: string;
 };
 
 type ApiResponse = {
@@ -64,7 +62,9 @@ export default function NotificationBell({
       const res = await fetch(`/api/notifications?limit=${limit}`, {
         cache: "no-store",
       });
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const json = (await res.json()) as ApiResponse;
       setUnread(json.unreadCount ?? 0);
       setItems(json.items ?? []);
@@ -86,7 +86,9 @@ export default function NotificationBell({
 
     const res = await fetch("/api/notifications", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ ids }),
     });
 
@@ -107,6 +109,7 @@ export default function NotificationBell({
     const id = setInterval(() => {
       fetchNotifs();
     }, pollMs);
+
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollMs, limit]);
@@ -117,8 +120,11 @@ export default function NotificationBell({
       if (!open) return;
       const el = boxRef.current;
       if (!el) return;
-      if (e.target instanceof Node && !el.contains(e.target)) setOpen(false);
+      if (e.target instanceof Node && !el.contains(e.target)) {
+        setOpen(false);
+      }
     };
+
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
@@ -129,6 +135,7 @@ export default function NotificationBell({
       if (!open) return;
       if (e.key === "Escape") setOpen(false);
     };
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
@@ -139,8 +146,20 @@ export default function NotificationBell({
   );
 
   const routeFor = (n: NotifItem) => {
-    if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
-    return "/ranking";
+    // API側で url を返していれば最優先
+    if (n.url && n.url.trim().length > 0) return n.url;
+
+    // 終了通知 → 継続リザルト
+    if (n.type === "streak_end" && n.session_id) {
+      return `/results/${n.session_id}`;
+    }
+
+    // DM通知 → DMスレッド
+    if (n.type === "dm" && n.thread_id) {
+      return `/dm/${n.thread_id}`;
+    }
+
+    return "/app";
   };
 
   const titleFor = (n: NotifItem) => {
@@ -154,18 +173,14 @@ export default function NotificationBell({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative inline-flex items-center justify-center rounded-lg border border-border bg-transparent px-3 py-2
-                   hover:bg-secondary/50 transition
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="relative inline-flex items-center justify-center rounded-lg border border-border bg-transparent px-3 py-2 hover:bg-secondary/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label="通知"
       >
         {bellIcon("h-5 w-5")}
 
-        {/* 未読バッジ */}
         {unread > 0 && (
           <span
-            className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground
-                       text-xs font-bold flex items-center justify-center tabular-nums"
+            className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center tabular-nums"
             aria-label={`未読 ${unread} 件`}
           >
             {unread > 99 ? "99+" : unread}
@@ -173,9 +188,7 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* =========================
-          PC: 右上ドロップダウン (sm以上)
-         ========================= */}
+      {/* PC: ドロップダウン */}
       {open && (
         <div
           className="hidden sm:block absolute right-0 mt-2 w-[360px] rounded-xl border border-border bg-card text-card-foreground shadow-glow z-50"
@@ -189,6 +202,7 @@ export default function NotificationBell({
             onRefresh={fetchNotifs}
             onMarkAll={() => markRead(unreadIds)}
           />
+
           <ListArea
             items={items}
             loading={loading}
@@ -198,23 +212,20 @@ export default function NotificationBell({
             routeFor={routeFor}
             close={() => setOpen(false)}
           />
+
           <FooterHint />
         </div>
       )}
 
-      {/* =========================
-          Mobile: フルスクリーン/ボトムシート (sm未満)
-         ========================= */}
+      {/* Mobile: フルスクリーン */}
       {open && (
         <div className="sm:hidden fixed inset-0 z-50">
-          {/* オーバーレイ */}
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
 
-          {/* 下から出るシート */}
           <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border border-border bg-card text-card-foreground shadow-glow">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="font-semibold">通知</div>
@@ -323,15 +334,11 @@ function ListArea({
   close: () => void;
 }) {
   if (loading) {
-    return (
-      <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>
-    );
+    return <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>;
   }
 
   if (error) {
-    return (
-      <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>
-    );
+    return <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>;
   }
 
   if (items.length === 0) {
@@ -364,7 +371,6 @@ function ListArea({
                 </div>
               </div>
 
-              {/* ✅ 時刻表示をJST固定にする（相対ではなく絶対時刻へ） */}
               <div className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                 {formatJstStartLabel(n.created_at)}
               </div>
@@ -383,7 +389,7 @@ function ListArea({
 function FooterHint() {
   return (
     <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-      DM通知はDM画面へ、継続終了通知はランキングへ飛びます。
+      DM通知はDM画面へ、継続終了通知は継続リザルトへ飛びます。
     </div>
   );
 }
