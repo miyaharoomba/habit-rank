@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 type ThreadRow = {
   id: string;
