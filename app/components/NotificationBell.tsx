@@ -6,11 +6,12 @@ import { formatJstStartLabel } from "@/lib/time";
 
 type NotifItem = {
   id: string;
-  type: "dm" | "streak_end";
+  type: "dm" | "streak_end" | "admin_broadcast";
   created_at: string;
   message_preview: string;
   thread_id: string | null;
   session_id: string | null;
+  announcement_id?: string | null;
   actor_id: string | null;
   actor_name: string | null;
   read: boolean;
@@ -58,6 +59,7 @@ export default function NotificationBell({
   const fetchNotifs = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const res = await fetch(`/api/notifications?limit=${limit}`, {
         cache: "no-store",
@@ -97,14 +99,12 @@ export default function NotificationBell({
     }
   };
 
-  // 開いたら最新取得
   useEffect(() => {
     if (!open) return;
     fetchNotifs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // 定期ポーリング
   useEffect(() => {
     const id = setInterval(() => {
       fetchNotifs();
@@ -114,22 +114,18 @@ export default function NotificationBell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollMs, limit]);
 
-  // 外側クリックで閉じる（PCドロップダウン用）
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!open) return;
       const el = boxRef.current;
       if (!el) return;
-      if (e.target instanceof Node && !el.contains(e.target)) {
-        setOpen(false);
-      }
+      if (e.target instanceof Node && !el.contains(e.target)) setOpen(false);
     };
 
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  // Escで閉じる
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!open) return;
@@ -146,17 +142,18 @@ export default function NotificationBell({
   );
 
   const routeFor = (n: NotifItem) => {
-    // API側で url を返していれば最優先
     if (n.url && n.url.trim().length > 0) return n.url;
 
-    // 終了通知 → 継続リザルト
     if (n.type === "streak_end" && n.session_id) {
       return `/results/${n.session_id}`;
     }
 
-    // DM通知 → DMスレッド
     if (n.type === "dm" && n.thread_id) {
       return `/dm/${n.thread_id}`;
+    }
+
+    if (n.type === "admin_broadcast" && n.announcement_id) {
+      return `/announcements/${n.announcement_id}`;
     }
 
     return "/app";
@@ -164,12 +161,12 @@ export default function NotificationBell({
 
   const titleFor = (n: NotifItem) => {
     if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
-    return `${n.actor_name ?? "誰か"} が継続を終了`;
+    if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
+    return "管理者からのお知らせ";
   };
 
   return (
     <div ref={boxRef} className="relative">
-      {/* ベルボタン */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -188,7 +185,6 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* PC: ドロップダウン */}
       {open && (
         <div
           className="hidden sm:block absolute right-0 mt-2 w-[360px] rounded-xl border border-border bg-card text-card-foreground shadow-glow z-50"
@@ -217,7 +213,6 @@ export default function NotificationBell({
         </div>
       )}
 
-      {/* Mobile: フルスクリーン */}
       {open && (
         <div className="sm:hidden fixed inset-0 z-50">
           <div
@@ -367,7 +362,9 @@ function ListArea({
                 <div className="mt-0.5 text-xs text-muted-foreground break-words">
                   {n.type === "dm"
                     ? n.message_preview
-                    : `理由: ${n.message_preview || "finished"}`}
+                    : n.type === "streak_end"
+                    ? `理由: ${n.message_preview || "finished"}`
+                    : n.message_preview || "お知らせ"}
                 </div>
               </div>
 
@@ -389,7 +386,7 @@ function ListArea({
 function FooterHint() {
   return (
     <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-      DM通知はDM画面へ、継続終了通知は継続リザルトへ飛びます。
+      DM通知はDM画面へ、継続終了通知は継続リザルトへ、管理者通知はお知らせ詳細へ飛びます。
     </div>
   );
 }

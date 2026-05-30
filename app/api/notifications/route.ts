@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const { data: notifs, error: nErr } = await supabase
     .from("notifications")
     .select(
-      "id, type, actor_id, recipient_id, thread_id, session_id, message_preview, created_at"
+      "id, type, actor_id, recipient_id, thread_id, session_id, announcement_id, message_preview, created_at"
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -83,6 +83,8 @@ export async function GET(request: Request) {
         ? `/results/${n.session_id}`
         : n.type === "dm" && n.thread_id
         ? `/dm/${n.thread_id}`
+        : n.type === "admin_broadcast" && n.announcement_id
+        ? `/announcements/${n.announcement_id}`
         : "/app";
 
     return {
@@ -92,6 +94,7 @@ export async function GET(request: Request) {
       message_preview: n.message_preview ?? "",
       thread_id: n.thread_id,
       session_id: n.session_id,
+      announcement_id: n.announcement_id ?? null,
       actor_id: n.actor_id,
       actor_name: n.actor_id ? actorMap.get(n.actor_id) ?? "NoName" : null,
       read: readSet.has(n.id),
