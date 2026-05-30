@@ -8,8 +8,9 @@ on:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+
     steps:
       - name: Call push dispatch
         run: |
-          curl.exe -i -X POST "https://habit-rank.vercel.app/api/push/dispatch" -H "x-push-secret: $env:PUSH_DISPATCH_SECRET" -H "Content-Type: application/json"
-          
+          curl -sS -i --fail-with-body "https://habit-rank.vercel.app/api/push/dispatch" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
