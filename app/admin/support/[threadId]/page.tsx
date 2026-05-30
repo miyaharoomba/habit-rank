@@ -4,8 +4,8 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { formatJst } from "@/lib/time";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { formatJst } from "@/lib/time";
 
 type ThreadRow = {
   id: string;
@@ -82,7 +82,7 @@ export default async function AdminSupportThreadPage({
       throw new Error(threadErr?.message ?? "support thread not found");
     }
 
-    // 1) 返信を保存
+    // 1) 返信本文を保存（通常クライアント）
     const { error: msgErr } = await supabase.from("support_messages").insert({
       thread_id: threadId,
       sender_id: user.id,
@@ -94,10 +94,21 @@ export default async function AdminSupportThreadPage({
       throw new Error(msgErr.message);
     }
 
-    // 2) ユーザー向け通知を作成
+    // 2) notifications / push_outbox は service role で作る
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+    if (!serviceKey) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing");
+    }
+
+    const adminClient = createAdminClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
     const notifPreview = preview(body, 120);
 
-    const { data: notif, error: notifErr } = await supabase
+    const { data: notif, error: notifErr } = await adminClient
       .from("notifications")
       .insert({
         type: "support_reply",
@@ -113,26 +124,29 @@ export default async function AdminSupportThreadPage({
       .single();
 
     if (notifErr || !notif) {
-      throw new Error(notifErr?.message ?? "support_reply notification insert failed");
+      throw new Error(
+        notifErr?.message ?? "support_reply notification insert failed"
+      );
     }
 
-    // 3) push_outbox も作成
-    const { error: outboxErr } = await supabase.from("push_outbox").insert({
-      notification_id: notif.id,
-      recipient_id: targetThread.user_id,
-      payload: {
-        title: "管理者から返信",
-        body: notifPreview || "問い合わせに返信がありました",
-        url: `/support/${threadId}`,
-      },
-      attempts: 0,
-    });
+    const { error: outboxErr } = await adminClient
+      .from("push_outbox")
+      .insert({
+        notification_id: notif.id,
+        recipient_id: targetThread.user_id,
+        payload: {
+          title: "管理者から返信",
+          body: notifPreview || "問い合わせに返信がありました",
+          url: `/support/${threadId}`,
+        },
+        attempts: 0,
+      });
 
     if (outboxErr) {
       throw new Error(outboxErr.message);
     }
 
-    // 4) 監査ログ
+    // 3) 監査ログ
     await supabase.from("admin_audit_logs").insert({
       actor_id: user.id,
       action: "SUPPORT_REPLY",
@@ -256,7 +270,9 @@ export default async function AdminSupportThreadPage({
 
   const msgRows = (messages ?? []) as MessageRow[];
 
-  const senderIds = Array.from(new Set([row.user_id, ...msgRows.map((m) => m.sender_id)]));
+  const senderIds = Array.from(
+    new Set([row.user_id, ...msgRows.map((m) => m.sender_id)])
+  );
   const nameMap = new Map<string, string>();
 
   if (senderIds.length > 0) {
