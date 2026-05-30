@@ -23,13 +23,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(request.url);
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 50);
+  const requestUrl = new URL(request.url);
+  const limit = Math.min(Number(requestUrl.searchParams.get("limit") ?? 20), 50);
 
-  // 1) 通知を取得（RLSで「自分宛 or 全体通知」しか返らない想定）
   const { data: notifs, error: nErr } = await supabase
     .from("notifications")
-    .select("id, type, actor_id, recipient_id, thread_id, session_id, message_preview, created_at")
+    .select(
+      "id, type, actor_id, recipient_id, thread_id, session_id, message_preview, created_at"
+    )
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -38,24 +39,29 @@ export async function GET(request: Request) {
   }
 
   const notifications = notifs ?? [];
-  const ids = notifications.map((n) => n.id);
+  const ids = notifications.map((n: any) => n.id);
 
-  // 2) 既読情報を取得（このユーザーが既読にした通知）
   const { data: reads, error: rErr } = await supabase
     .from("notification_reads")
     .select("notification_id")
     .eq("user_id", user.id)
-    .in("notification_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+    .in(
+      "notification_id",
+      ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]
+    );
 
   if (rErr) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
   }
 
-  const readSet = new Set((reads ?? []).map((r) => r.notification_id));
+  const readSet = new Set((reads ?? []).map((r: any) => r.notification_id));
 
-  // 3) actor の display_name をまとめて取得
   const actorIds = Array.from(
-    new Set(notifications.map((n) => n.actor_id).filter(Boolean))
+    new Set(
+      notifications
+        .map((n: any) => n.actor_id)
+        .filter(Boolean)
+    )
   ) as string[];
 
   const actorMap = new Map<string, string>();
@@ -66,12 +72,12 @@ export async function GET(request: Request) {
       .select("id, display_name")
       .in("id", actorIds);
 
-    (actors ?? []).forEach((a) => {
+    (actors ?? []).forEach((a: any) => {
       actorMap.set(a.id, (a.display_name ?? "").trim() || "NoName");
     });
   }
 
-  const items = notifications.map((n) => {
+  const items = notifications.map((n: any) => {
     const notificationUrl =
       n.type === "streak_end" && n.session_id
         ? `/results/${n.session_id}`
@@ -89,16 +95,14 @@ export async function GET(request: Request) {
       actor_id: n.actor_id,
       actor_name: n.actor_id ? actorMap.get(n.actor_id) ?? "NoName" : null,
       read: readSet.has(n.id),
-
-      // ✅ 通知クリック時の遷移先
-      // streak_end → /results/{session_id}
-      // dm → /dm/{thread_id}
-      // その他 → /app
       url: notificationUrl,
     };
   });
 
-  const unreadCount = items.reduce((acc, it) => acc + (it.read ? 0 : 1), 0);
+  const unreadCount = items.reduce(
+    (acc: number, it: any) => acc + (it.read ? 0 : 1),
+    0
+  );
 
   return NextResponse.json({ unreadCount, items });
 }
@@ -122,7 +126,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, inserted: 0 });
   }
 
-  // 既読を upsert（同じ通知を何回押してもOK）
   const payload = ids.map((notification_id) => ({
     notification_id,
     user_id: user.id,
@@ -138,4 +141,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, inserted: ids.length });
 }
-``
