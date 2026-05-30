@@ -101,6 +101,13 @@ export default async function AppPage() {
           </Link>
 
           <Link
+            href="/support"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
+            問い合わせ
+          </Link>
+
+          <Link
             href="/ranking"
             className="text-sm text-primary hover:underline whitespace-nowrap"
           >
@@ -147,7 +154,6 @@ export default async function AppPage() {
                   </Button>
                 </form>
 
-                {/* ✅ 終了：理由入力付き（finishSession は FormData を受け取る） [1](https://github-api-bice.vercel.app/) */}
                 <form action={finishSession} className="flex-1 min-w-[260px]">
                   <input type="hidden" name="end_reason" value="" />
                   <div className="flex flex-col gap-2">
