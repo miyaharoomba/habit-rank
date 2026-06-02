@@ -1,4 +1,5 @@
 import LiveTimer from "@/app/components/LiveTimer";
+import GlobalChatBoard from "@/app/components/GlobalChatBoard";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Button from "@/app/components/ui/Button";
@@ -10,15 +11,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { formatJst, formatJstStartLabel } from "@/lib/time";
-
-function formatDuration(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return { days, hours, minutes, seconds };
-}
 
 export default async function AppPage() {
   const supabase = await createClient();
@@ -61,15 +53,6 @@ export default async function AppPage() {
 
   const startedAt = active?.started_at ?? null;
 
-  // 履歴（終了済み）最新10件
-  const { data: history } = await supabase
-    .from("streak_sessions")
-    .select("id, started_at, ended_at, end_reason")
-    .eq("user_id", user.id)
-    .not("ended_at", "is", null)
-    .order("ended_at", { ascending: false })
-    .limit(10);
-
   return (
     <Container>
       {/* ヘッダー */}
@@ -105,6 +88,13 @@ export default async function AppPage() {
             className="text-sm text-primary hover:underline whitespace-nowrap"
           >
             問い合わせ
+          </Link>
+
+          <Link
+            href="/history"
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
+            履歴
           </Link>
 
           <Link
@@ -179,52 +169,8 @@ export default async function AppPage() {
           </CardBody>
         </Card>
 
-        {/* 履歴 */}
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">履歴（最新10件）</h2>
-          </CardHeader>
-
-          <CardBody>
-            {history && history.length > 0 ? (
-              <ul className="space-y-3">
-                {history.map((row) => {
-                  const s = new Date(row.started_at);
-                  const e = row.ended_at ? new Date(row.ended_at) : null;
-                  const diff = e ? e.getTime() - s.getTime() : 0;
-                  const { days, hours, minutes, seconds } = formatDuration(diff);
-
-                  return (
-                    <li
-                      key={row.id}
-                      className="rounded-lg border border-border bg-secondary/40 px-4 py-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-semibold tabular-nums">
-                          {days}日 {hours}時間 {minutes}分 {seconds}秒
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {row.end_reason && row.end_reason.trim()
-                            ? `理由: ${row.end_reason}`
-                            : "理由: finished"}
-                        </span>
-                      </div>
-
-                      <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-                        開始: {formatJst(row.started_at)} / 終了:{" "}
-                        {row.ended_at ? formatJst(row.ended_at) : "-"}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                まだ履歴がありません。開始→終了してみて！
-              </p>
-            )}
-          </CardBody>
-        </Card>
+        {/* 全体掲示板 */}
+        <GlobalChatBoard myUserId={user.id} />
       </div>
     </Container>
   );
