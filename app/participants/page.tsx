@@ -26,7 +26,6 @@ export default async function ParticipantsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) redirect("/auth/sign-in");
 
   const { data, error } = await supabase.rpc("get_participants_status", {
@@ -78,7 +77,6 @@ export default async function ParticipantsPage() {
 
   return (
     <Container>
-      {/* ヘッダー */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">参加者一覧</h1>
@@ -100,7 +98,6 @@ export default async function ParticipantsPage() {
         </div>
       </header>
 
-      {/* 本体 */}
       <div className="mt-6">
         <Card>
           <CardHeader>
@@ -120,3 +117,4 @@ export default async function ParticipantsPage() {
     </Container>
   );
 }
+``

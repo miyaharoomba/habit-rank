@@ -4,8 +4,6 @@ import Link from "next/link";
 
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-
-// JST固定フォーマッタ
 import { formatJstStartLabel } from "@/lib/time";
 
 type BestRow = {
@@ -23,6 +21,11 @@ type CurrentRow = {
   started_at: string;
 };
 
+type ProfileRow = {
+  id: string;
+  avatar_path: string | null;
+};
+
 function formatTime(sec: number) {
   const s = Math.max(0, Math.floor(sec));
   const days = Math.floor(s / 86400);
@@ -34,6 +37,43 @@ function formatTime(sec: number) {
   if (hours > 0) return `${hours}時間 ${minutes}分 ${seconds}秒`;
   if (minutes > 0) return `${minutes}分 ${seconds}秒`;
   return `${seconds}秒`;
+}
+
+function avatarUrl(path: string | null | undefined) {
+  if (!path) return null;
+  return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
+}
+
+function profileHref(userId: string, myUserId: string) {
+  return userId === myUserId ? "/profile" : `/users/${encodeURIComponent(userId)}`;
+}
+
+function Avatar({
+  href,
+  avatar,
+  displayName,
+}: {
+  href: string;
+  avatar: string | null;
+  displayName: string;
+}) {
+  const initial = (displayName ?? "?").trim().slice(0, 1) || "?";
+
+  return (
+    <Link href={href} className="shrink-0">
+      {avatar ? (
+        <img
+          src={avatar}
+          alt="avatar"
+          className="h-10 w-10 rounded-full object-cover border border-border"
+        />
+      ) : (
+        <div className="h-10 w-10 rounded-full border border-border bg-background/60 flex items-center justify-center text-sm font-bold text-muted-foreground">
+          {initial}
+        </div>
+      )}
+    </Link>
+  );
 }
 
 export default async function RankingPage({
@@ -48,10 +88,7 @@ export default async function RankingPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/auth/sign-in");
-  }
+  if (!user) redirect("/auth/sign-in");
 
   const limit_count = 50;
 
@@ -66,7 +103,6 @@ export default async function RankingPage({
       : { data: null as any, error: null as any };
 
   const error = bestRes.error ?? currentRes.error;
-
   if (error) {
     return (
       <Container>
@@ -93,9 +129,25 @@ export default async function RankingPage({
   const bestRows = (bestRes.data ?? []) as BestRow[];
   const currentRows = (currentRes.data ?? []) as CurrentRow[];
 
+  const targetUserIds = Array.from(
+    new Set((activeTab === "best" ? bestRows : currentRows).map((r) => r.user_id))
+  );
+
+  const avatarMap = new Map<string, string | null>();
+
+  if (targetUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, avatar_path")
+      .in("id", targetUserIds);
+
+    (profiles ?? []).forEach((p: ProfileRow) => {
+      avatarMap.set(p.id, p.avatar_path ?? null);
+    });
+  }
+
   return (
     <Container>
-      {/* ヘッダー */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ランキング</h1>
@@ -111,13 +163,15 @@ export default async function RankingPage({
           <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/dm">
             /dm
           </Link>
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/settings">
+          <Link
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+            href="/settings"
+          >
             設定
           </Link>
         </div>
       </header>
 
-      {/* タブ */}
       <div className="mt-5 flex gap-2">
         <Link
           href="/ranking?tab=best"
@@ -140,7 +194,6 @@ export default async function RankingPage({
         </Link>
       </div>
 
-      {/* 本体 */}
       <div className="mt-4">
         <Card>
           <CardHeader>
@@ -164,6 +217,8 @@ export default async function RankingPage({
                 <ul className="space-y-2">
                   {bestRows.map((r) => {
                     const isMe = r.user_id === user.id;
+                    const href = profileHref(r.user_id, user.id);
+                    const avatar = avatarUrl(avatarMap.get(r.user_id));
 
                     return (
                       <li
@@ -173,30 +228,33 @@ export default async function RankingPage({
                           isMe ? "ring-1 ring-primary/40 bg-primary/10" : "",
                         ].join(" ")}
                       >
-                        {/* ベスト側だけ、モバイルでは縦寄せにする */}
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-start gap-3 min-w-0">
                             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
                               {r.rank_no}
                             </span>
 
-                            <div className="min-w-0 flex-1">
-                              <div
-                                className={[
-                                  "font-semibold leading-tight break-words sm:truncate",
-                                  isMe ? "text-primary" : "",
-                                ].join(" ")}
-                              >
-                                {r.display_name}
-                                {isMe ? "（あなた）" : ""}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                ベスト記録
+                            <div className="flex min-w-0 flex-1 gap-3">
+                              <Avatar href={href} avatar={avatar} displayName={r.display_name} />
+
+                              <div className="min-w-0 flex-1">
+                                <Link
+                                  href={href}
+                                  className={[
+                                    "font-semibold leading-tight break-words sm:truncate hover:underline",
+                                    isMe ? "text-primary" : "",
+                                  ].join(" ")}
+                                >
+                                  {r.display_name}
+                                  {isMe ? "（あなた）" : ""}
+                                </Link>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  ベスト記録
+                                </div>
                               </div>
                             </div>
                           </div>
 
-                          {/* モバイルでは下段に逃がす */}
                           <div className="pl-11 sm:pl-0 text-left sm:text-right">
                             <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
                               {formatTime(Number(r.best_seconds))}
@@ -216,6 +274,8 @@ export default async function RankingPage({
               <ul className="space-y-2">
                 {currentRows.map((r) => {
                   const isMe = r.user_id === user.id;
+                  const href = profileHref(r.user_id, user.id);
+                  const avatar = avatarUrl(avatarMap.get(r.user_id));
 
                   return (
                     <li
@@ -226,24 +286,29 @@ export default async function RankingPage({
                       ].join(" ")}
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
                             {r.rank_no}
                           </span>
 
-                          <div className="min-w-0">
-                            <div
-                              className={[
-                                "font-semibold truncate",
-                                isMe ? "text-primary" : "",
-                              ].join(" ")}
-                            >
-                              {r.display_name}
-                              {isMe ? "（あなた）" : ""}
-                            </div>
+                          <div className="flex min-w-0 flex-1 gap-3">
+                            <Avatar href={href} avatar={avatar} displayName={r.display_name} />
 
-                            <div className="text-xs text-muted-foreground tabular-nums">
-                              開始：{formatJstStartLabel(r.started_at)}
+                            <div className="min-w-0 flex-1">
+                              <Link
+                                href={href}
+                                className={[
+                                  "font-semibold leading-tight break-words sm:truncate hover:underline",
+                                  isMe ? "text-primary" : "",
+                                ].join(" ")}
+                              >
+                                {r.display_name}
+                                {isMe ? "（あなた）" : ""}
+                              </Link>
+
+                              <div className="text-xs text-muted-foreground tabular-nums">
+                                開始：{formatJstStartLabel(r.started_at)}
+                              </div>
                             </div>
                           </div>
                         </div>
