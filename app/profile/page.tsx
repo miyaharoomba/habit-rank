@@ -14,9 +14,35 @@ type ProfileRow = {
   updated_at: string | null;
 };
 
+type SessionRow = {
+  id: number | string;
+  started_at: string;
+  ended_at: string | null;
+  end_reason: string | null;
+};
+
 function avatarUrl(path: string | null) {
   if (!path) return null;
   return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
+}
+
+function durationSeconds(startedAt: string, endedAt: string | null) {
+  const start = new Date(startedAt).getTime();
+  const end = endedAt ? new Date(endedAt).getTime() : Date.now();
+  return Math.max(0, Math.floor((end - start) / 1000));
+}
+
+function formatDuration(totalSec: number) {
+  const sec = Math.max(0, Math.floor(totalSec));
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
+
+  if (days > 0) return `${days}日 ${hours}時間 ${minutes}分 ${seconds}秒`;
+  if (hours > 0) return `${hours}時間 ${minutes}分 ${seconds}秒`;
+  if (minutes > 0) return `${minutes}分 ${seconds}秒`;
+  return `${seconds}秒`;
 }
 
 export default async function ProfilePage() {
@@ -41,8 +67,44 @@ export default async function ProfilePage() {
     throw new Error(error?.message ?? "profile not found");
   }
 
+  // 履歴表示用（直近20件）
+  const { data: recentSessions, error: recentErr } = await supabase
+    .from("streak_sessions")
+    .select("id, started_at, ended_at, end_reason")
+    .eq("user_id", user.id)
+    .not("ended_at", "is", null)
+    .order("ended_at", { ascending: false })
+    .limit(20);
+
+  if (recentErr) {
+    throw new Error(recentErr.message);
+  }
+
+  // 集計用（全終了履歴）
+  const { data: allSessions, error: allErr } = await supabase
+    .from("streak_sessions")
+    .select("id, started_at, ended_at")
+    .eq("user_id", user.id)
+    .not("ended_at", "is", null)
+    .order("ended_at", { ascending: false });
+
+  if (allErr) {
+    throw new Error(allErr.message);
+  }
+
   const row = profile as ProfileRow;
   const avatar = avatarUrl(row.avatar_path);
+  const history = (recentSessions ?? []) as SessionRow[];
+  const allHistory = (allSessions ?? []) as Array<
+    Pick<SessionRow, "id" | "started_at" | "ended_at">
+  >;
+
+  const sessionCount = allHistory.length;
+  const durations = allHistory.map((s) =>
+    durationSeconds(s.started_at, s.ended_at)
+  );
+  const bestSeconds = durations.length > 0 ? Math.max(...durations) : 0;
+  const totalSeconds = durations.reduce((sum, sec) => sum + sec, 0);
 
   return (
     <Container>
@@ -50,7 +112,7 @@ export default async function ProfilePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">プロフィール</h1>
           <p className="text-sm text-muted-foreground">
-            自分のプロフィール情報を確認できます。
+            自分のプロフィールと継続履歴です。
           </p>
         </div>
 
@@ -58,16 +120,11 @@ export default async function ProfilePage() {
           <Link className="text-sm text-primary hover:underline" href="/app">
             /app
           </Link>
-          <Link className="text-sm text-primary hover:underline" href="/history">
-            /history
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/profile/edit">
-            /profile/edit
-          </Link>
         </div>
       </header>
 
       <div className="mt-6 grid gap-4">
+        {/* プロフィール情報 */}
         <Card>
           <CardHeader>
             <h2 className="font-semibold">プロフィール情報</h2>
@@ -98,6 +155,30 @@ export default async function ProfilePage() {
                     "ステータスメッセージはまだ設定されていません。"}
                 </div>
 
+                {/* サマリー */}
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
+                    <div className="text-xs text-muted-foreground">継続回数</div>
+                    <div className="mt-1 text-lg font-bold tabular-nums">
+                      {sessionCount}回
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
+                    <div className="text-xs text-muted-foreground">最長記録</div>
+                    <div className="mt-1 text-sm font-bold tabular-nums break-words">
+                      {sessionCount > 0 ? formatDuration(bestSeconds) : "記録なし"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
+                    <div className="text-xs text-muted-foreground">総継続時間</div>
+                    <div className="mt-1 text-sm font-bold tabular-nums break-words">
+                      {sessionCount > 0 ? formatDuration(totalSeconds) : "記録なし"}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground tabular-nums">
                   <div>ユーザーID: {row.id}</div>
                   <div>更新日時: {row.updated_at ? formatJst(row.updated_at) : "-"}</div>
@@ -107,42 +188,56 @@ export default async function ProfilePage() {
           </CardBody>
         </Card>
 
+        {/* 継続履歴 */}
         <Card>
           <CardHeader>
-            <h2 className="font-semibold">導線</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold">継続履歴</h2>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                直近20件
+              </span>
+            </div>
           </CardHeader>
           <CardBody>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <Link
-                href="/profile/edit"
-                className="rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
-              >
-                <div className="font-semibold">プロフィールを編集</div>
-                <div className="text-xs text-muted-foreground">
-                  名前 / アイコン / ステータスメッセージ
-                </div>
-              </Link>
+            {history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                まだ表示できる継続履歴がありません。
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {history.map((s) => (
+                  <li key={String(s.id)}>
+                    <Link
+                      href={`/results/${s.id}`}
+                      className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold tabular-nums">
+                          継続時間:{" "}
+                          {formatDuration(durationSeconds(s.started_at, s.ended_at))}
+                        </div>
 
-              <Link
-                href="/history"
-                className="rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
-              >
-                <div className="font-semibold">履歴</div>
-                <div className="text-xs text-muted-foreground">
-                  終了済み継続の確認
-                </div>
-              </Link>
+                        <div className="mt-1 text-xs text-muted-foreground tabular-nums break-words">
+                          開始: {formatJst(s.started_at)}
+                        </div>
 
-              <Link
-                href="/participants"
-                className="rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
-              >
-                <div className="font-semibold">参加者一覧</div>
-                <div className="text-xs text-muted-foreground">
-                  他の参加者を見る
-                </div>
-              </Link>
-            </div>
+                        <div className="mt-1 text-xs text-muted-foreground tabular-nums break-words">
+                          終了: {s.ended_at ? formatJst(s.ended_at) : "-"}
+                        </div>
+
+                        <div className="mt-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                          理由: {(s.end_reason ?? "").trim() || "記録なし"}
+                        </div>
+
+                        <div className="mt-2 text-[11px] text-primary font-semibold">
+                          結果画面を見る →
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardBody>
         </Card>
       </div>
