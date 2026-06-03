@@ -1,6 +1,7 @@
 // app/support/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import PendingSubmitButton from "@/app/components/ui/PendingSubmitButton";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -46,7 +47,6 @@ export default async function SupportPage() {
       throw new Error("件名と本文は必須です。");
     }
 
-    // 1) スレッド作成
     const { data: thread, error: threadErr } = await supabase
       .from("support_threads")
       .insert({
@@ -61,7 +61,6 @@ export default async function SupportPage() {
       throw new Error(threadErr?.message ?? "support_threads insert failed");
     }
 
-    // 2) 最初の本文をメッセージとして保存
     const { error: msgErr } = await supabase
       .from("support_messages")
       .insert({
@@ -142,12 +141,11 @@ export default async function SupportPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90"
-              >
-                問い合わせを送信
-              </button>
+              <PendingSubmitButton
+                idleText="問い合わせを送信"
+                pendingText="送信中…"
+                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+              />
             </form>
           </CardBody>
         </Card>
@@ -195,9 +193,7 @@ export default async function SupportPage() {
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
                           最終更新:{" "}
-                          <span className="tabular-nums">
-                            {formatJst(row.last_message_at)}
-                          </span>
+                          <span className="tabular-nums">{formatJst(row.last_message_at)}</span>
                         </div>
                       </div>
 
@@ -220,3 +216,4 @@ export default async function SupportPage() {
     </Container>
   );
 }
+``
