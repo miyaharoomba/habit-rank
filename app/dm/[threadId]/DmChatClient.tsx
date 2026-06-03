@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +20,9 @@ import { formatJst } from "@/lib/time";
 type Message = {
   id: string;
   sender_id: string;
+  sender_name?: string;
+  sender_avatar_url?: string | null;
+  sender_profile_href?: string;
   body: string;
   created_at: string;
 
@@ -26,6 +37,9 @@ type Message = {
 type LocalUpload = {
   id: string;
   sender_id: string;
+  sender_name: string;
+  sender_avatar_url: string | null;
+  sender_profile_href: string;
   created_at: string;
   type: "image" | "video" | "file";
   signedUrl: string;
@@ -46,6 +60,61 @@ function bytes(size: number) {
   return `${gb.toFixed(1)} GB`;
 }
 
+function AvatarLink({
+  href,
+  name,
+  url,
+}: {
+  href: string;
+  name: string;
+  url: string | null;
+}) {
+  const initial = (name ?? "?").trim().slice(0, 1) || "?";
+
+  return (
+    <Link href={href} className="shrink-0" aria-label={`${name} のプロフィール`}>
+      {url ? (
+        <img
+          src={url}
+          alt="avatar"
+          className="h-9 w-9 rounded-full object-cover border border-border"
+        />
+      ) : (
+        <div className="h-9 w-9 rounded-full border border-border bg-background/60 flex items-center justify-center text-xs font-bold text-muted-foreground">
+          {initial}
+        </div>
+      )}
+    </Link>
+  );
+}
+
+function NameLine({
+  mine,
+  href,
+  name,
+}: {
+  mine: boolean;
+  href: string;
+  name: string;
+}) {
+  return (
+    <div
+      className={[
+        "mb-1 text-[11px] text-muted-foreground",
+        mine ? "text-right" : "text-left",
+      ].join(" ")}
+    >
+      {mine ? (
+        "あなた"
+      ) : (
+        <Link href={href} className="hover:underline">
+          {name}
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function SubmitButton({ onSettled }: { onSettled: () => void }) {
   const { pending } = useFormStatus();
   const prev = useRef(false);
@@ -62,7 +131,13 @@ function SubmitButton({ onSettled }: { onSettled: () => void }) {
   );
 }
 
-function BubbleMeta({ mine, createdAt }: { mine: boolean; createdAt: string }) {
+function BubbleMeta({
+  mine,
+  createdAt,
+}: {
+  mine: boolean;
+  createdAt: string;
+}) {
   return (
     <div
       className={[
@@ -79,24 +154,39 @@ function BubbleText({
   mine,
   body,
   createdAt,
+  senderName,
+  senderAvatarUrl,
+  senderProfileHref,
 }: {
   mine: boolean;
   body: string;
   createdAt: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  senderProfileHref: string;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[85%] sm:max-w-[70%]">
-        <div
-          className={[
-            "rounded-2xl px-3 py-2 border border-border",
-            "whitespace-pre-wrap break-words text-sm leading-relaxed",
-            mine ? "bg-primary/15" : "bg-secondary/40",
-          ].join(" ")}
-        >
-          {body}
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
+
+        <div className="max-w-[82vw] sm:max-w-[70%]">
+          <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+
+          <div
+            className={[
+              "rounded-2xl px-3 py-2 border border-border",
+              "whitespace-pre-wrap break-words text-sm leading-relaxed",
+              mine ? "bg-primary/15" : "bg-secondary/40",
+            ].join(" ")}
+          >
+            {body}
+          </div>
+
+          <BubbleMeta mine={mine} createdAt={createdAt} />
         </div>
-        <BubbleMeta mine={mine} createdAt={createdAt} />
       </div>
     </div>
   );
@@ -109,6 +199,9 @@ function BubbleImage({
   createdAt,
   onOpen,
   onMediaLoaded,
+  senderName,
+  senderAvatarUrl,
+  senderProfileHref,
 }: {
   mine: boolean;
   url: string;
@@ -116,42 +209,53 @@ function BubbleImage({
   createdAt: string;
   onOpen: (kind: "image" | "video", url: string) => void;
   onMediaLoaded: () => void;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  senderProfileHref: string;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[85%] sm:max-w-[70%]">
-        <button
-          type="button"
-          onClick={() => onOpen("image", url)}
-          className={[
-            "block overflow-hidden rounded-2xl border border-border",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            mine ? "bg-primary/10" : "bg-secondary/30",
-          ].join(" ")}
-          aria-label="画像を拡大表示"
-          title="タップで拡大"
-        >
-          <img
-            src={url}
-            alt="image"
-            className="block w-full h-auto max-h-[340px] object-cover"
-            loading="lazy"
-            onLoad={onMediaLoaded}
-          />
-        </button>
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
 
-        {caption ? (
-          <div
+        <div className="max-w-[82vw] sm:max-w-[70%]">
+          <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+
+          <button
+            type="button"
+            onClick={() => onOpen("image", url)}
             className={[
-              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
-              mine ? "bg-primary/15" : "bg-secondary/40",
+              "block overflow-hidden rounded-2xl border border-border",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              mine ? "bg-primary/10" : "bg-secondary/30",
             ].join(" ")}
+            aria-label="画像を拡大表示"
+            title="タップで拡大"
           >
-            {caption}
-          </div>
-        ) : null}
+            <img
+              src={url}
+              alt="image"
+              className="block w-full h-auto max-h-[340px] object-cover"
+              loading="lazy"
+              onLoad={onMediaLoaded}
+            />
+          </button>
 
-        <BubbleMeta mine={mine} createdAt={createdAt} />
+          {caption ? (
+            <div
+              className={[
+                "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+                mine ? "bg-primary/15" : "bg-secondary/40",
+              ].join(" ")}
+            >
+              {caption}
+            </div>
+          ) : null}
+
+          <BubbleMeta mine={mine} createdAt={createdAt} />
+        </div>
       </div>
     </div>
   );
@@ -164,6 +268,9 @@ function BubbleVideo({
   createdAt,
   onOpen,
   onMediaLoaded,
+  senderName,
+  senderAvatarUrl,
+  senderProfileHref,
 }: {
   mine: boolean;
   url: string;
@@ -171,45 +278,56 @@ function BubbleVideo({
   createdAt: string;
   onOpen: (kind: "image" | "video", url: string) => void;
   onMediaLoaded: () => void;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  senderProfileHref: string;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[85%] sm:max-w-[70%]">
-        <div
-          className={[
-            "overflow-hidden rounded-2xl border border-border",
-            mine ? "bg-primary/10" : "bg-secondary/30",
-          ].join(" ")}
-        >
-          <video
-            src={url}
-            className="block w-full h-auto max-h-[360px] bg-black"
-            controls
-            playsInline
-            preload="metadata"
-            onLoadedMetadata={onMediaLoaded}
-          />
-          <button
-            type="button"
-            onClick={() => onOpen("video", url)}
-            className="w-full text-xs text-primary hover:underline px-3 py-2 text-left"
-          >
-            大きく表示
-          </button>
-        </div>
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
 
-        {caption ? (
+        <div className="max-w-[82vw] sm:max-w-[70%]">
+          <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+
           <div
             className={[
-              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
-              mine ? "bg-primary/15" : "bg-secondary/40",
+              "overflow-hidden rounded-2xl border border-border",
+              mine ? "bg-primary/10" : "bg-secondary/30",
             ].join(" ")}
           >
-            {caption}
+            <video
+              src={url}
+              className="block w-full h-auto max-h-[360px] bg-black"
+              controls
+              playsInline
+              preload="metadata"
+              onLoadedMetadata={onMediaLoaded}
+            />
+            <button
+              type="button"
+              onClick={() => onOpen("video", url)}
+              className="w-full text-xs text-primary hover:underline px-3 py-2 text-left"
+            >
+              大きく表示
+            </button>
           </div>
-        ) : null}
 
-        <BubbleMeta mine={mine} createdAt={createdAt} />
+          {caption ? (
+            <div
+              className={[
+                "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+                mine ? "bg-primary/15" : "bg-secondary/40",
+              ].join(" ")}
+            >
+              {caption}
+            </div>
+          ) : null}
+
+          <BubbleMeta mine={mine} createdAt={createdAt} />
+        </div>
       </div>
     </div>
   );
@@ -223,6 +341,9 @@ function BubbleFile({
   size,
   caption,
   createdAt,
+  senderName,
+  senderAvatarUrl,
+  senderProfileHref,
 }: {
   mine: boolean;
   url: string;
@@ -231,38 +352,51 @@ function BubbleFile({
   size: number;
   caption?: string;
   createdAt: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  senderProfileHref: string;
 }) {
   const label = mime?.includes("pdf") ? "PDF" : "FILE";
 
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[85%] sm:max-w-[70%]">
-        <a href={url} target="_blank" rel="noreferrer">
-          <div className="rounded-2xl border border-border bg-secondary/30 px-3 py-3 hover:bg-secondary/40 transition">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold truncate">{fileName}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
+
+        <div className="max-w-[82vw] sm:max-w-[70%]">
+          <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+
+          <a href={url} target="_blank" rel="noreferrer">
+            <div className="rounded-2xl border border-border bg-secondary/30 px-3 py-3 hover:bg-secondary/40 transition">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold truncate">{fileName}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+                  </div>
+                </div>
+                <div className="text-xs text-primary font-semibold whitespace-nowrap">
+                  開く
                 </div>
               </div>
-              <div className="text-xs text-primary font-semibold whitespace-nowrap">開く</div>
             </div>
-          </div>
-        </a>
+          </a>
 
-        {caption ? (
-          <div
-            className={[
-              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
-              mine ? "bg-primary/15" : "bg-secondary/40",
-            ].join(" ")}
-          >
-            {caption}
-          </div>
-        ) : null}
+          {caption ? (
+            <div
+              className={[
+                "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+                mine ? "bg-primary/15" : "bg-secondary/40",
+              ].join(" ")}
+            >
+              {caption}
+            </div>
+          ) : null}
 
-        <BubbleMeta mine={mine} createdAt={createdAt} />
+          <BubbleMeta mine={mine} createdAt={createdAt} />
+        </div>
       </div>
     </div>
   );
@@ -296,6 +430,11 @@ export default function DmChatClient({
 
   const pinnedRef = useRef(true);
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
+
+  const selfSeedMessage = messages.find((m) => m.sender_id === myUserId);
+  const selfName = (selfSeedMessage?.sender_name ?? "").trim() || "あなた";
+  const selfAvatarUrl = selfSeedMessage?.sender_avatar_url ?? null;
+  const selfProfileHref = "/profile";
 
   const scrollToBottom = (smooth: boolean) => {
     const el = bottomRef.current;
@@ -349,13 +488,11 @@ export default function DmChatClient({
     const serverIds = new Set(messages.map((m) => m.id));
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
-  
+
   // 相手からの新着を数秒ごとに取り込む
   useEffect(() => {
     const id = window.setInterval(() => {
-      // タブが見えてるときだけ更新
       if (document.visibilityState !== "visible") return;
-
       router.refresh();
     }, 2500);
 
@@ -382,6 +519,7 @@ export default function DmChatClient({
     const fp = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
     const last = lastUploadKeyRef.current;
     const now = Date.now();
+
     if (last && last.key === fp && now - last.at < 2500) return;
     lastUploadKeyRef.current = { key: fp, at: now };
 
@@ -397,7 +535,9 @@ export default function DmChatClient({
       const res = await fetch("/api/dm/upload-image", { method: "POST", body: fd });
       const json = await res.json().catch(() => ({}));
 
-      if (!res.ok || !json.ok) throw new Error(json.error ?? `Upload failed (HTTP ${res.status})`);
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `Upload failed (HTTP ${res.status})`);
+      }
 
       const signedUrl = json.signedUrl as string | null;
       const messageType = json.messageType as "image" | "video" | "file";
@@ -410,6 +550,9 @@ export default function DmChatClient({
           {
             id: messageId ?? `local-${Date.now()}`,
             sender_id: myUserId,
+            sender_name: selfName,
+            sender_avatar_url: selfAvatarUrl,
+            sender_profile_href: selfProfileHref,
             created_at: (json.createdAt as string | null) ?? new Date().toISOString(),
             type: messageType,
             signedUrl,
@@ -433,7 +576,7 @@ export default function DmChatClient({
     }
   };
 
-  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -463,9 +606,18 @@ export default function DmChatClient({
               </button>
 
               {modal.kind === "image" ? (
-                <img src={modal.url} alt="image" className="max-h-[85vh] w-full object-contain" />
+                <img
+                  src={modal.url}
+                  alt="image"
+                  className="max-h-[85vh] w-full object-contain"
+                />
               ) : (
-                <video src={modal.url} className="max-h-[85vh] w-full" controls playsInline />
+                <video
+                  src={modal.url}
+                  className="max-h-[85vh] w-full"
+                  controls
+                  playsInline
+                />
               )}
             </div>
           </div>
@@ -489,7 +641,11 @@ export default function DmChatClient({
         disabled={uploading}
       />
 
-      <div ref={listRef} className="flex-1 overflow-y-auto pr-1 space-y-3" onScroll={updatePinned}>
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto pr-1 space-y-3"
+        onScroll={updatePinned}
+      >
         {messages.length === 0 && localUploads.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             まだメッセージがありません。最初の一言（またはメディア）を送ってみよう。
@@ -498,6 +654,11 @@ export default function DmChatClient({
           <>
             {messages.map((m) => {
               const mine = m.sender_id === myUserId;
+              const senderName = (m.sender_name ?? "").trim() || "NoName";
+              const senderAvatarUrl = m.sender_avatar_url ?? null;
+              const senderProfileHref =
+                m.sender_profile_href ??
+                (mine ? "/profile" : `/users/${encodeURIComponent(m.sender_id)}`);
 
               if (m.message_type === "image" && m.image_url) {
                 return (
@@ -509,6 +670,9 @@ export default function DmChatClient({
                     createdAt={m.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
                     onMediaLoaded={onMediaLoaded}
+                    senderName={senderName}
+                    senderAvatarUrl={senderAvatarUrl}
+                    senderProfileHref={senderProfileHref}
                   />
                 );
               }
@@ -523,6 +687,9 @@ export default function DmChatClient({
                     createdAt={m.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
                     onMediaLoaded={onMediaLoaded}
+                    senderName={senderName}
+                    senderAvatarUrl={senderAvatarUrl}
+                    senderProfileHref={senderProfileHref}
                   />
                 );
               }
@@ -538,6 +705,9 @@ export default function DmChatClient({
                     size={m.file_size ?? 0}
                     caption={m.body || ""}
                     createdAt={m.created_at}
+                    senderName={senderName}
+                    senderAvatarUrl={senderAvatarUrl}
+                    senderProfileHref={senderProfileHref}
                   />
                 );
               }
@@ -557,6 +727,9 @@ export default function DmChatClient({
                       : "")
                   }
                   createdAt={m.created_at}
+                  senderName={senderName}
+                  senderAvatarUrl={senderAvatarUrl}
+                  senderProfileHref={senderProfileHref}
                 />
               );
             })}
@@ -574,6 +747,9 @@ export default function DmChatClient({
                     createdAt={u.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
                     onMediaLoaded={onMediaLoaded}
+                    senderName={u.sender_name}
+                    senderAvatarUrl={u.sender_avatar_url}
+                    senderProfileHref={u.sender_profile_href}
                   />
                 );
               }
@@ -588,6 +764,9 @@ export default function DmChatClient({
                     createdAt={u.created_at}
                     onOpen={(kind, url) => setModal({ kind, url })}
                     onMediaLoaded={onMediaLoaded}
+                    senderName={u.sender_name}
+                    senderAvatarUrl={u.sender_avatar_url}
+                    senderProfileHref={u.sender_profile_href}
                   />
                 );
               }
@@ -602,6 +781,9 @@ export default function DmChatClient({
                   size={u.size}
                   caption={u.caption}
                   createdAt={u.created_at}
+                  senderName={u.sender_name}
+                  senderAvatarUrl={u.sender_avatar_url}
+                  senderProfileHref={u.sender_profile_href}
                 />
               );
             })}
@@ -665,3 +847,4 @@ export default function DmChatClient({
     </div>
   );
 }
+``
