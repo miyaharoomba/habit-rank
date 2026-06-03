@@ -67,13 +67,23 @@ export default async function AppPage() {
 
         {/* 右側：ユーザー名 + ベル + メニュー */}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="text-sm text-muted-foreground mr-1 whitespace-nowrap hidden sm:block">
+          <Link
+            href="/profile"
+            className="hidden sm:inline-flex text-sm text-muted-foreground mr-1 whitespace-nowrap hover:text-foreground hover:underline"
+          >
             👤 {displayName}
-          </div>
+          </Link>
 
           <NotificationBell />
 
           <div className="hidden sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+            <Link
+              href="/profile"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              プロフィール
+            </Link>
+
             <Link
               href="/participants"
               className="text-sm text-primary hover:underline whitespace-nowrap"
@@ -212,3 +222,4 @@ export default async function AppPage() {
     </Container>
   );
 }
+``
