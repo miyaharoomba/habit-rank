@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
@@ -13,6 +14,7 @@ type ChatItem = {
   id: string;
   user_id: string;
   user_name: string;
+  user_avatar_url?: string | null;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -37,6 +39,34 @@ function bytes(size: number) {
   return `${gb.toFixed(1)} GB`;
 }
 
+function Avatar({
+  userId,
+  userName,
+  avatarUrl,
+}: {
+  userId: string;
+  userName: string;
+  avatarUrl: string | null | undefined;
+}) {
+  const initial = (userName ?? "?").trim().slice(0, 1) || "?";
+
+  return (
+    <Link href={`/users/${encodeURIComponent(userId)}`} className="shrink-0">
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt="avatar"
+          className="h-9 w-9 rounded-full object-cover border border-border"
+        />
+      ) : (
+        <div className="h-9 w-9 rounded-full border border-border bg-background/60 flex items-center justify-center text-xs font-bold text-muted-foreground">
+          {initial}
+        </div>
+      )}
+    </Link>
+  );
+}
+
 function ChatMeta({
   mine,
   createdAt,
@@ -58,9 +88,11 @@ function ChatMeta({
 
 function NameLine({
   mine,
+  userId,
   userName,
 }: {
   mine: boolean;
+  userId: string;
   userName: string;
 }) {
   return (
@@ -70,35 +102,54 @@ function NameLine({
         mine ? "text-right" : "text-left",
       ].join(" ")}
     >
-      {mine ? "あなた" : userName}
+      {mine ? (
+        "あなた"
+      ) : (
+        <Link
+          href={`/users/${encodeURIComponent(userId)}`}
+          className="hover:underline"
+        >
+          {userName}
+        </Link>
+      )}
     </div>
   );
 }
 
 function ChatText({
   mine,
+  userId,
   userName,
+  avatarUrl,
   body,
   createdAt,
 }: {
   mine: boolean;
+  userId: string;
   userName: string;
+  avatarUrl?: string | null;
   body: string;
   createdAt: string;
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[92%] sm:max-w-[72%]">
-        <NameLine mine={mine} userName={userName} />
-        <div
-          className={[
-            "rounded-2xl border border-border px-3 py-2 text-sm whitespace-pre-wrap break-words",
-            mine ? "bg-primary/15" : "bg-secondary/40",
-          ].join(" ")}
-        >
-          {body}
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <Avatar userId={userId} userName={userName} avatarUrl={avatarUrl} />
+
+        <div className="max-w-[82vw] sm:max-w-[72%]">
+          <NameLine mine={mine} userId={userId} userName={userName} />
+          <div
+            className={[
+              "rounded-2xl border border-border px-3 py-2 text-sm whitespace-pre-wrap break-words",
+              mine ? "bg-primary/15" : "bg-secondary/40",
+            ].join(" ")}
+          >
+            {body}
+          </div>
+          <ChatMeta mine={mine} createdAt={createdAt} />
         </div>
-        <ChatMeta mine={mine} createdAt={createdAt} />
       </div>
     </div>
   );
@@ -106,14 +157,18 @@ function ChatText({
 
 function ChatImage({
   mine,
+  userId,
   userName,
+  avatarUrl,
   url,
   caption,
   createdAt,
   onOpen,
 }: {
   mine: boolean;
+  userId: string;
   userName: string;
+  avatarUrl?: string | null;
   url: string;
   caption?: string;
   createdAt: string;
@@ -121,38 +176,44 @@ function ChatImage({
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[92%] sm:max-w-[72%]">
-        <NameLine mine={mine} userName={userName} />
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <Avatar userId={userId} userName={userName} avatarUrl={avatarUrl} />
 
-        <button
-          type="button"
-          onClick={() => onOpen("image", url)}
-          className={[
-            "block overflow-hidden rounded-2xl border border-border",
-            mine ? "bg-primary/10" : "bg-secondary/30",
-          ].join(" ")}
-          aria-label="画像を拡大表示"
-        >
-          <img
-            src={url}
-            alt="image"
-            className="block w-full h-auto max-h-[280px] sm:max-h-[340px] object-cover"
-            loading="lazy"
-          />
-        </button>
+        <div className="max-w-[82vw] sm:max-w-[72%]">
+          <NameLine mine={mine} userId={userId} userName={userName} />
 
-        {caption ? (
-          <div
+          <button
+            type="button"
+            onClick={() => onOpen("image", url)}
             className={[
-              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
-              mine ? "bg-primary/15" : "bg-secondary/40",
+              "block overflow-hidden rounded-2xl border border-border",
+              mine ? "bg-primary/10" : "bg-secondary/30",
             ].join(" ")}
+            aria-label="画像を拡大表示"
           >
-            {caption}
-          </div>
-        ) : null}
+            <img
+              src={url}
+              alt="image"
+              className="block w-full h-auto max-h-[280px] sm:max-h-[340px] object-cover"
+              loading="lazy"
+            />
+          </button>
 
-        <ChatMeta mine={mine} createdAt={createdAt} />
+          {caption ? (
+            <div
+              className={[
+                "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+                mine ? "bg-primary/15" : "bg-secondary/40",
+              ].join(" ")}
+            >
+              {caption}
+            </div>
+          ) : null}
+
+          <ChatMeta mine={mine} createdAt={createdAt} />
+        </div>
       </div>
     </div>
   );
@@ -160,14 +221,18 @@ function ChatImage({
 
 function ChatVideo({
   mine,
+  userId,
   userName,
+  avatarUrl,
   url,
   caption,
   createdAt,
   onOpen,
 }: {
   mine: boolean;
+  userId: string;
   userName: string;
+  avatarUrl?: string | null;
   url: string;
   caption?: string;
   createdAt: string;
@@ -175,43 +240,49 @@ function ChatVideo({
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[92%] sm:max-w-[72%]">
-        <NameLine mine={mine} userName={userName} />
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <Avatar userId={userId} userName={userName} avatarUrl={avatarUrl} />
 
-        <div
-          className={[
-            "overflow-hidden rounded-2xl border border-border",
-            mine ? "bg-primary/10" : "bg-secondary/30",
-          ].join(" ")}
-        >
-          <video
-            src={url}
-            className="block w-full h-auto max-h-[280px] sm:max-h-[360px] bg-black"
-            controls
-            playsInline
-            preload="metadata"
-          />
-          <button
-            type="button"
-            onClick={() => onOpen("video", url)}
-            className="w-full text-xs text-primary hover:underline px-3 py-2 text-left"
-          >
-            大きく表示
-          </button>
-        </div>
+        <div className="max-w-[82vw] sm:max-w-[72%]">
+          <NameLine mine={mine} userId={userId} userName={userName} />
 
-        {caption ? (
           <div
             className={[
-              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
-              mine ? "bg-primary/15" : "bg-secondary/40",
+              "overflow-hidden rounded-2xl border border-border",
+              mine ? "bg-primary/10" : "bg-secondary/30",
             ].join(" ")}
           >
-            {caption}
+            <video
+              src={url}
+              className="block w-full h-auto max-h-[280px] sm:max-h-[360px] bg-black"
+              controls
+              playsInline
+              preload="metadata"
+            />
+            <button
+              type="button"
+              onClick={() => onOpen("video", url)}
+              className="w-full text-xs text-primary hover:underline px-3 py-2 text-left"
+            >
+              大きく表示
+            </button>
           </div>
-        ) : null}
 
-        <ChatMeta mine={mine} createdAt={createdAt} />
+          {caption ? (
+            <div
+              className={[
+                "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+                mine ? "bg-primary/15" : "bg-secondary/40",
+              ].join(" ")}
+            >
+              {caption}
+            </div>
+          ) : null}
+
+          <ChatMeta mine={mine} createdAt={createdAt} />
+        </div>
       </div>
     </div>
   );
@@ -219,7 +290,9 @@ function ChatVideo({
 
 function ChatFile({
   mine,
+  userId,
   userName,
+  avatarUrl,
   url,
   fileName,
   mime,
@@ -228,7 +301,9 @@ function ChatFile({
   createdAt,
 }: {
   mine: boolean;
+  userId: string;
   userName: string;
+  avatarUrl?: string | null;
   url: string;
   fileName: string;
   mime: string;
@@ -240,37 +315,43 @@ function ChatFile({
 
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[92%] sm:max-w-[72%]">
-        <NameLine mine={mine} userName={userName} />
+      <div
+        className={`flex gap-2 ${mine ? "flex-row-reverse" : "flex-row"} max-w-full`}
+      >
+        <Avatar userId={userId} userName={userName} avatarUrl={avatarUrl} />
 
-        <a href={url} target="_blank" rel="noreferrer">
-          <div className="rounded-2xl border border-border bg-secondary/30 px-3 py-3 hover:bg-secondary/40 transition">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold truncate">{fileName}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+        <div className="max-w-[82vw] sm:max-w-[72%]">
+          <NameLine mine={mine} userId={userId} userName={userName} />
+
+          <a href={url} target="_blank" rel="noreferrer">
+            <div className="rounded-2xl border border-border bg-secondary/30 px-3 py-3 hover:bg-secondary/40 transition">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold truncate">{fileName}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
+                  </div>
+                </div>
+                <div className="text-xs text-primary font-semibold whitespace-nowrap">
+                  開く
                 </div>
               </div>
-              <div className="text-xs text-primary font-semibold whitespace-nowrap">
-                開く
-              </div>
             </div>
-          </div>
-        </a>
+          </a>
 
-        {caption ? (
-          <div
-            className={[
-              "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
-              mine ? "bg-primary/15" : "bg-secondary/40",
-            ].join(" ")}
-          >
-            {caption}
-          </div>
-        ) : null}
+          {caption ? (
+            <div
+              className={[
+                "mt-2 rounded-xl border border-border px-3 py-2 text-sm",
+                mine ? "bg-primary/15" : "bg-secondary/40",
+              ].join(" ")}
+            >
+              {caption}
+            </div>
+          ) : null}
 
-        <ChatMeta mine={mine} createdAt={createdAt} />
+          <ChatMeta mine={mine} createdAt={createdAt} />
+        </div>
       </div>
     </div>
   );
@@ -292,7 +373,6 @@ export default function GlobalChatBoard({
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(null);
 
-  const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
@@ -471,10 +551,7 @@ export default function GlobalChatBoard({
         </div>
       </div>
 
-      <div
-        ref={listRef}
-        className="max-h-[300px] sm:max-h-[420px] overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 space-y-3"
-      >
+      <div className="max-h-[300px] sm:max-h-[420px] overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 space-y-3">
         {loading ? (
           <p className="text-sm text-muted-foreground">読み込み中…</p>
         ) : items.length === 0 ? (
@@ -491,7 +568,9 @@ export default function GlobalChatBoard({
                 <ChatImage
                   key={item.id}
                   mine={mine}
+                  userId={item.user_id}
                   userName={item.user_name}
+                  avatarUrl={item.user_avatar_url}
                   url={item.image_url}
                   caption={item.body || ""}
                   createdAt={item.created_at}
@@ -505,7 +584,9 @@ export default function GlobalChatBoard({
                 <ChatVideo
                   key={item.id}
                   mine={mine}
+                  userId={item.user_id}
                   userName={item.user_name}
+                  avatarUrl={item.user_avatar_url}
                   url={item.file_url}
                   caption={item.body || ""}
                   createdAt={item.created_at}
@@ -519,7 +600,9 @@ export default function GlobalChatBoard({
                 <ChatFile
                   key={item.id}
                   mine={mine}
+                  userId={item.user_id}
                   userName={item.user_name}
+                  avatarUrl={item.user_avatar_url}
                   url={item.file_url}
                   fileName={item.file_name ?? "file"}
                   mime={item.file_mime ?? ""}
@@ -534,7 +617,9 @@ export default function GlobalChatBoard({
               <ChatText
                 key={item.id}
                 mine={mine}
+                userId={item.user_id}
                 userName={item.user_name}
+                avatarUrl={item.user_avatar_url}
                 body={item.body || ""}
                 createdAt={item.created_at}
               />

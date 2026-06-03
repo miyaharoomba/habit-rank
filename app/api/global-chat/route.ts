@@ -17,10 +17,16 @@ type ChatRow = {
 type ProfileRow = {
   id: string;
   display_name: string | null;
+  avatar_path: string | null;
 };
 
 function mediaProxyUrl(path: string) {
   return `/api/media/dm?path=${encodeURIComponent(path)}`;
+}
+
+function avatarProxyUrl(path: string | null) {
+  if (!path) return null;
+  return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
 }
 
 export async function GET(request: Request) {
@@ -53,32 +59,37 @@ export async function GET(request: Request) {
   const rows = (data ?? []) as ChatRow[];
 
   const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
-  const nameMap = new Map<string, string>();
+  const profileMap = new Map<string, ProfileRow>();
 
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, avatar_path")
       .in("id", userIds);
 
     (profiles ?? []).forEach((p: ProfileRow) => {
-      nameMap.set(p.id, (p.display_name ?? "").trim() || "NoName");
+      profileMap.set(p.id, p);
     });
   }
 
-  const items = rows.map((r) => ({
-    id: r.id,
-    user_id: r.user_id,
-    user_name: nameMap.get(r.user_id) ?? "NoName",
-    body: r.body,
-    created_at: r.created_at,
-    message_type: r.message_type ?? "text",
-    image_url: r.image_url ? mediaProxyUrl(r.image_url) : null,
-    file_url: r.file_url ? mediaProxyUrl(r.file_url) : null,
-    file_name: r.file_name,
-    file_mime: r.file_mime,
-    file_size: r.file_size,
-  }));
+  const items = rows.map((r) => {
+    const profile = profileMap.get(r.user_id);
+
+    return {
+      id: r.id,
+      user_id: r.user_id,
+      user_name: (profile?.display_name ?? "").trim() || "NoName",
+      user_avatar_url: avatarProxyUrl(profile?.avatar_path ?? null),
+      body: r.body,
+      created_at: r.created_at,
+      message_type: r.message_type ?? "text",
+      image_url: r.image_url ? mediaProxyUrl(r.image_url) : null,
+      file_url: r.file_url ? mediaProxyUrl(r.file_url) : null,
+      file_name: r.file_name,
+      file_mime: r.file_mime,
+      file_size: r.file_size,
+    };
+  });
 
   return NextResponse.json({ items });
 }
@@ -127,3 +138,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, item: data });
 }
+``
