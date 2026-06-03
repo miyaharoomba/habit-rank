@@ -5,7 +5,7 @@ import Link from "next/link";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 
-// ✅ JST固定フォーマッタ（前に作った lib/time.ts を使う）
+// JST固定フォーマッタ
 import { formatJstStartLabel } from "@/lib/time";
 
 type BestRow = {
@@ -20,7 +20,7 @@ type CurrentRow = {
   user_id: string;
   display_name: string;
   current_seconds: number;
-  started_at: string; // timestamptz
+  started_at: string;
 };
 
 function formatTime(sec: number) {
@@ -45,8 +45,13 @@ export default async function RankingPage({
   const activeTab = tab === "current" ? "current" : "best";
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/sign-in");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/auth/sign-in");
+  }
 
   const limit_count = 50;
 
@@ -61,6 +66,7 @@ export default async function RankingPage({
       : { data: null as any, error: null as any };
 
   const error = bestRes.error ?? currentRes.error;
+
   if (error) {
     return (
       <Container>
@@ -140,11 +146,7 @@ export default async function RankingPage({
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">
-                TOP{" "}
-                {Math.min(
-                  50,
-                  activeTab === "best" ? bestRows.length : currentRows.length
-                )}
+                TOP {Math.min(50, activeTab === "best" ? bestRows.length : currentRows.length)}
               </h2>
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {activeTab === "best" ? "過去最高" : "現在経過"}
@@ -162,6 +164,7 @@ export default async function RankingPage({
                 <ul className="space-y-2">
                   {bestRows.map((r) => {
                     const isMe = r.user_id === user.id;
+
                     return (
                       <li
                         key={r.user_id}
@@ -170,29 +173,31 @@ export default async function RankingPage({
                           isMe ? "ring-1 ring-primary/40 bg-primary/10" : "",
                         ].join(" ")}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
+                        {/* ベスト側だけ、モバイルでは縦寄せにする */}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
                               {r.rank_no}
                             </span>
 
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div
-                                className={
-                                  "font-semibold truncate " +
-                                  (isMe ? "text-primary" : "")
-                                }
+                                className={[
+                                  "font-semibold leading-tight break-words sm:truncate",
+                                  isMe ? "text-primary" : "",
+                                ].join(" ")}
                               >
                                 {r.display_name}
                                 {isMe ? "（あなた）" : ""}
                               </div>
-                              <div className="text-xs text-muted-foreground">
+                              <div className="mt-1 text-xs text-muted-foreground">
                                 ベスト記録
                               </div>
                             </div>
                           </div>
 
-                          <div className="text-right">
+                          {/* モバイルでは下段に逃がす */}
+                          <div className="pl-11 sm:pl-0 text-left sm:text-right">
                             <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
                               {formatTime(Number(r.best_seconds))}
                             </div>
@@ -211,6 +216,7 @@ export default async function RankingPage({
               <ul className="space-y-2">
                 {currentRows.map((r) => {
                   const isMe = r.user_id === user.id;
+
                   return (
                     <li
                       key={r.user_id}
@@ -227,23 +233,22 @@ export default async function RankingPage({
 
                           <div className="min-w-0">
                             <div
-                              className={
-                                "font-semibold truncate " +
-                                (isMe ? "text-primary" : "")
-                              }
+                              className={[
+                                "font-semibold truncate",
+                                isMe ? "text-primary" : "",
+                              ].join(" ")}
                             >
                               {r.display_name}
                               {isMe ? "（あなた）" : ""}
                             </div>
 
-                            {/* ✅ ここをJST固定表示に変更 */}
                             <div className="text-xs text-muted-foreground tabular-nums">
                               開始：{formatJstStartLabel(r.started_at)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="text-right">
+                        <div className="text-left sm:text-right pl-11 sm:pl-0">
                           <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
                             {formatTime(Number(r.current_seconds))}
                           </div>
