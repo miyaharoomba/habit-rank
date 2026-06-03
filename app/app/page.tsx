@@ -30,14 +30,16 @@ export default async function AppPage() {
     );
   }
 
-  // 表示名
+  // 表示名・アイコン・ステータスメッセージ
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, avatar_path, status_message")
     .eq("id", user.id)
     .maybeSingle();
 
   const displayName = profile?.display_name?.trim() || "";
+  const avatarPath = profile?.avatar_path ?? null;
+  const statusMessage = profile?.status_message ?? null;
 
   // 初回：名前未設定なら onboarding へ
   if (!displayName) {
@@ -116,89 +118,93 @@ export default async function AppPage() {
           </div>
 
           <div className="sm:hidden">
-            <MobileAppMenu displayName={displayName} />
+            <MobileAppMenu
+              displayName={displayName}
+              avatarPath={avatarPath}
+              statusMessage={statusMessage}
+            />
           </div>
         </div>
       </header>
 
       <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4">
-       {/* 現在の継続 */}
-<Card>
-  <CardHeader>
-    <div className="flex items-center justify-between">
-      <h2 className="font-semibold">現在の継続</h2>
-      <span className="text-xs text-muted-foreground">リアルタイム</span>
-    </div>
-  </CardHeader>
-
-  <CardBody>
-    <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-      <LiveTimer startedAt={startedAt} />
-    </div>
-
-    <div className="mt-2 text-sm text-muted-foreground tabular-nums">
-      {startedAt ? (
-        <span>開始：{formatJstStartLabel(startedAt)}</span>
-      ) : (
-        <span>開始：未開始</span>
-      )}
-    </div>
-
-    <div className="mt-4 flex flex-col gap-3">
-      {!isRunning ? (
-        <form action={startSession}>
-          <button
-            type="submit"
-            className="w-full rounded-2xl bg-primary text-primary-foreground px-4 py-4 text-base font-bold shadow-sm hover:opacity-90"
-          >
-            継続を開始する
-          </button>
-        </form>
-      ) : (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary font-semibold">
-            終了方法を選べます。通常は「終了して次を開始」を使ってください。
-          </div>
-
-          <form action={finishSession} className="space-y-3">
-            <textarea
-              name="end_reason"
-              placeholder="終了理由（任意：200文字以内）例：仕事が忙しい、体調不良、達成した など"
-              className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
-              rows={2}
-              maxLength={200}
-            />
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="submit"
-                name="mode"
-                value="restart"
-                className="rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-bold hover:opacity-90"
-              >
-                終了して次を開始
-              </button>
-
-              <Button
-                type="submit"
-                name="mode"
-                value="stop"
-                variant="ghost"
-                className="w-full"
-              >
-                完全に終了
-              </Button>
+        {/* 現在の継続 */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">現在の継続</h2>
+              <span className="text-xs text-muted-foreground">リアルタイム</span>
             </div>
-          </form>
-        </div>
-      )}
+          </CardHeader>
 
-      <div className="text-xs text-muted-foreground tabular-nums">
-        started_at: {startedAt ? formatJst(startedAt) : "(未開始)"}
-      </div>
-    </div>
-  </CardBody>
-</Card>
+          <CardBody>
+            <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              <LiveTimer startedAt={startedAt} />
+            </div>
+
+            <div className="mt-2 text-sm text-muted-foreground tabular-nums">
+              {startedAt ? (
+                <span>開始：{formatJstStartLabel(startedAt)}</span>
+              ) : (
+                <span>開始：未開始</span>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3">
+              {!isRunning ? (
+                <form action={startSession}>
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl bg-primary text-primary-foreground px-4 py-4 text-base font-bold shadow-sm hover:opacity-90"
+                  >
+                    継続を開始する
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary font-semibold">
+                    終了方法を選べます。通常は「終了して次を開始」を使ってください。
+                  </div>
+
+                  <form action={finishSession} className="space-y-3">
+                    <textarea
+                      name="end_reason"
+                      placeholder="終了理由（任意：200文字以内）例：仕事が忙しい、体調不良、達成した など"
+                      className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
+                      rows={2}
+                      maxLength={200}
+                    />
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        type="submit"
+                        name="mode"
+                        value="restart"
+                        className="rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-bold hover:opacity-90"
+                      >
+                        終了して次を開始
+                      </button>
+
+                      <Button
+                        type="submit"
+                        name="mode"
+                        value="stop"
+                        variant="ghost"
+                        className="w-full"
+                      >
+                        完全に終了
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground tabular-nums">
+                started_at: {startedAt ? formatJst(startedAt) : "(未開始)"}
+              </div>
+            </div>
+          </CardBody>
+        </Card>
 
         {/* 全体掲示板 */}
         <GlobalChatBoard myUserId={user.id} />
