@@ -6,6 +6,12 @@ type ChatRow = {
   user_id: string;
   body: string;
   created_at: string;
+  message_type: "text" | "image" | "video" | "file";
+  image_url: string | null; // 実際は storage path を入れている
+  file_url: string | null;  // 実際は storage path を入れている
+  file_name: string | null;
+  file_mime: string | null;
+  file_size: number | null;
 };
 
 type ProfileRow = {
@@ -30,7 +36,9 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("global_chat_messages")
-    .select("id, user_id, body, created_at")
+    .select(
+      "id, user_id, body, created_at, message_type, image_url, file_url, file_name, file_mime, file_size"
+    )
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -54,13 +62,38 @@ export async function GET(request: Request) {
     });
   }
 
-  const items = rows.map((r) => ({
-    id: r.id,
-    user_id: r.user_id,
-    user_name: nameMap.get(r.user_id) ?? "NoName",
-    body: r.body,
-    created_at: r.created_at,
-  }));
+  const bucket = supabase.storage.from("dm-media");
+
+  const items = await Promise.all(
+    rows.map(async (r) => {
+      let signedImageUrl: string | null = null;
+      let signedFileUrl: string | null = null;
+
+      if (r.image_url) {
+        const { data: signed } = await bucket.createSignedUrl(r.image_url, 60 * 60);
+        signedImageUrl = signed?.signedUrl ?? null;
+      }
+
+      if (r.file_url) {
+        const { data: signed } = await bucket.createSignedUrl(r.file_url, 60 * 60);
+        signedFileUrl = signed?.signedUrl ?? null;
+      }
+
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        user_name: nameMap.get(r.user_id) ?? "NoName",
+        body: r.body,
+        created_at: r.created_at,
+        message_type: r.message_type ?? "text",
+        image_url: signedImageUrl,
+        file_url: signedFileUrl,
+        file_name: r.file_name,
+        file_mime: r.file_mime,
+        file_size: r.file_size,
+      };
+    })
+  );
 
   return NextResponse.json({ items });
 }
@@ -93,8 +126,14 @@ export async function POST(request: Request) {
     .insert({
       user_id: user.id,
       body,
+      message_type: "text",
+      image_url: null,
+      file_url: null,
+      file_name: null,
+      file_mime: null,
+      file_size: null,
     })
-    .select("id, user_id, body, created_at")
+    .select("id, user_id, body, created_at, message_type")
     .single();
 
   if (error) {
@@ -103,4 +142,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, item: data });
 }
-``
