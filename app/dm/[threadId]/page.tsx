@@ -1,3 +1,4 @@
+// app/dm/[threadId]/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
@@ -21,9 +22,18 @@ type MessageRow = {
   file_size: number | null;
 };
 
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  avatar_path: string | null;
+};
+
 type MessageForClient = {
   id: string;
   sender_id: string;
+  sender_name: string;
+  sender_avatar_url: string | null;
+  sender_profile_href: string;
   body: string;
   created_at: string;
 
@@ -38,6 +48,15 @@ type MessageForClient = {
   file_mime?: string | null;
   file_size?: number | null;
 };
+
+function mediaProxyUrl(path: string) {
+  return `/api/media/dm?path=${encodeURIComponent(path)}`;
+}
+
+function avatarProxyUrl(path: string | null) {
+  if (!path) return null;
+  return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
+}
 
 export default async function DmThreadPage({
   params,
@@ -54,10 +73,11 @@ export default async function DmThreadPage({
     data: { user },
     error: userErr,
   } = await supabase.auth.getUser();
-  if (userErr || !user) redirect("/auth/sign-in");
 
-  // ✅ 通報送信（Server Action）
-  // form の action に渡すのが正しい（JSX の子に置かない）[1](https://attendence-system-1910.vercel.app/users/login)[2](https://techstudywork.jp/articles/vercel-deployment-complete-guide)
+  if (userErr || !user) {
+    redirect("/auth/sign-in");
+  }
+
   async function submitReport(formData: FormData): Promise<void> {
     "use server";
 
@@ -67,7 +87,10 @@ export default async function DmThreadPage({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) redirect("/auth/sign-in");
+
+    if (!user) {
+      redirect("/auth/sign-in");
+    }
 
     if (reason.length < 3) {
       redirect(`/dm/${threadId}?report=error`);
@@ -121,14 +144,20 @@ export default async function DmThreadPage({
   const otherUserId =
     thread.user_low === user.id ? thread.user_high : thread.user_low;
 
-  // 2) 相手の表示名
-  const { data: otherProfile } = await supabase
+  // 2) 参加ユーザーのプロフィールをまとめて取得
+  const userIds = [user.id, otherUserId];
+  const { data: profiles } = await supabase
     .from("profiles")
-    .select("display_name")
-    .eq("id", otherUserId)
-    .maybeSingle();
+    .select("id, display_name, avatar_path")
+    .in("id", userIds);
 
-  const otherName = otherProfile?.display_name?.trim() || "NoName";
+  const profileMap = new Map<string, ProfileRow>();
+  (profiles ?? []).forEach((p: ProfileRow) => {
+    profileMap.set(p.id, p);
+  });
+
+  const otherName =
+    (profileMap.get(otherUserId)?.display_name ?? "").trim() || "NoName";
 
   // 3) メッセージ取得（画像/動画/ファイル含む）
   const { data: msgs, error: msgErr } = await supabase
@@ -161,43 +190,49 @@ export default async function DmThreadPage({
 
   const rows = (msgs ?? []) as MessageRow[];
 
-  // 4) signed URL 生成（image/video/file）
-  const messages: MessageForClient[] = await Promise.all(
-    rows.map(async (m) => {
-      const base: MessageForClient = {
-        id: m.id,
-        sender_id: m.sender_id,
-        body: m.body,
-        created_at: m.created_at,
-        message_type: m.message_type,
-        image_path: m.image_path,
-        file_path: m.file_path,
-        file_name: m.file_name,
-        file_mime: m.file_mime,
-        file_size: m.file_size,
-        image_url: null,
-        file_url: null,
+  // 4) fixed proxy URL + 送信者プロフィール情報を返す
+  const messages: MessageForClient[] = rows.map((m) => {
+    const senderProfile = profileMap.get(m.sender_id);
+
+    const base: MessageForClient = {
+      id: m.id,
+      sender_id: m.sender_id,
+      sender_name: (senderProfile?.display_name ?? "").trim() || "NoName",
+      sender_avatar_url: avatarProxyUrl(senderProfile?.avatar_path ?? null),
+      sender_profile_href:
+        m.sender_id === user.id
+          ? "/profile"
+          : `/users/${encodeURIComponent(m.sender_id)}`,
+      body: m.body,
+      created_at: m.created_at,
+      message_type: m.message_type,
+      image_path: m.image_path,
+      file_path: m.file_path,
+      file_name: m.file_name,
+      file_mime: m.file_mime,
+      file_size: m.file_size,
+      image_url: null,
+      file_url: null,
+    };
+
+    if (m.message_type === "text") return base;
+
+    if (m.message_type === "image" && m.image_path) {
+      return {
+        ...base,
+        image_url: mediaProxyUrl(m.image_path),
       };
+    }
 
-      if (m.message_type === "text") return base;
+    if ((m.message_type === "video" || m.message_type === "file") && m.file_path) {
+      return {
+        ...base,
+        file_url: mediaProxyUrl(m.file_path),
+      };
+    }
 
-      if (m.message_type === "image" && m.image_path) {
-        const { data: signed, error: sErr } = await supabase.storage
-          .from("dm-media")
-          .createSignedUrl(m.image_path, 60 * 60);
-        return { ...base, image_url: sErr ? null : signed?.signedUrl ?? null };
-      }
-
-      if ((m.message_type === "video" || m.message_type === "file") && m.file_path) {
-        const { data: signed, error: sErr } = await supabase.storage
-          .from("dm-media")
-          .createSignedUrl(m.file_path, 60 * 60);
-        return { ...base, file_url: sErr ? null : signed?.signedUrl ?? null };
-      }
-
-      return base;
-    })
-  );
+    return base;
+  });
 
   const reportStatus = typeof sp.report === "string" ? sp.report : "";
 
@@ -217,7 +252,6 @@ export default async function DmThreadPage({
             /app
           </Link>
 
-          {/* ✅ 通報UI */}
           <details className="relative">
             <summary className="cursor-pointer select-none rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary/40">
               通報
@@ -235,7 +269,6 @@ export default async function DmThreadPage({
                 </div>
               )}
 
-              {/* ✅ 正しい：form action に Server Action を渡す [1](https://attendence-system-1910.vercel.app/users/login)[2](https://techstudywork.jp/articles/vercel-deployment-complete-guide) */}
               <form action={submitReport}>
                 <textarea
                   name="reason"
@@ -267,11 +300,14 @@ export default async function DmThreadPage({
             <h2 className="font-semibold">チャット</h2>
           </CardHeader>
           <CardBody>
-            <DmChatClient threadId={threadId} myUserId={user.id} messages={messages as any} />
+            <DmChatClient
+              threadId={threadId}
+              myUserId={user.id}
+              messages={messages as any}
+            />
           </CardBody>
         </Card>
       </div>
     </Container>
   );
 }
-``
