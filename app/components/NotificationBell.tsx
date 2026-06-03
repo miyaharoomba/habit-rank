@@ -50,16 +50,33 @@ export default function NotificationBell({
   pollMs?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  // 初回だけ使うローディング
+  const [initialLoading, setInitialLoading] = useState(false);
+
+  // バックグラウンド更新用
+  const [refreshing, setRefreshing] = useState(false);
+
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<NotifItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchNotifs = async () => {
-    setLoading(true);
+  const fetchNotifs = async ({
+    background = false,
+  }: {
+    background?: boolean;
+  } = {}) => {
+    // 一覧が空の時だけ初回ローディング表示
+    if (!background && items.length === 0) {
+      setInitialLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
     setError(null);
+
     try {
       const res = await fetch(`/api/notifications?limit=${limit}`, {
         cache: "no-store",
@@ -73,13 +90,15 @@ export default function NotificationBell({
     } catch (e: any) {
       setError(e?.message ?? "fetch failed");
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   };
 
   const markRead = async (ids: string[]) => {
     if (ids.length === 0) return;
 
+    // 楽観更新
     setItems((prev) =>
       prev.map((it) => (ids.includes(it.id) ? { ...it, read: true } : it))
     );
@@ -94,19 +113,22 @@ export default function NotificationBell({
     });
 
     if (!res.ok) {
-      await fetchNotifs();
+      await fetchNotifs({ background: true });
     }
   };
 
+  // 開いた時、まだ items が空なら最初だけ取得
   useEffect(() => {
     if (!open) return;
+    if (items.length > 0) return;
     fetchNotifs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // 定期更新
   useEffect(() => {
     const id = setInterval(() => {
-      fetchNotifs();
+      fetchNotifs({ background: true });
     }, pollMs);
 
     return () => clearInterval(id);
@@ -197,16 +219,17 @@ export default function NotificationBell({
           aria-label="通知一覧"
         >
           <HeaderBar
-            loading={loading}
+            initialLoading={initialLoading}
+            refreshing={refreshing}
             error={error}
             unreadCount={unreadIds.length}
-            onRefresh={fetchNotifs}
+            onRefresh={() => fetchNotifs({ background: true })}
             onMarkAll={() => markRead(unreadIds)}
           />
 
           <ListArea
             items={items}
-            loading={loading}
+            initialLoading={initialLoading}
             error={error}
             onClickItem={(id) => markRead([id])}
             titleFor={titleFor}
@@ -242,7 +265,7 @@ export default function NotificationBell({
             <div className="px-4 py-2 border-b border-border flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => fetchNotifs()}
+                onClick={() => fetchNotifs({ background: true })}
                 className="text-sm text-primary hover:underline"
               >
                 更新
@@ -260,7 +283,7 @@ export default function NotificationBell({
             <div className="max-h-[70dvh] overflow-y-auto">
               <ListArea
                 items={items}
-                loading={loading}
+                initialLoading={initialLoading}
                 error={error}
                 onClickItem={(id) => markRead([id])}
                 titleFor={titleFor}
@@ -277,13 +300,15 @@ export default function NotificationBell({
 }
 
 function HeaderBar({
-  loading,
+  initialLoading,
+  refreshing,
   error,
   unreadCount,
   onRefresh,
   onMarkAll,
 }: {
-  loading: boolean;
+  initialLoading: boolean;
+  refreshing: boolean;
   error: string | null;
   unreadCount: number;
   onRefresh: () => void;
@@ -309,7 +334,15 @@ function HeaderBar({
           全部既読
         </button>
         <span className="text-xs text-muted-foreground">
-          {loading ? "…" : error ? "!" : unreadCount > 0 ? `未読${unreadCount}` : ""}
+          {initialLoading
+            ? "読み込み中…"
+            : error
+            ? "!"
+            : refreshing
+            ? "更新中…"
+            : unreadCount > 0
+            ? `未読${unreadCount}`
+            : ""}
         </span>
       </div>
     </div>
@@ -318,7 +351,7 @@ function HeaderBar({
 
 function ListArea({
   items,
-  loading,
+  initialLoading,
   error,
   onClickItem,
   titleFor,
@@ -326,18 +359,18 @@ function ListArea({
   close,
 }: {
   items: NotifItem[];
-  loading: boolean;
+  initialLoading: boolean;
   error: string | null;
   onClickItem: (id: string) => void;
   titleFor: (n: NotifItem) => string;
   routeFor: (n: NotifItem) => string;
   close: () => void;
 }) {
-  if (loading) {
+  if (initialLoading && items.length === 0) {
     return <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>;
   }
 
-  if (error) {
+  if (error && items.length === 0) {
     return <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>;
   }
 
@@ -396,4 +429,3 @@ function FooterHint() {
     </div>
   );
 }
-``
