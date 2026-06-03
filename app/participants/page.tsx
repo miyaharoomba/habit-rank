@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-// 既存の参加者コンポーネント（検索/継続中バッジ/DMボタン）を再利用
 import ParticipantsClient from "../ranking/ParticipantsClient";
 
 type Participant = {
@@ -13,15 +12,23 @@ type Participant = {
   created_at: string;
   is_active: boolean;
   current_seconds: number;
+  avatar_path?: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  avatar_path: string | null;
 };
 
 export default async function ParticipantsPage() {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) redirect("/auth/sign-in");
 
-  // RPCで参加者一覧（継続中情報付き）を取得（SupabaseはDB関数をrpcで呼べる）[2](https://attendence-system-1910.vercel.app/users/login)[3](https://qiita.com/H-Iida/items/fe4fe5f18b2ca5bbf6d4)
   const { data, error } = await supabase.rpc("get_participants_status", {
     limit_count: 200,
   });
@@ -49,7 +56,25 @@ export default async function ParticipantsPage() {
     );
   }
 
-  const participants = (data ?? []) as Participant[];
+  const baseParticipants = (data ?? []) as Participant[];
+  const userIds = Array.from(new Set(baseParticipants.map((p) => p.user_id)));
+  const avatarMap = new Map<string, string | null>();
+
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, avatar_path")
+      .in("id", userIds);
+
+    (profiles ?? []).forEach((p: ProfileRow) => {
+      avatarMap.set(p.id, p.avatar_path ?? null);
+    });
+  }
+
+  const participants = baseParticipants.map((p) => ({
+    ...p,
+    avatar_path: avatarMap.get(p.user_id) ?? null,
+  }));
 
   return (
     <Container>
@@ -58,12 +83,11 @@ export default async function ParticipantsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">参加者一覧</h1>
           <p className="text-sm text-muted-foreground">
-            検索 / 継続中バッジ / DM開始
+            検索 / 継続中バッジ / DM開始 / プロフィール
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {/* Linkはアプリ内遷移の基本 [1](https://zenn.dev/exmedia/articles/install-npm-on-windows11-via-winget) */}
           <Link className="text-sm text-primary hover:underline" href="/app">
             ← /app
           </Link>
