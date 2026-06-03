@@ -7,8 +7,8 @@ type ChatRow = {
   body: string;
   created_at: string;
   message_type: "text" | "image" | "video" | "file";
-  image_url: string | null; // 実際は storage path を入れている
-  file_url: string | null;  // 実際は storage path を入れている
+  image_url: string | null; // storage path を保存
+  file_url: string | null;  // storage path を保存
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
@@ -18,6 +18,10 @@ type ProfileRow = {
   id: string;
   display_name: string | null;
 };
+
+function mediaProxyUrl(path: string) {
+  return `/api/media/dm?path=${encodeURIComponent(path)}`;
+}
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -62,38 +66,19 @@ export async function GET(request: Request) {
     });
   }
 
-  const bucket = supabase.storage.from("dm-media");
-
-  const items = await Promise.all(
-    rows.map(async (r) => {
-      let signedImageUrl: string | null = null;
-      let signedFileUrl: string | null = null;
-
-      if (r.image_url) {
-        const { data: signed } = await bucket.createSignedUrl(r.image_url, 60 * 60);
-        signedImageUrl = signed?.signedUrl ?? null;
-      }
-
-      if (r.file_url) {
-        const { data: signed } = await bucket.createSignedUrl(r.file_url, 60 * 60);
-        signedFileUrl = signed?.signedUrl ?? null;
-      }
-
-      return {
-        id: r.id,
-        user_id: r.user_id,
-        user_name: nameMap.get(r.user_id) ?? "NoName",
-        body: r.body,
-        created_at: r.created_at,
-        message_type: r.message_type ?? "text",
-        image_url: signedImageUrl,
-        file_url: signedFileUrl,
-        file_name: r.file_name,
-        file_mime: r.file_mime,
-        file_size: r.file_size,
-      };
-    })
-  );
+  const items = rows.map((r) => ({
+    id: r.id,
+    user_id: r.user_id,
+    user_name: nameMap.get(r.user_id) ?? "NoName",
+    body: r.body,
+    created_at: r.created_at,
+    message_type: r.message_type ?? "text",
+    image_url: r.image_url ? mediaProxyUrl(r.image_url) : null,
+    file_url: r.file_url ? mediaProxyUrl(r.file_url) : null,
+    file_name: r.file_name,
+    file_mime: r.file_mime,
+    file_size: r.file_size,
+  }));
 
   return NextResponse.json({ items });
 }
