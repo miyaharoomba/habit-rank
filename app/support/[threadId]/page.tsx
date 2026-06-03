@@ -1,6 +1,7 @@
 // app/support/[threadId]/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import PendingSubmitButton from "@/app/components/ui/PendingSubmitButton";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -228,7 +229,7 @@ export default async function SupportThreadPage({
           </CardBody>
         </Card>
 
-        {row.status === "open" ? (
+        {row.status === "open" && (
           <Card>
             <CardHeader>
               <h2 className="font-semibold">追記する</h2>
@@ -242,16 +243,15 @@ export default async function SupportThreadPage({
                   placeholder="追加で伝えたい内容を入力"
                   className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm resize-y"
                 />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90"
-                >
-                  送信
-                </button>
+                <PendingSubmitButton
+                  idleText="送信"
+                  pendingText="送信中…"
+                  className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                />
               </form>
             </CardBody>
           </Card>
-        ) : null}
+        )}
       </div>
     </Container>
   );
