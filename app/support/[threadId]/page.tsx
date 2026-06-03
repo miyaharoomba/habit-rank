@@ -1,4 +1,4 @@
-// app/support/[threadId]/page.tsx
+// app/support/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import PendingSubmitButton from "@/app/components/ui/PendingSubmitButton";
@@ -9,7 +9,6 @@ import { formatJst } from "@/lib/time";
 
 type ThreadRow = {
   id: string;
-  user_id: string;
   subject: string;
   status: "open" | "closed";
   created_at: string;
@@ -17,26 +16,7 @@ type ThreadRow = {
   last_message_at: string;
 };
 
-type MessageRow = {
-  id: string;
-  thread_id: string;
-  sender_id: string;
-  sender_role: "user" | "admin";
-  body: string;
-  created_at: string;
-};
-
-type ProfileRow = {
-  id: string;
-  display_name: string | null;
-};
-
-export default async function SupportThreadPage({
-  params,
-}: {
-  params: Promise<{ threadId: string }>;
-}) {
-  const { threadId } = await params;
+export default async function SupportPage() {
   const supabase = await createClient();
 
   const {
@@ -47,7 +27,7 @@ export default async function SupportThreadPage({
     redirect("/auth/sign-in");
   }
 
-  async function replyAction(formData: FormData) {
+  async function createSupportThreadAction(formData: FormData) {
     "use server";
 
     const supabase = await createClient();
@@ -60,97 +40,74 @@ export default async function SupportThreadPage({
       redirect("/auth/sign-in");
     }
 
+    const subject = String(formData.get("subject") ?? "").trim();
     const body = String(formData.get("body") ?? "").trim();
-    if (!body) {
-      throw new Error("本文は必須です。");
+
+    if (!subject || !body) {
+      throw new Error("件名と本文は必須です。");
     }
 
-    const { error } = await supabase.from("support_messages").insert({
-      thread_id: threadId,
-      sender_id: user.id,
-      sender_role: "user",
-      body,
-    });
+    const { data: thread, error: threadErr } = await supabase
+      .from("support_threads")
+      .insert({
+        user_id: user.id,
+        subject,
+        status: "open",
+      })
+      .select("id")
+      .single();
 
-    if (error) {
-      throw new Error(error.message);
+    if (threadErr || !thread) {
+      throw new Error(threadErr?.message ?? "support_threads insert failed");
     }
 
-    redirect(`/support/${threadId}`);
+    const { error: msgErr } = await supabase
+      .from("support_messages")
+      .insert({
+        thread_id: thread.id,
+        sender_id: user.id,
+        sender_role: "user",
+        body,
+      });
+
+    if (msgErr) {
+      throw new Error(msgErr.message);
+    }
+
+    redirect(`/support/${thread.id}`);
   }
 
-  const { data: thread, error: threadErr } = await supabase
+  const { data: threads, error } = await supabase
     .from("support_threads")
-    .select("id, user_id, subject, status, created_at, updated_at, last_message_at")
-    .eq("id", threadId)
-    .maybeSingle();
+    .select("id, subject, status, created_at, updated_at, last_message_at")
+    .order("last_message_at", { ascending: false })
+    .limit(50);
 
-  if (threadErr || !thread) {
-    return (
-      <Container>
-        <Card>
-          <CardHeader>
-            <h1 className="text-xl font-bold tracking-tight">問い合わせ</h1>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-destructive">問い合わせが見つかりません。</p>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/support">
-                /support へ戻る
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                /app
-              </Link>
-            </div>
-          </CardBody>
-        </Card>
-      </Container>
-    );
+  if (error) {
+    throw new Error(error.message);
   }
 
-  const row = thread as ThreadRow;
-
-  const { data: messages, error: msgErr } = await supabase
-    .from("support_messages")
-    .select("id, thread_id, sender_id, sender_role, body, created_at")
-    .eq("thread_id", row.id)
-    .order("created_at", { ascending: true });
-
-  if (msgErr) {
-    throw new Error(msgErr.message);
-  }
-
-  const msgRows = (messages ?? []) as MessageRow[];
-
-  const senderIds = Array.from(new Set(msgRows.map((m) => m.sender_id)));
-  const nameMap = new Map<string, string>();
-
-  if (senderIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .in("id", senderIds);
-
-    (profiles ?? []).forEach((p: ProfileRow) => {
-      nameMap.set(p.id, (p.display_name ?? "").trim() || "NoName");
-    });
-  }
+  const rows = (threads ?? []) as ThreadRow[];
 
   return (
     <Container>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">問い合わせ詳細</h1>
-          <p className="text-sm text-muted-foreground break-words">{row.subject}</p>
+          <h1 className="text-2xl font-bold tracking-tight">管理者への問い合わせ</h1>
+          <p className="text-sm text-muted-foreground">
+            不具合報告・相談・要望などを管理者に送れます。
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/support">
-            /support
-          </Link>
           <Link className="text-sm text-primary hover:underline" href="/app">
             /app
+          </Link>
+          <Link className="text-sm text-primary hover:underline" href="/ranking">
+            /ranking
+          </Link>
+          <Link className="text-sm text-primary hover:underline" href="/settings">
+            /settings
           </Link>
         </div>
       </header>
@@ -158,101 +115,105 @@ export default async function SupportThreadPage({
       <div className="mt-6 grid gap-4">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-semibold">スレッド情報</h2>
-              <span
-                className={[
-                  "rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap",
-                  row.status === "open"
-                    ? "bg-primary/15 text-primary"
-                    : "bg-muted text-muted-foreground",
-                ].join(" ")}
-              >
-                {row.status === "open" ? "対応中" : "完了"}
-              </span>
-            </div>
+            <h2 className="font-semibold">新しい問い合わせを送る</h2>
           </CardHeader>
           <CardBody>
-            <div className="text-sm break-words">{row.subject}</div>
-            <div className="mt-2 text-xs text-muted-foreground tabular-nums">
-              作成: {formatJst(row.created_at)} / 最終更新: {formatJst(row.last_message_at)}
-            </div>
+            <form action={createSupportThreadAction} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">件名</label>
+                <input
+                  name="subject"
+                  required
+                  maxLength={120}
+                  placeholder="例: 通知が届かない / 不具合報告 / 要望"
+                  className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">本文</label>
+                <textarea
+                  name="body"
+                  required
+                  rows={8}
+                  placeholder="問い合わせ内容を入力してください"
+                  className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm resize-y"
+                />
+              </div>
+
+              <PendingSubmitButton
+                idleText="問い合わせを送信"
+                pendingText="送信中…"
+                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </form>
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader>
-            <h2 className="font-semibold">やりとり</h2>
+            <h2 className="font-semibold">これまでの問い合わせ</h2>
           </CardHeader>
           <CardBody>
-            {msgRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">まだメッセージがありません。</p>
+            {rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                まだ問い合わせはありません。
+              </p>
             ) : (
-              <div className="space-y-3">
-                {msgRows.map((m) => {
-                  const mine = m.sender_role === "user";
-                  const senderLabel = mine
-                    ? "あなた"
-                    : `${nameMap.get(m.sender_id) ?? "管理者"}（管理者）`;
+              <ul className="space-y-3">
+                {rows.map((row) => (
+                  <li
+                    key={row.id}
+                    className="rounded-xl border border-border bg-secondary/30 p-4"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/support/${row.id}`}
+                            className="font-semibold break-words hover:underline"
+                          >
+                            {row.subject}
+                          </Link>
+                          <span
+                            className={[
+                              "rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap",
+                              row.status === "open"
+                                ? "bg-primary/15 text-primary"
+                                : "bg-muted text-muted-foreground",
+                            ].join(" ")}
+                          >
+                            {row.status === "open" ? "対応中" : "完了"}
+                          </span>
+                        </div>
 
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex ${mine ? "justify-end" : "justify-start"}`}
-                    >
-                      <div className="max-w-[85%] sm:max-w-[72%]">
-                        <div className="mb-1 text-[11px] text-muted-foreground">
-                          {senderLabel}
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          作成:{" "}
+                          <span className="tabular-nums">{formatJst(row.created_at)}</span>
                         </div>
-                        <div
-                          className={[
-                            "rounded-2xl border border-border px-3 py-2 text-sm whitespace-pre-wrap break-words",
-                            mine ? "bg-primary/15" : "bg-secondary/40",
-                          ].join(" ")}
-                        >
-                          {m.body}
-                        </div>
-                        <div
-                          className={[
-                            "mt-1 text-[11px] text-muted-foreground tabular-nums",
-                            mine ? "text-right" : "text-left",
-                          ].join(" ")}
-                        >
-                          {formatJst(m.created_at)}
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          最終更新:{" "}
+                          <span className="tabular-nums">{formatJst(row.last_message_at)}</span>
                         </div>
                       </div>
+
+                      <div className="text-sm">
+                        <Link
+                          href={`/support/${row.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          開く →
+                        </Link>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardBody>
         </Card>
-
-        {row.status === "open" && (
-          <Card>
-            <CardHeader>
-              <h2 className="font-semibold">追記する</h2>
-            </CardHeader>
-            <CardBody>
-              <form action={replyAction} className="space-y-3">
-                <textarea
-                  name="body"
-                  required
-                  rows={6}
-                  placeholder="追加で伝えたい内容を入力"
-                  className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm resize-y"
-                />
-                <PendingSubmitButton
-                  idleText="送信"
-                  pendingText="送信中…"
-                  className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-              </form>
-            </CardBody>
-          </Card>
-        )}
       </div>
     </Container>
   );
 }
+``
