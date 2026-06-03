@@ -1,5 +1,6 @@
 import LiveTimer from "@/app/components/LiveTimer";
 import GlobalChatBoard from "@/app/components/GlobalChatBoard";
+import MobileAppMenu from "@/app/components/MobileAppMenu";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Button from "@/app/components/ui/Button";
@@ -52,6 +53,7 @@ export default async function AppPage() {
     .maybeSingle();
 
   const startedAt = active?.started_at ?? null;
+  const isRunning = Boolean(startedAt);
 
   return (
     <Container>
@@ -63,57 +65,63 @@ export default async function AppPage() {
 
         {/* 右側：ユーザー名 + ベル + メニュー */}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="text-sm text-muted-foreground mr-1 whitespace-nowrap">
+          <div className="text-sm text-muted-foreground mr-1 whitespace-nowrap hidden sm:block">
             👤 {displayName}
           </div>
 
           <NotificationBell />
 
-          <Link
-            href="/participants"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            参加者
-          </Link>
+          <div className="hidden sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+            <Link
+              href="/participants"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              参加者
+            </Link>
 
-          <Link
-            href="/dm"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            DM
-          </Link>
+            <Link
+              href="/dm"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              DM
+            </Link>
 
-          <Link
-            href="/support"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            問い合わせ
-          </Link>
+            <Link
+              href="/support"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              問い合わせ
+            </Link>
 
-          <Link
-            href="/history"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            履歴
-          </Link>
+            <Link
+              href="/history"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              履歴
+            </Link>
 
-          <Link
-            href="/ranking"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            ランキング
-          </Link>
+            <Link
+              href="/ranking"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              ランキング
+            </Link>
 
-          <Link
-            href="/settings"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            設定
-          </Link>
+            <Link
+              href="/settings"
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              設定
+            </Link>
+          </div>
+
+          <div className="sm:hidden">
+            <MobileAppMenu displayName={displayName} />
+          </div>
         </div>
       </header>
 
-      <div className="mt-6 grid gap-4">
+      <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4">
         {/* 現在の継続 */}
         <Card>
           <CardHeader>
@@ -124,7 +132,7 @@ export default async function AppPage() {
           </CardHeader>
 
           <CardBody>
-            <div className="text-4xl font-extrabold tracking-tight">
+            <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">
               <LiveTimer startedAt={startedAt} />
             </div>
 
@@ -137,30 +145,36 @@ export default async function AppPage() {
             </div>
 
             <div className="mt-4 flex flex-col gap-3">
-              <div className="flex flex-wrap gap-3">
+              {!isRunning ? (
                 <form action={startSession}>
-                  <Button type="submit" disabled={!!startedAt}>
-                    開始
-                  </Button>
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl bg-primary text-primary-foreground px-4 py-4 text-base font-bold shadow-sm hover:opacity-90"
+                  >
+                    継続を開始する
+                  </button>
                 </form>
+              ) : (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary font-semibold">
+                    継続中です。終了する場合は理由を入力してください。
+                  </div>
 
-                <form action={finishSession} className="flex-1 min-w-[260px]">
-                  <input type="hidden" name="end_reason" value="" />
-                  <div className="flex flex-col gap-2">
+                  <form action={finishSession} className="space-y-2">
+                    <input type="hidden" name="end_reason" value="" />
                     <textarea
                       name="end_reason"
                       placeholder="終了理由（任意：200文字以内）例：仕事が忙しい、体調不良、達成した など"
                       className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
                       rows={2}
                       maxLength={200}
-                      disabled={!startedAt}
                     />
-                    <Button type="submit" variant="ghost" disabled={!startedAt}>
+                    <Button type="submit" variant="ghost" className="w-full sm:w-auto">
                       終了（理由を保存）
                     </Button>
-                  </div>
-                </form>
-              </div>
+                  </form>
+                </div>
+              )}
 
               <div className="text-xs text-muted-foreground tabular-nums">
                 started_at: {startedAt ? formatJst(startedAt) : "(未開始)"}

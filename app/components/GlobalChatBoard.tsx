@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { formatJstStartLabel } from "@/lib/time";
 
 type ChatItem = {
@@ -50,6 +56,25 @@ function ChatMeta({
   );
 }
 
+function NameLine({
+  mine,
+  userName,
+}: {
+  mine: boolean;
+  userName: string;
+}) {
+  return (
+    <div
+      className={[
+        "mb-1 text-[11px] text-muted-foreground",
+        mine ? "text-right" : "text-left",
+      ].join(" ")}
+    >
+      {mine ? "あなた" : userName}
+    </div>
+  );
+}
+
 function ChatText({
   mine,
   userName,
@@ -63,16 +88,8 @@ function ChatText({
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[88%] sm:max-w-[72%]">
-        <div
-          className={[
-            "mb-1 text-[11px]",
-            mine ? "text-right text-muted-foreground" : "text-left text-muted-foreground",
-          ].join(" ")}
-        >
-          {mine ? "あなた" : userName}
-        </div>
-
+      <div className="max-w-[92%] sm:max-w-[72%]">
+        <NameLine mine={mine} userName={userName} />
         <div
           className={[
             "rounded-2xl border border-border px-3 py-2 text-sm whitespace-pre-wrap break-words",
@@ -81,7 +98,6 @@ function ChatText({
         >
           {body}
         </div>
-
         <ChatMeta mine={mine} createdAt={createdAt} />
       </div>
     </div>
@@ -105,31 +121,22 @@ function ChatImage({
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[88%] sm:max-w-[72%]">
-        <div
-          className={[
-            "mb-1 text-[11px]",
-            mine ? "text-right text-muted-foreground" : "text-left text-muted-foreground",
-          ].join(" ")}
-        >
-          {mine ? "あなた" : userName}
-        </div>
+      <div className="max-w-[92%] sm:max-w-[72%]">
+        <NameLine mine={mine} userName={userName} />
 
         <button
           type="button"
           onClick={() => onOpen("image", url)}
           className={[
             "block overflow-hidden rounded-2xl border border-border",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             mine ? "bg-primary/10" : "bg-secondary/30",
           ].join(" ")}
           aria-label="画像を拡大表示"
-          title="タップで拡大"
         >
           <img
             src={url}
             alt="image"
-            className="block w-full h-auto max-h-[340px] object-cover"
+            className="block w-full h-auto max-h-[280px] sm:max-h-[340px] object-cover"
             loading="lazy"
           />
         </button>
@@ -168,15 +175,8 @@ function ChatVideo({
 }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[88%] sm:max-w-[72%]">
-        <div
-          className={[
-            "mb-1 text-[11px]",
-            mine ? "text-right text-muted-foreground" : "text-left text-muted-foreground",
-          ].join(" ")}
-        >
-          {mine ? "あなた" : userName}
-        </div>
+      <div className="max-w-[92%] sm:max-w-[72%]">
+        <NameLine mine={mine} userName={userName} />
 
         <div
           className={[
@@ -186,7 +186,7 @@ function ChatVideo({
         >
           <video
             src={url}
-            className="block w-full h-auto max-h-[360px] bg-black"
+            className="block w-full h-auto max-h-[280px] sm:max-h-[360px] bg-black"
             controls
             playsInline
             preload="metadata"
@@ -240,15 +240,8 @@ function ChatFile({
 
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[88%] sm:max-w-[72%]">
-        <div
-          className={[
-            "mb-1 text-[11px]",
-            mine ? "text-right text-muted-foreground" : "text-left text-muted-foreground",
-          ].join(" ")}
-        >
-          {mine ? "あなた" : userName}
-        </div>
+      <div className="max-w-[92%] sm:max-w-[72%]">
+        <NameLine mine={mine} userName={userName} />
 
         <a href={url} target="_blank" rel="noreferrer">
           <div className="rounded-2xl border border-border bg-secondary/30 px-3 py-3 hover:bg-secondary/40 transition">
@@ -259,7 +252,9 @@ function ChatFile({
                   {label} ・ {bytes(size)} ・ {mime || "application/octet-stream"}
                 </div>
               </div>
-              <div className="text-xs text-primary font-semibold whitespace-nowrap">開く</div>
+              <div className="text-xs text-primary font-semibold whitespace-nowrap">
+                開く
+              </div>
             </div>
           </div>
         </a>
@@ -299,7 +294,6 @@ export default function GlobalChatBoard({
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
 
@@ -312,7 +306,7 @@ export default function GlobalChatBoard({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const json = (await res.json()) as ApiResponse;
-      const rows = [...(json.items ?? [])].reverse(); // 古い → 新しい
+      const rows = [...(json.items ?? [])].reverse();
       setItems(rows);
       setError(null);
     } catch (e: any) {
@@ -352,17 +346,12 @@ export default function GlobalChatBoard({
     try {
       const res = await fetch("/api/global-chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body }),
       });
 
       const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(json?.error ?? `HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
 
       setDraft("");
       await fetchMessages();
@@ -393,14 +382,12 @@ export default function GlobalChatBoard({
       });
 
       const json = await res.json().catch(() => ({}));
-
       if (!res.ok || !json.ok) {
         throw new Error(json?.error ?? `HTTP ${res.status}`);
       }
 
       setDraft("");
       await fetchMessages();
-
       setTimeout(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       }, 50);
@@ -411,23 +398,15 @@ export default function GlobalChatBoard({
     }
   };
 
-  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     await uploadFile(file);
   };
 
-  const openFilePicker = () => {
-    if (!sending) filePickerRef.current?.click();
-  };
-
-  const openMediaPicker = () => {
-    if (!sending) mediaPickerRef.current?.click();
-  };
-
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       {modal && (
         <div className="fixed inset-0 z-[60]">
           <div
@@ -494,7 +473,7 @@ export default function GlobalChatBoard({
 
       <div
         ref={listRef}
-        className="max-h-[420px] overflow-y-auto px-4 py-4 space-y-3"
+        className="max-h-[300px] sm:max-h-[420px] overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 space-y-3"
       >
         {loading ? (
           <p className="text-sm text-muted-foreground">読み込み中…</p>
@@ -566,15 +545,15 @@ export default function GlobalChatBoard({
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-border px-4 py-3 space-y-2">
+      <div className="border-t border-border px-3 py-3 sm:px-4 sm:py-3 space-y-2">
         {error && <div className="text-xs text-destructive">{error}</div>}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-end">
           <button
             type="button"
-            onClick={openFilePicker}
+            onClick={() => filePickerRef.current?.click()}
             disabled={sending}
-            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 hover:bg-secondary/50 transition disabled:opacity-50"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border hover:bg-secondary/50 transition disabled:opacity-50"
             aria-label="ファイルを送る"
             title="ファイルを送る"
           >
@@ -583,9 +562,9 @@ export default function GlobalChatBoard({
 
           <button
             type="button"
-            onClick={openMediaPicker}
+            onClick={() => mediaPickerRef.current?.click()}
             disabled={sending}
-            className="inline-flex items-center justify-center rounded-lg border border-border px-3 py-2 hover:bg-secondary/50 transition disabled:opacity-50"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border hover:bg-secondary/50 transition disabled:opacity-50"
             aria-label="画像・動画を送る"
             title="画像・動画を送る"
           >
@@ -595,10 +574,10 @@ export default function GlobalChatBoard({
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            rows={2}
+            rows={1}
             maxLength={200}
-            placeholder="全体に向けて投稿…（画像/動画/ファイルならキャプションにもなる）"
-            className="flex-1 rounded-lg bg-background border border-input px-3 py-2 text-sm resize-none"
+            placeholder="全体に向けて投稿…"
+            className="min-h-11 flex-1 rounded-lg bg-background border border-input px-3 py-2 text-sm resize-none"
             disabled={sending}
           />
 
@@ -606,7 +585,7 @@ export default function GlobalChatBoard({
             type="button"
             onClick={sendText}
             disabled={!canSend || sending}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+            className="h-11 rounded-lg bg-primary text-primary-foreground px-4 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
           >
             {sending ? "送信中…" : "送信"}
           </button>
