@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * GET /api/notifications?limit=20
- * - notifications を新しい順で返す
+ * - 自分宛て通知 + 全体通知(recipient_id is null) を新しい順で返す
  * - notification_reads を見て未読数を返す
  * - 各通知に url を付けて返す
  *
@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
  * body: { ids: string[] }
  * - 指定IDを既読にする（notification_reads に挿入）
  */
+
 export async function GET(request: Request) {
   const supabase = await createClient();
 
@@ -24,13 +25,17 @@ export async function GET(request: Request) {
   }
 
   const requestUrl = new URL(request.url);
-  const limit = Math.min(Number(requestUrl.searchParams.get("limit") ?? 20), 50);
+  const rawLimit = Number(requestUrl.searchParams.get("limit") ?? 20);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.max(1, Math.min(rawLimit, 50))
+    : 20;
 
   const { data: notifs, error: nErr } = await supabase
     .from("notifications")
     .select(
       "id, type, actor_id, recipient_id, thread_id, session_id, announcement_id, support_thread_id, message_preview, created_at"
     )
+    .or(`recipient_id.eq.${user.id},recipient_id.is.null`)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -41,14 +46,14 @@ export async function GET(request: Request) {
   const notifications = notifs ?? [];
   const ids = notifications.map((n: any) => n.id);
 
+  const readIdsTarget =
+    ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"];
+
   const { data: reads, error: rErr } = await supabase
     .from("notification_reads")
     .select("notification_id")
     .eq("user_id", user.id)
-    .in(
-      "notification_id",
-      ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]
-    );
+    .in("notification_id", readIdsTarget);
 
   if (rErr) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
@@ -67,10 +72,14 @@ export async function GET(request: Request) {
   const actorMap = new Map<string, string>();
 
   if (actorIds.length > 0) {
-    const { data: actors } = await supabase
+    const { data: actors, error: aErr } = await supabase
       .from("profiles")
       .select("id, display_name")
       .in("id", actorIds);
+
+    if (aErr) {
+      return NextResponse.json({ error: aErr.message }, { status: 500 });
+    }
 
     (actors ?? []).forEach((a: any) => {
       actorMap.set(a.id, (a.display_name ?? "").trim() || "NoName");
@@ -147,3 +156,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, inserted: ids.length });
 }
+``

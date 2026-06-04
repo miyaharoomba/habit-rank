@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatJstStartLabel } from "@/lib/time";
 
 type NotifItem = {
@@ -44,86 +44,90 @@ function bellIcon(className = "h-5 w-5") {
 
 export default function NotificationBell({
   limit = 20,
-  pollMs = 15000,
+  pollMs = 5000,
 }: {
   limit?: number;
   pollMs?: number;
 }) {
   const [open, setOpen] = useState(false);
-
-  // 初回だけ使うローディング
   const [initialLoading, setInitialLoading] = useState(false);
-
-  // バックグラウンド更新用
   const [refreshing, setRefreshing] = useState(false);
-
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<NotifItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(false);
+  const fetchingRef = useRef(false);
 
-  const fetchNotifs = async ({
-    background = false,
-  }: {
-    background?: boolean;
-  } = {}) => {
-    // 一覧が空の時だけ初回ローディング表示
-    if (!background && items.length === 0) {
-      setInitialLoading(true);
-    } else {
-      setRefreshing(true);
-    }
+  const fetchNotifs = useCallback(
+    async ({ background = false }: { background?: boolean } = {}) => {
+      if (fetchingRef.current) return;
+      fetchingRef.current = true;
 
-    setError(null);
+      if (!background && !mountedRef.current && items.length === 0) {
+        setInitialLoading(true);
+      } else {
+        setRefreshing(true);
+      }
 
-    try {
-      const res = await fetch(`/api/notifications?limit=${limit}`, {
-        cache: "no-store",
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/notifications?limit=${limit}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const json = (await res.json()) as ApiResponse;
+        setUnread(json.unreadCount ?? 0);
+        setItems(json.items ?? []);
+        mountedRef.current = true;
+      } catch (e: any) {
+        setError(e?.message ?? "fetch failed");
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
+        fetchingRef.current = false;
+      }
+    },
+    [limit, items.length]
+  );
+
+  const markRead = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+
+      setItems((prev) =>
+        prev.map((it) => (ids.includes(it.id) ? { ...it, read: true } : it))
+      );
+      setUnread((prev) => Math.max(0, prev - ids.length));
+
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        await fetchNotifs({ background: true });
+      }
+    },
+    [fetchNotifs]
+  );
 
-      const json = (await res.json()) as ApiResponse;
-      setUnread(json.unreadCount ?? 0);
-      setItems(json.items ?? []);
-    } catch (e: any) {
-      setError(e?.message ?? "fetch failed");
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
-  };
+  // 初回マウント時に即取得
+  useEffect(() => {
+    fetchNotifs();
+  }, [fetchNotifs]);
 
-  const markRead = async (ids: string[]) => {
-    if (ids.length === 0) return;
-
-    // 楽観更新
-    setItems((prev) =>
-      prev.map((it) => (ids.includes(it.id) ? { ...it, read: true } : it))
-    );
-    setUnread((prev) => Math.max(0, prev - ids.length));
-
-    const res = await fetch("/api/notifications", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ids }),
-    });
-
-    if (!res.ok) {
-      await fetchNotifs({ background: true });
-    }
-  };
-
-  // 開いた時、まだ items が空なら最初だけ取得
+  // 開いたら必ず再取得
   useEffect(() => {
     if (!open) return;
-    if (items.length > 0) return;
-    fetchNotifs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    fetchNotifs({ background: true });
+  }, [open, fetchNotifs]);
 
   // 定期更新
   useEffect(() => {
@@ -132,8 +136,28 @@ export default function NotificationBell({
     }, pollMs);
 
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pollMs, limit]);
+  }, [pollMs, fetchNotifs]);
+
+  // フォーカス復帰 / タブ復帰時に更新
+  useEffect(() => {
+    const onFocus = () => {
+      fetchNotifs({ background: true });
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifs({ background: true });
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [fetchNotifs]);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -142,7 +166,6 @@ export default function NotificationBell({
       if (!el) return;
       if (e.target instanceof Node && !el.contains(e.target)) setOpen(false);
     };
-
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
@@ -152,7 +175,6 @@ export default function NotificationBell({
       if (!open) return;
       if (e.key === "Escape") setOpen(false);
     };
-
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
@@ -164,23 +186,18 @@ export default function NotificationBell({
 
   const routeFor = (n: NotifItem) => {
     if (n.url && n.url.trim().length > 0) return n.url;
-
     if (n.type === "streak_end" && n.session_id) {
       return `/results/${n.session_id}`;
     }
-
     if (n.type === "dm" && n.thread_id) {
       return `/dm/${n.thread_id}`;
     }
-
     if (n.type === "admin_broadcast" && n.announcement_id) {
       return `/announcements/${n.announcement_id}`;
     }
-
     if (n.type === "support_reply" && n.support_thread_id) {
       return `/support/${n.support_thread_id}`;
     }
-
     return "/app";
   };
 
@@ -201,7 +218,6 @@ export default function NotificationBell({
         aria-label="通知"
       >
         {bellIcon("h-5 w-5")}
-
         {unread > 0 && (
           <span
             className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center tabular-nums"
@@ -226,7 +242,6 @@ export default function NotificationBell({
             onRefresh={() => fetchNotifs({ background: true })}
             onMarkAll={() => markRead(unreadIds)}
           />
-
           <ListArea
             items={items}
             initialLoading={initialLoading}
@@ -236,7 +251,6 @@ export default function NotificationBell({
             routeFor={routeFor}
             close={() => setOpen(false)}
           />
-
           <FooterHint />
         </div>
       )}
@@ -248,7 +262,6 @@ export default function NotificationBell({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-
           <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border border-border bg-card text-card-foreground shadow-glow">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="font-semibold">通知</div>
@@ -405,7 +418,6 @@ function ListArea({
                     : n.message_preview || "通知が届きました"}
                 </div>
               </div>
-
               <div className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                 {formatJstStartLabel(n.created_at)}
               </div>
@@ -429,3 +441,4 @@ function FooterHint() {
     </div>
   );
 }
+``
