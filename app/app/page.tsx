@@ -8,12 +8,11 @@ import { createClient } from "@/lib/supabase/server";
 import { startSession, finishSession } from "./actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { formatJst, formatJstStartLabel } from "@/lib/time";
+import { formatJstStartLabel } from "@/lib/time";
 
 export default async function AppPage() {
   const supabase = await createClient();
 
-  // ログイン中ユーザー
   const {
     data: { user },
     error: userError,
@@ -23,7 +22,6 @@ export default async function AppPage() {
     return <div>ログイン情報が取れません</div>;
   }
 
-  // 表示名・アイコン・ステータスメッセージ
   const { data: profile } = await supabase
     .from("profiles")
     .select("display_name, avatar_path, status_message")
@@ -34,12 +32,10 @@ export default async function AppPage() {
   const avatarPath = profile?.avatar_path ?? null;
   const statusMessage = profile?.status_message ?? null;
 
-  // 初回：名前未設定なら onboarding へ
   if (!displayName) {
     redirect("/onboarding");
   }
 
-  // 継続中セッション（自分のもの）
   const { data: active } = await supabase
     .from("streak_sessions")
     .select("id, started_at")
@@ -52,16 +48,16 @@ export default async function AppPage() {
 
   return (
     <Container>
-      <div className="space-y-5 sm:space-y-7">
-        {/* ヘッダー */}
-        <header className="flex items-start justify-between gap-3 pt-1 sm:pt-2">
+      <div className="space-y-4 sm:space-y-6">
+        {/* モバイルを優先したコンパクトヘッダー */}
+        <header className="flex items-center justify-between gap-3 pt-1">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[clamp(2rem,8vw,3.6rem)] font-extrabold tracking-tight leading-[0.95]">
+            <h1 className="text-[32px] leading-[1.02] font-extrabold tracking-tight sm:text-5xl whitespace-nowrap">
               継続チャレンジ
             </h1>
           </div>
 
-          <div className="shrink-0 flex items-center gap-2 sm:gap-3 pt-1">
+          <div className="shrink-0 flex items-center gap-2">
             <NotificationBell />
             <div className="sm:hidden">
               <MobileAppMenu
@@ -73,7 +69,7 @@ export default async function AppPage() {
           </div>
         </header>
 
-        {/* PCサブ導線 */}
+        {/* PC用サブ導線 */}
         <div className="hidden sm:flex items-center justify-between gap-4">
           <div className="min-w-0 text-sm text-muted-foreground truncate">
             👤{" "}
@@ -107,27 +103,33 @@ export default async function AppPage() {
           </nav>
         </div>
 
-        {/* 現在の継続 */}
+        {/* メインカード */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                現在の継続
-              </h2>
-              <span className="shrink-0 text-xs sm:text-sm text-muted-foreground">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-3xl font-bold tracking-tight">
+                  現在の継続
+                </h2>
+              </div>
+
+              <span className="shrink-0 text-[11px] sm:text-sm text-muted-foreground">
                 リアルタイム
               </span>
             </div>
           </CardHeader>
 
           <CardBody>
-            <div className="space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-6">
+            <div className="space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6">
+              {/* タイマーは一行寄り・圧縮表示 */}
               <div className="space-y-2">
                 <div className="overflow-hidden">
-                  <LiveTimer startedAt={startedAt} />
+                  <div className="whitespace-nowrap origin-left scale-[0.58] sm:scale-100 h-[54px] sm:h-auto w-max">
+                    <LiveTimer startedAt={startedAt} />
+                  </div>
                 </div>
 
-                <div className="text-lg sm:text-xl text-muted-foreground break-words">
+                <div className="text-sm sm:text-lg text-muted-foreground break-words">
                   開始：{startedAt ? formatJstStartLabel(startedAt) : "未開始"}
                 </div>
               </div>
@@ -136,33 +138,33 @@ export default async function AppPage() {
                 <form action={startSession}>
                   <button
                     type="submit"
-                    className="w-full rounded-lg bg-primary text-primary-foreground h-13 sm:h-14 text-lg sm:text-xl font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full h-12 sm:h-14 rounded-xl bg-primary text-primary-foreground text-base sm:text-xl font-bold hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     継続を開始する
                   </button>
                 </form>
               ) : (
-                <form action={finishSession} className="space-y-4">
-                  <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-4 sm:px-5 sm:py-4">
-                    <p className="text-base sm:text-lg font-semibold text-primary leading-relaxed">
-                      終了方法を選べます。通常は「終了して次を開始」を使ってください。
+                <form action={finishSession} className="space-y-3">
+                  <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3">
+                    <p className="text-sm sm:text-base font-semibold text-primary leading-relaxed">
+                      終了方法を選択。通常は「終了して次を開始」。
                     </p>
                   </div>
 
                   <textarea
                     name="end_reason"
+                    rows={2}
                     maxLength={200}
-                    rows={3}
-                    placeholder="終了理由（任意：200文字以内） 例：仕事が忙しい、体調不良、達成した など"
-                    className="w-full rounded-2xl border border-input bg-background px-4 py-4 text-base sm:text-lg text-foreground placeholder:text-muted-foreground resize-none"
+                    placeholder="終了理由（任意・200文字以内）"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm sm:text-base text-foreground placeholder:text-muted-foreground resize-none"
                   />
 
-                  <div className="grid gap-3">
+                  <div className="grid gap-2">
                     <button
                       type="submit"
                       name="mode"
                       value="restart"
-                      className="w-full rounded-lg bg-primary text-primary-foreground h-14 sm:h-14 text-lg sm:text-xl font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full h-12 sm:h-14 rounded-xl bg-primary text-primary-foreground text-base sm:text-xl font-bold hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       終了して次を開始
                     </button>
@@ -171,14 +173,10 @@ export default async function AppPage() {
                       type="submit"
                       name="mode"
                       value="stop"
-                      className="w-full rounded-lg border border-border bg-background h-13 sm:h-14 text-lg sm:text-xl font-bold hover:bg-secondary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full h-11 sm:h-14 rounded-xl border border-border bg-background text-base sm:text-xl font-bold hover:bg-secondary/40 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       完全に終了
                     </button>
-                  </div>
-
-                  <div className="hidden sm:block text-xs text-muted-foreground tabular-nums break-all">
-                    started_at: {startedAt ? formatJst(startedAt) : "(未開始)"}
                   </div>
                 </form>
               )}
@@ -186,17 +184,8 @@ export default async function AppPage() {
           </CardBody>
         </Card>
 
-        {/* 掲示板 */}
-        <section className="space-y-2">
-          <div className="px-1">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">掲示板</h2>
-            <p className="mt-1 text-base sm:text-lg text-muted-foreground">
-              全員が読める公開チャット
-            </p>
-          </div>
-
-          <GlobalChatBoard myUserId={user.id} />
-        </section>
+        {/* 掲示板タイトルは GlobalChatBoard 側で出るのでここでは出さない */}
+        <GlobalChatBoard myUserId={user.id} />
       </div>
     </Container>
   );
