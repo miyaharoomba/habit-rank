@@ -48,11 +48,11 @@ export default async function AppPage() {
 
   return (
     <Container>
-      <div className="space-y-4 sm:space-y-6">
-        {/* モバイルを優先したコンパクトヘッダー */}
+      <div className="space-y-3 sm:space-y-6">
+        {/* ヘッダー */}
         <header className="flex items-center justify-between gap-3 pt-1">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[32px] leading-[1.02] font-extrabold tracking-tight sm:text-5xl whitespace-nowrap">
+            <h1 className="text-[28px] leading-[1.05] font-extrabold tracking-tight whitespace-nowrap sm:text-5xl">
               継続チャレンジ
             </h1>
           </div>
@@ -69,7 +69,7 @@ export default async function AppPage() {
           </div>
         </header>
 
-        {/* PC用サブ導線 */}
+        {/* PCサブ導線 */}
         <div className="hidden sm:flex items-center justify-between gap-4">
           <div className="min-w-0 text-sm text-muted-foreground truncate">
             👤{" "}
@@ -103,16 +103,13 @@ export default async function AppPage() {
           </nav>
         </div>
 
-        {/* メインカード */}
+        {/* 現在の継続 */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
-              <div className="min-w-0">
-                <h2 className="text-xl sm:text-3xl font-bold tracking-tight">
-                  現在の継続
-                </h2>
-              </div>
-
+            <div className="flex items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4">
+              <h2 className="text-xl sm:text-3xl font-bold tracking-tight">
+                現在の継続
+              </h2>
               <span className="shrink-0 text-[11px] sm:text-sm text-muted-foreground">
                 リアルタイム
               </span>
@@ -120,71 +117,73 @@ export default async function AppPage() {
           </CardHeader>
 
           <CardBody>
-            <div className="space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6">
-              {/* タイマーは一行寄り・圧縮表示 */}
-              <div className="space-y-2">
-                <div className="overflow-hidden">
-                  <div className="whitespace-nowrap origin-left scale-[0.58] sm:scale-100 h-[54px] sm:h-auto w-max">
-                    <LiveTimer startedAt={startedAt} />
+            <div className="px-3 pb-3 sm:px-6 sm:pb-6">
+              <div className="space-y-3 sm:space-y-5">
+                {/* タイマー */}
+                <div className="space-y-1.5">
+                  <div className="overflow-hidden">
+                    <div className="w-max origin-left scale-[0.72] sm:scale-100 h-[72px] sm:h-auto">
+                      <LiveTimer startedAt={startedAt} />
+                    </div>
+                  </div>
+
+                  <div className="text-sm sm:text-lg text-muted-foreground break-words">
+                    開始：{startedAt ? formatJstStartLabel(startedAt) : "未開始"}
                   </div>
                 </div>
 
-                <div className="text-sm sm:text-lg text-muted-foreground break-words">
-                  開始：{startedAt ? formatJstStartLabel(startedAt) : "未開始"}
-                </div>
-              </div>
-
-              {!isRunning ? (
-                <form action={startSession}>
-                  <button
-                    type="submit"
-                    className="w-full h-12 sm:h-14 rounded-xl bg-primary text-primary-foreground text-base sm:text-xl font-bold hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    継続を開始する
-                  </button>
-                </form>
-              ) : (
-                <form action={finishSession} className="space-y-3">
-                  <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3">
-                    <p className="text-sm sm:text-base font-semibold text-primary leading-relaxed">
-                      終了方法を選択。通常は「終了して次を開始」。
-                    </p>
-                  </div>
-
-                  <textarea
-                    name="end_reason"
-                    rows={2}
-                    maxLength={200}
-                    placeholder="終了理由（任意・200文字以内）"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm sm:text-base text-foreground placeholder:text-muted-foreground resize-none"
-                  />
-
-                  <div className="grid gap-2">
+                {!isRunning ? (
+                  <form action={startSession}>
                     <button
                       type="submit"
-                      name="mode"
-                      value="restart"
                       className="w-full h-12 sm:h-14 rounded-xl bg-primary text-primary-foreground text-base sm:text-xl font-bold hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      終了して次を開始
+                      継続を開始する
                     </button>
+                  </form>
+                ) : (
+                  <form action={finishSession} className="space-y-3">
+                    <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5">
+                      <p className="text-sm sm:text-base font-semibold text-primary leading-relaxed">
+                        通常は「終了して次を開始」を使ってください。
+                      </p>
+                    </div>
 
-                    <button
-                      type="submit"
-                      name="mode"
-                      value="stop"
-                      className="w-full h-11 sm:h-14 rounded-xl border border-border bg-background text-base sm:text-xl font-bold hover:bg-secondary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      完全に終了
-                    </button>
-                  </div>
-                </form>
-              )}
+                    <textarea
+                      name="end_reason"
+                      rows={2}
+                      maxLength={200}
+                      placeholder="終了理由（任意・200文字以内）"
+                      className="w-full rounded-xl border border-input bg-background px-3 py-3 text-sm sm:text-base text-foreground placeholder:text-muted-foreground resize-none"
+                    />
+
+                    <div className="grid gap-2">
+                      <button
+                        type="submit"
+                        name="mode"
+                        value="restart"
+                        className="w-full h-12 sm:h-14 rounded-xl bg-primary text-primary-foreground text-base sm:text-xl font-bold hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        終了して次を開始
+                      </button>
+
+                      <button
+                        type="submit"
+                        name="mode"
+                        value="stop"
+                        className="w-full h-11 sm:h-14 rounded-xl border border-border bg-background text-base sm:text-xl font-bold hover:bg-secondary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        完全に終了
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
             </div>
           </CardBody>
         </Card>
 
-        {/* 掲示板タイトルは GlobalChatBoard 側で出るのでここでは出さない */}
+        {/* 掲示板見出しは GlobalChatBoard 側で出る */}
         <GlobalChatBoard myUserId={user.id} />
       </div>
     </Container>
