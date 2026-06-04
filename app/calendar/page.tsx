@@ -12,102 +12,102 @@ type SessionRow = {
   end_reason: string | null;
 };
 
-type DayMapValue = {
-  key: string;
-  rows: SessionRow[];
-};
-
-function formatMonthKey(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, "0")}`;
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
 }
 
-function parseMonthParam(raw: string | null | undefined) {
-  const now = new Date();
-  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const fallbackYear = jstNow.getUTCFullYear();
-  const fallbackMonth = jstNow.getUTCMonth() + 1;
-
+function monthParamToDate(raw?: string) {
   if (!raw) {
-    return { year: fallbackYear, month: fallbackMonth };
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
   const m = raw.match(/^(\d{4})-(\d{2})$/);
   if (!m) {
-    return { year: fallbackYear, month: fallbackMonth };
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
   const year = Number(m[1]);
-  const month = Number(m[2]);
+  const monthIndex = Number(m[2]) - 1;
 
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
-    return { year: fallbackYear, month: fallbackMonth };
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
-  return { year, month };
+  return new Date(year, monthIndex, 1);
 }
 
-function monthRangeJst(year: number, month: number) {
-  // JST month start -> UTC に直す（JST-9h）
-  const startUtc = new Date(Date.UTC(year, month - 1, 1, -9, 0, 0));
-  const nextUtc = new Date(Date.UTC(year, month, 1, -9, 0, 0));
-  return {
-    startIso: startUtc.toISOString(),
-    nextIso: nextUtc.toISOString(),
-  };
+function ym(date: Date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
 }
 
-function jstDateKey(iso: string) {
-  const d = new Date(iso);
+function ymd(date: Date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+}
+
+function prevMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() - 1, 1);
+}
+
+function nextMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+}
+
+function jstDayKey(value: string) {
+  const d = new Date(value);
   const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-  const y = jst.getUTCFullYear();
-  const m = jst.getUTCMonth() + 1;
-  const day = jst.getUTCDate();
-  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return `${jst.getUTCFullYear()}-${pad2(jst.getUTCMonth() + 1)}-${pad2(jst.getUTCDate())}`;
 }
 
-function monthLabel(year: number, month: number) {
-  return `${year}年 ${month}月`;
-}
+function formatDuration(startedAt: string, endedAt: string | null) {
+  if (!endedAt) return "未終了";
 
-function getTodayJstKey() {
-  const now = new Date();
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const y = jst.getUTCFullYear();
-  const m = jst.getUTCMonth() + 1;
-  const d = jst.getUTCDate();
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
+  const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
 
-function getMonthMeta(year: number, month: number) {
-  const first = new Date(year, month - 1, 1);
-  const firstWeekday = first.getDay(); // 0=Sun
-  const daysInMonth = new Date(year, month, 0).getDate();
-  return { firstWeekday, daysInMonth };
-}
-
-function shiftMonth(year: number, month: number, delta: number) {
-  const d = new Date(year, month - 1 + delta, 1);
-  return {
-    year: d.getFullYear(),
-    month: d.getMonth() + 1,
-  };
-}
-
-function formatDurationFromIso(startedAt: string, endedAt: string | null) {
-  if (!endedAt) return "記録なし";
-  const start = new Date(startedAt).getTime();
-  const end = new Date(endedAt).getTime();
-  const sec = Math.max(0, Math.floor((end - start) / 1000));
-
-  const days = Math.floor(sec / 86400);
-  const hours = Math.floor((sec % 86400) / 3600);
-  const minutes = Math.floor((sec % 3600) / 60);
-  const seconds = sec % 60;
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
   if (days > 0) return `${days}日 ${hours}時間 ${minutes}分 ${seconds}秒`;
   if (hours > 0) return `${hours}時間 ${minutes}分 ${seconds}秒`;
   if (minutes > 0) return `${minutes}分 ${seconds}秒`;
   return `${seconds}秒`;
+}
+
+function buildCalendarCells(baseMonth: Date) {
+  const first = startOfMonth(baseMonth);
+  const startWeekday = first.getDay(); // 0=Sun
+  const daysInMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 0).getDate();
+
+  const cells: Array<{ date: Date | null }> = [];
+
+  for (let i = 0; i < startWeekday; i++) {
+    cells.push({ date: null });
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({
+      date: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), day),
+    });
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push({ date: null });
+  }
+
+  return cells;
 }
 
 export default async function CalendarPage({
@@ -116,8 +116,7 @@ export default async function CalendarPage({
   searchParams: Promise<{ month?: string; day?: string }>;
 }) {
   const sp = await searchParams;
-  const { year, month } = parseMonthParam(sp.month);
-  const monthKey = formatMonthKey(year, month);
+  const monthDate = monthParamToDate(sp.month);
 
   const supabase = await createClient();
 
@@ -130,16 +129,17 @@ export default async function CalendarPage({
     redirect("/auth/sign-in");
   }
 
-  const { startIso, nextIso } = monthRangeJst(year, month);
+  const monthStart = startOfMonth(monthDate);
+  const monthEnd = endOfMonth(monthDate);
 
   const { data: rows, error } = await supabase
     .from("streak_sessions")
     .select("id, started_at, ended_at, end_reason")
     .eq("user_id", user.id)
     .not("ended_at", "is", null)
-    .gte("ended_at", startIso)
-    .lt("ended_at", nextIso)
-    .order("ended_at", { ascending: true });
+    .gte("ended_at", monthStart.toISOString())
+    .lt("ended_at", monthEnd.toISOString())
+    .order("ended_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);
@@ -147,136 +147,158 @@ export default async function CalendarPage({
 
   const sessions = (rows ?? []) as SessionRow[];
 
-  const grouped = new Map<string, DayMapValue>();
+  const grouped = new Map<string, SessionRow[]>();
   for (const row of sessions) {
-    const key = jstDateKey(String(row.ended_at));
-    const hit = grouped.get(key);
-    if (hit) {
-      hit.rows.push(row);
-    } else {
-      grouped.set(key, { key, rows: [row] });
-    }
+    if (!row.ended_at) continue;
+    const key = jstDayKey(row.ended_at);
+    const list = grouped.get(key) ?? [];
+    list.push(row);
+    grouped.set(key, list);
   }
 
-  const { firstWeekday, daysInMonth } = getMonthMeta(year, month);
-  const prev = shiftMonth(year, month, -1);
-  const next = shiftMonth(year, month, 1);
-  const todayKey = getTodayJstKey();
+  const cells = buildCalendarCells(monthDate);
+  const todayKey = jstDayKey(new Date().toISOString());
 
-  const requestedDay = sp.day && sp.day.startsWith(monthKey) ? sp.day : null;
   const selectedDay =
-    requestedDay ||
-    (todayKey.startsWith(monthKey) ? todayKey : null) ||
-    Array.from(grouped.keys())[0] ||
-    null;
+    sp.day && grouped.has(sp.day)
+      ? sp.day
+      : cells.find((c) => c.date && grouped.has(ymd(c.date)))?.date
+      ? ymd(cells.find((c) => c.date && grouped.has(ymd(c.date)))!.date as Date)
+      : null;
 
-  const selectedRows = selectedDay ? grouped.get(selectedDay)?.rows ?? [] : [];
+  const selectedSessions = selectedDay ? grouped.get(selectedDay) ?? [] : [];
 
-  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  const prevHref = `/calendar?month=${ym(prevMonth(monthDate))}`;
+  const nextHref = `/calendar?month=${ym(nextMonth(monthDate))}`;
 
   return (
     <Container>
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">カレンダー</h1>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-4 sm:space-y-5">
+        {/* ヘッダーを少し圧縮 */}
+        <header className="space-y-2">
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">カレンダー</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             継続が終了した日付を確認できます。
           </p>
-        </div>
 
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link href="/app" className="text-primary hover:underline">
-            /app
-          </Link>
-          <Link href="/history" className="text-primary hover:underline">
-            /history
-          </Link>
-        </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Link
+              href="/app"
+              className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
+            >
+              /app
+            </Link>
+            <Link
+              href="/history"
+              className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
+            >
+              /history
+            </Link>
+          </div>
+        </header>
 
+        {/* カレンダー本体 */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-2 px-4 py-4">
-              <Link
-                href={`/calendar?month=${formatMonthKey(prev.year, prev.month)}`}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-secondary/40 transition"
-              >
-                ← 前月
-              </Link>
+            <div className="px-3 py-3 sm:px-5 sm:py-4">
+              {/* 1行バー化 */}
+              <div className="grid grid-cols-[64px_1fr_64px] items-center gap-2 sm:grid-cols-[96px_1fr_96px]">
+                <Link
+                  href={prevHref}
+                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-2 py-2 text-sm font-semibold hover:bg-secondary/40"
+                >
+                  ← 前
+                </Link>
 
-              <div className="text-lg font-bold tabular-nums">
-                {monthLabel(year, month)}
+                <div className="text-center text-lg sm:text-2xl font-bold tabular-nums">
+                  {monthDate.getFullYear()}年 {monthDate.getMonth() + 1}月
+                </div>
+
+                <Link
+                  href={nextHref}
+                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-2 py-2 text-sm font-semibold hover:bg-secondary/40"
+                >
+                  次 →
+                </Link>
               </div>
-
-              <Link
-                href={`/calendar?month=${formatMonthKey(next.year, next.month)}`}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-secondary/40 transition"
-              >
-                翌月 →
-              </Link>
             </div>
           </CardHeader>
 
           <CardBody>
-            <div className="px-4 pb-4">
-              <div className="grid grid-cols-7 gap-2">
-                {weekdays.map((w) => (
-                  <div
-                    key={w}
-                    className="text-center text-xs font-semibold text-muted-foreground py-1"
-                  >
-                    {w}
-                  </div>
-                ))}
+            <div className="px-3 pb-3 sm:px-5 sm:pb-5">
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-[11px] sm:text-xs font-semibold text-muted-foreground mb-2">
+                <div>日</div>
+                <div>月</div>
+                <div>火</div>
+                <div>水</div>
+                <div>木</div>
+                <div>金</div>
+                <div>土</div>
+              </div>
 
-                {Array.from({ length: firstWeekday }).map((_, i) => (
-                  <div key={`blank-${i}`} className="aspect-square" />
-                ))}
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                {cells.map((cell, idx) => {
+                  if (!cell.date) {
+                    return (
+                      <div
+                        key={`blank-${idx}`}
+                        className="aspect-square rounded-2xl bg-transparent"
+                      />
+                    );
+                  }
 
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const dayKey = `${monthKey}-${String(day).padStart(2, "0")}`;
-                  const count = grouped.get(dayKey)?.rows.length ?? 0;
-                  const isToday = dayKey === todayKey;
-                  const isSelected = selectedDay === dayKey;
+                  const key = ymd(cell.date);
+                  const items = grouped.get(key) ?? [];
+                  const isToday = key === todayKey;
+                  const isSelected = key === selectedDay;
+
+                  const href = `/calendar?month=${ym(monthDate)}&day=${key}`;
 
                   return (
                     <Link
-                      key={dayKey}
-                      href={`/calendar?month=${monthKey}&day=${dayKey}`}
+                      key={key}
+                      href={href}
                       className={[
-                        "aspect-square rounded-xl border px-2 py-2 transition flex flex-col",
+                        "relative aspect-square rounded-2xl border p-1.5 sm:p-2 transition",
                         isSelected
                           ? "border-primary bg-primary/10"
-                          : "border-border bg-background/50 hover:bg-secondary/40",
-                        isToday ? "ring-2 ring-primary/70" : "",
+                          : isToday
+                          ? "border-primary/60 bg-background"
+                          : "border-border bg-background hover:bg-secondary/30",
                       ].join(" ")}
                     >
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="text-sm font-bold tabular-nums">{day}</div>
-                        {count > 0 ? (
-                          <div className="text-[10px] text-primary font-semibold">
-                            {count}件
-                          </div>
-                        ) : null}
+                      {/* 日付 */}
+                      <div className="text-sm sm:text-lg font-bold tabular-nums leading-none">
+                        {cell.date.getDate()}
                       </div>
 
-                      <div className="mt-auto flex items-center gap-1">
-                        {count > 0 ? (
+                      {/* 件数バッジ */}
+                      {items.length > 0 ? (
+                        <div className="absolute right-1.5 top-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold text-primary leading-none">
+                          {items.length}
+                        </div>
+                      ) : null}
+
+                      {/* 下部ドット */}
+                      <div className="absolute left-1.5 right-1.5 bottom-1.5 flex items-center justify-center gap-1">
+                        {items.length > 0 ? (
                           <>
-                            {Array.from({ length: Math.min(count, 3) }).map((__, dotIdx) => (
+                            {items.slice(0, 3).map((_, dotIdx) => (
                               <span
-                                key={`${dayKey}-dot-${dotIdx}`}
-                                className="h-1.5 w-1.5 rounded-full bg-primary"
+                                key={`${key}-dot-${dotIdx}`}
+                                className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-primary"
                               />
                             ))}
-                            {count > 3 ? (
-                              <span className="text-[10px] text-primary font-semibold">
-                                +{count - 3}
+                            {items.length > 3 ? (
+                              <span className="text-[9px] sm:text-[10px] text-primary font-semibold">
+                                +{items.length - 3}
                               </span>
                             ) : null}
                           </>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground/60">-</span>
+                          <span className="text-[10px] sm:text-[11px] text-muted-foreground/50">
+                            -
+                          </span>
                         )}
                       </div>
                     </Link>
@@ -287,10 +309,11 @@ export default async function CalendarPage({
           </CardBody>
         </Card>
 
+        {/* 詳細カードも少し軽く */}
         <Card>
           <CardHeader>
-            <div className="px-4 py-4">
-              <h2 className="text-lg font-bold tracking-tight">
+            <div className="px-3 py-3 sm:px-5 sm:py-4">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight">
                 {selectedDay
                   ? `${selectedDay.replaceAll("-", "/")} の終了履歴`
                   : "終了履歴"}
@@ -299,25 +322,21 @@ export default async function CalendarPage({
           </CardHeader>
 
           <CardBody>
-            <div className="space-y-3 px-4 pb-4">
-              {!selectedDay ? (
+            <div className="space-y-3 px-3 pb-3 sm:px-5 sm:pb-5">
+              {!selectedDay || selectedSessions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  日付を選ぶと、その日の終了履歴を表示します。
-                </p>
-              ) : selectedRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  この日は終了済み履歴がありません。
+                  カレンダーの終了日を押すと、その日の結果一覧を表示できます。
                 </p>
               ) : (
-                <ul className="space-y-3">
-                  {selectedRows.map((row) => (
-                    <li key={row.id}>
+                <ul className="space-y-2.5">
+                  {selectedSessions.map((row) => (
+                    <li key={String(row.id)}>
                       <Link
                         href={`/results/${row.id}`}
-                        className="block rounded-xl border border-border bg-secondary/30 px-4 py-4 hover:bg-secondary/40 transition"
+                        className="block rounded-xl border border-border bg-secondary/20 px-3 py-3 hover:bg-secondary/30 transition"
                       >
                         <div className="text-sm font-semibold">
-                          {formatDurationFromIso(row.started_at, row.ended_at)}
+                          継続時間: {formatDuration(row.started_at, row.ended_at)}
                         </div>
 
                         <div className="mt-2 text-xs text-muted-foreground break-words">
