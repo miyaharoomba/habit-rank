@@ -5,7 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-const MAX_AVATAR_SIZE_MB = 15;
+const MAX_AVATAR_SIZE_MB = 50;
 const MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024;
 
 function safeExt(filename: string) {
@@ -286,4 +286,3 @@ export default async function ProfileEditPage({
     </Container>
   );
 }
-``
