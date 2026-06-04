@@ -1,6 +1,6 @@
-// app/users/[userId]/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import LinkifiedText from "@/app/components/LinkifiedText";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -84,9 +84,10 @@ export default async function UserProfilePage({
             <h1 className="text-xl font-bold tracking-tight">ユーザープロフィール</h1>
           </CardHeader>
           <CardBody>
-            <p className="text-sm text-destructive">プロフィールが見つかりません。</p>
-
-            <div className="mt-4 flex flex-wrap gap-3">
+            <p className="text-sm text-muted-foreground">
+              プロフィールが見つかりません。
+            </p>
+            <div className="mt-3 flex gap-3">
               <Link className="text-sm text-primary hover:underline" href="/participants">
                 /participants へ戻る
               </Link>
@@ -100,7 +101,6 @@ export default async function UserProfilePage({
     );
   }
 
-  // 履歴表示用（直近20件）
   const { data: recentSessions, error: recentErr } = await supabase
     .from("streak_sessions")
     .select("id, started_at, ended_at, end_reason")
@@ -113,7 +113,6 @@ export default async function UserProfilePage({
     throw new Error(recentErr.message);
   }
 
-  // 集計用（全終了履歴）
   const { data: allSessions, error: allErr } = await supabase
     .from("streak_sessions")
     .select("id, started_at, ended_at")
@@ -133,9 +132,15 @@ export default async function UserProfilePage({
   >;
 
   const sessionCount = allHistory.length;
-  const durations = allHistory.map((s) => durationSeconds(s.started_at, s.ended_at));
+  const durations = allHistory.map((s) =>
+    durationSeconds(s.started_at, s.ended_at)
+  );
   const bestSeconds = durations.length > 0 ? Math.max(...durations) : 0;
   const totalSeconds = durations.reduce((sum, sec) => sum + sec, 0);
+
+  const statusText =
+    (row.status_message ?? "").trim() ||
+    "ステータスメッセージはまだ設定されていません。";
 
   return (
     <Container>
@@ -153,7 +158,7 @@ export default async function UserProfilePage({
           </Link>
           <Link
             className="text-sm text-primary hover:underline"
-            href={`/dm/new?u=${encodeURIComponent(row.id)}`}
+            href={`/dm/new?userId=${encodeURIComponent(userId)}`}
           >
             DMを送る
           </Link>
@@ -164,11 +169,11 @@ export default async function UserProfilePage({
       </header>
 
       <div className="mt-6 grid gap-4">
-        {/* プロフィール情報 */}
         <Card>
           <CardHeader>
             <h2 className="font-semibold">プロフィール情報</h2>
           </CardHeader>
+
           <CardBody>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div className="shrink-0">
@@ -190,16 +195,16 @@ export default async function UserProfilePage({
                   {(row.display_name ?? "").trim() || "NoName"}
                 </div>
 
-                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm whitespace-pre-wrap break-words">
-                  {(row.status_message ?? "").trim() ||
-                    "ステータスメッセージはまだ設定されていません。"}
+                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm break-words">
+                  <LinkifiedText text={statusText} showPreview />
                 </div>
 
-                {/* 上部サマリー */}
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
                     <div className="text-xs text-muted-foreground">継続回数</div>
-                    <div className="mt-1 text-lg font-bold tabular-nums">{sessionCount}回</div>
+                    <div className="mt-1 text-lg font-bold tabular-nums">
+                      {sessionCount}回
+                    </div>
                   </div>
 
                   <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
@@ -226,7 +231,6 @@ export default async function UserProfilePage({
           </CardBody>
         </Card>
 
-        {/* 継続履歴 */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -236,6 +240,7 @@ export default async function UserProfilePage({
               </span>
             </div>
           </CardHeader>
+
           <CardBody>
             {history.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -251,7 +256,8 @@ export default async function UserProfilePage({
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold tabular-nums">
-                          継続時間: {formatDuration(durationSeconds(s.started_at, s.ended_at))}
+                          継続時間:{" "}
+                          {formatDuration(durationSeconds(s.started_at, s.ended_at))}
                         </div>
 
                         <div className="mt-1 text-xs text-muted-foreground tabular-nums break-words">
@@ -281,3 +287,4 @@ export default async function UserProfilePage({
     </Container>
   );
 }
+``

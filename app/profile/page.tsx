@@ -1,6 +1,6 @@
-// app/profile/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import LinkifiedText from "@/app/components/LinkifiedText";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -67,7 +67,6 @@ export default async function ProfilePage() {
     throw new Error(error?.message ?? "profile not found");
   }
 
-  // 履歴表示用（直近20件）
   const { data: recentSessions, error: recentErr } = await supabase
     .from("streak_sessions")
     .select("id, started_at, ended_at, end_reason")
@@ -80,7 +79,6 @@ export default async function ProfilePage() {
     throw new Error(recentErr.message);
   }
 
-  // 集計用（全終了履歴）
   const { data: allSessions, error: allErr } = await supabase
     .from("streak_sessions")
     .select("id, started_at, ended_at")
@@ -106,6 +104,10 @@ export default async function ProfilePage() {
   const bestSeconds = durations.length > 0 ? Math.max(...durations) : 0;
   const totalSeconds = durations.reduce((sum, sec) => sum + sec, 0);
 
+  const statusText =
+    (row.status_message ?? "").trim() ||
+    "ステータスメッセージはまだ設定されていません。";
+
   return (
     <Container>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -124,11 +126,11 @@ export default async function ProfilePage() {
       </header>
 
       <div className="mt-6 grid gap-4">
-        {/* プロフィール情報 */}
         <Card>
           <CardHeader>
             <h2 className="font-semibold">プロフィール情報</h2>
           </CardHeader>
+
           <CardBody>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div className="shrink-0">
@@ -150,12 +152,10 @@ export default async function ProfilePage() {
                   {(row.display_name ?? "").trim() || "NoName"}
                 </div>
 
-                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm whitespace-pre-wrap break-words">
-                  {(row.status_message ?? "").trim() ||
-                    "ステータスメッセージはまだ設定されていません。"}
+                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm break-words">
+                  <LinkifiedText text={statusText} showPreview />
                 </div>
 
-                {/* サマリー */}
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
                     <div className="text-xs text-muted-foreground">継続回数</div>
@@ -188,7 +188,6 @@ export default async function ProfilePage() {
           </CardBody>
         </Card>
 
-        {/* 継続履歴 */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -198,6 +197,7 @@ export default async function ProfilePage() {
               </span>
             </div>
           </CardHeader>
+
           <CardBody>
             {history.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -244,3 +244,4 @@ export default async function ProfilePage() {
     </Container>
   );
 }
+``
