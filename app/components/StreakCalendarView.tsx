@@ -124,6 +124,11 @@ export default function StreakCalendarView({
 
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 
+  const monthTotal = Object.values(grouped).reduce(
+    (sum, rows) => sum + rows.length,
+    0
+  );
+
   return (
     <div className="space-y-4 sm:space-y-5">
       {/* ヘッダー */}
@@ -139,7 +144,7 @@ export default function StreakCalendarView({
         <div className="flex flex-wrap gap-2 pt-1">
           {topLinks.map((link) => (
             <Link
-              key={`${link.href}-${link.label}`}
+              key={link.href}
               href={link.href}
               className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
             >
@@ -161,8 +166,16 @@ export default function StreakCalendarView({
                 ← 前
               </Link>
 
-              <div className="text-center text-lg sm:text-2xl font-bold tabular-nums">
-                {year}年 {month}月
+              <div className="flex flex-col items-center justify-center">
+                <div className="text-center text-lg sm:text-2xl font-bold tabular-nums">
+                  {year}年 {month}月
+                </div>
+                <div className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
+                  今月の終了回数:{" "}
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {monthTotal}
+                  </span>
+                </div>
               </div>
 
               <Link
@@ -295,7 +308,7 @@ export default function StreakCalendarView({
                   <li key={String(row.id)}>
                     <Link
                       href={`/results/${row.id}`}
-                      className="block rounded-xl border border-border bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition"
+                      className="block rounded-xl border border-border bg-background/50 px-3 py-3 hover:bg-secondary/30 transition"
                     >
                       <div className="text-sm font-semibold">
                         継続時間: {formatDuration(row.started_at, row.ended_at)}
@@ -327,3 +340,4 @@ export default function StreakCalendarView({
     </div>
   );
 }
+``
