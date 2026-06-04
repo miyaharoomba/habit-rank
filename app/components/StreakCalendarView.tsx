@@ -35,7 +35,9 @@ function ym(year: number, month: number) {
 }
 
 function ymd(date: Date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`;
 }
 
 function prevMonth(year: number, month: number) {
@@ -120,17 +122,24 @@ export default function StreakCalendarView({
   const prev = prevMonth(year, month);
   const next = nextMonth(year, month);
 
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+
   return (
     <div className="space-y-4 sm:space-y-5">
       {/* ヘッダー */}
       <header className="space-y-2">
-        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">{title}</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">{description}</p>
+        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">
+          {title}
+        </h1>
+
+        <p className="text-sm sm:text-base text-muted-foreground">
+          {description}
+        </p>
 
         <div className="flex flex-wrap gap-2 pt-1">
           {topLinks.map((link) => (
             <Link
-              key={link.href}
+              key={`${link.href}-${link.label}`}
               href={link.href}
               className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
             >
@@ -168,79 +177,95 @@ export default function StreakCalendarView({
 
         <CardBody>
           <div className="px-3 pb-3 sm:px-5 sm:pb-5">
-            <div className="mb-2 grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-[11px] sm:text-xs font-semibold text-muted-foreground">
-              <div>日</div>
-              <div>月</div>
-              <div>火</div>
-              <div>水</div>
-              <div>木</div>
-              <div>金</div>
-              <div>土</div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-              {cells.map((cell, idx) => {
-                if (!cell.date) {
-                  return (
-                    <div
-                      key={`blank-${idx}`}
-                      className="aspect-square rounded-2xl bg-transparent"
-                    />
-                  );
-                }
-
-                const key = ymd(cell.date);
-                const items = grouped[key] ?? [];
-                const isToday = key === todayKey;
-                const isSelected = key === selectedDay;
-
-                return (
-                  <Link
-                    key={key}
-                    href={buildHref(basePath, ym(year, month), key)}
+            {/* エクセル風グリッド */}
+            <div className="overflow-hidden rounded-xl border border-border">
+              {/* 曜日行 */}
+              <div className="grid grid-cols-7 bg-background/70">
+                {weekdays.map((w, idx) => (
+                  <div
+                    key={w}
                     className={[
-                      "relative aspect-square rounded-2xl border p-1.5 sm:p-2 transition",
-                      isSelected
-                        ? "border-primary bg-primary/10"
-                        : isToday
-                        ? "border-primary/60 bg-background"
-                        : "border-border bg-background hover:bg-secondary/30",
+                      "py-2 text-center text-[11px] sm:text-xs font-semibold text-muted-foreground",
+                      idx !== 6 ? "border-r border-border" : "",
                     ].join(" ")}
                   >
-                    <div className="text-sm sm:text-lg font-bold tabular-nums leading-none">
-                      {cell.date.getDate()}
-                    </div>
+                    {w}
+                  </div>
+                ))}
+              </div>
 
-                    {items.length > 0 ? (
-                      <div className="absolute right-1.5 top-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold text-primary leading-none">
-                        {items.length}
+              {/* 日付グリッド */}
+              <div className="grid grid-cols-7 border-t border-border">
+                {cells.map((cell, idx) => {
+                  const isLastCol = idx % 7 === 6;
+
+                  if (!cell.date) {
+                    return (
+                      <div
+                        key={`blank-${idx}`}
+                        className={[
+                          "aspect-square bg-background/30",
+                          !isLastCol ? "border-r border-border" : "",
+                          "border-b border-border",
+                        ].join(" ")}
+                      />
+                    );
+                  }
+
+                  const key = ymd(cell.date);
+                  const items = grouped[key] ?? [];
+                  const isToday = key === todayKey;
+                  const isSelected = key === selectedDay;
+
+                  return (
+                    <Link
+                      key={key}
+                      href={buildHref(basePath, ym(year, month), key)}
+                      className={[
+                        "relative aspect-square p-1.5 sm:p-2 transition",
+                        !isLastCol ? "border-r border-border" : "",
+                        "border-b border-border",
+                        isSelected
+                          ? "bg-primary/10"
+                          : isToday
+                          ? "bg-secondary/30"
+                          : "bg-background hover:bg-secondary/20",
+                      ].join(" ")}
+                    >
+                      {/* 今日の枠 */}
+                      {isToday && !isSelected ? (
+                        <div className="pointer-events-none absolute inset-1 rounded-sm border border-primary/60" />
+                      ) : null}
+
+                      {/* 選択日の枠 */}
+                      {isSelected ? (
+                        <div className="pointer-events-none absolute inset-0 border-2 border-primary" />
+                      ) : null}
+
+                      {/* 日付 */}
+                      <div className="relative z-10 text-sm sm:text-lg font-bold tabular-nums leading-none">
+                        {cell.date.getDate()}
                       </div>
-                    ) : null}
 
-                    <div className="absolute left-1.5 right-1.5 bottom-1.5 flex items-center justify-center gap-1">
+                      {/* 件数 */}
                       {items.length > 0 ? (
-                        <>
-                          {items.slice(0, 3).map((_, dotIdx) => (
-                            <span
-                              key={`${key}-dot-${dotIdx}`}
-                              className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-primary"
-                            />
-                          ))}
-                          {items.length > 3 ? (
-                            <span className="text-[9px] sm:text-[10px] text-primary font-semibold">
-                              +{items.length - 3}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="text-[10px] sm:text-[11px] text-muted-foreground/50">
-                          -
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
+                        <div className="absolute right-1 top-1 z-10 rounded bg-primary/10 px-1 py-[1px] text-[9px] sm:text-[10px] font-semibold text-primary leading-none">
+                          {items.length}
+                        </div>
+                      ) : null}
+
+                      {/* 下部ライン */}
+                      <div className="absolute left-1.5 right-1.5 bottom-1.5 z-10">
+                        {items.length > 0 ? (
+                          <div className="h-[3px] rounded-full bg-primary/80" />
+                        ) : (
+                          <div className="h-[3px] w-full bg-transparent" />
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </CardBody>
@@ -270,7 +295,7 @@ export default function StreakCalendarView({
                   <li key={String(row.id)}>
                     <Link
                       href={`/results/${row.id}`}
-                      className="block rounded-lg border border-border bg-background/80 p-3 transition hover:bg-background"
+                      className="block rounded-xl border border-border bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition"
                     >
                       <div className="text-sm font-semibold">
                         継続時間: {formatDuration(row.started_at, row.ended_at)}
@@ -302,4 +327,3 @@ export default function StreakCalendarView({
     </div>
   );
 }
-``
