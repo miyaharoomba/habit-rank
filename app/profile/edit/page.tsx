@@ -1,10 +1,12 @@
-// app/profile/edit/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import PendingSubmitButton from "@/app/components/ui/PendingSubmitButton";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+
+const MAX_AVATAR_SIZE_MB = 15;
+const MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024;
 
 function safeExt(filename: string) {
   const last = filename.split(".").pop() || "";
@@ -37,7 +39,18 @@ function avatarUrl(path: string | null) {
   return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
 }
 
-export default async function ProfileEditPage() {
+function buildErrorRedirect(message: string) {
+  return `/profile/edit?error=${encodeURIComponent(message)}`;
+}
+
+export default async function ProfileEditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const sp = await searchParams;
+  const errorMessage = typeof sp.error === "string" ? sp.error : "";
+
   const supabase = await createClient();
 
   const {
@@ -68,13 +81,15 @@ export default async function ProfileEditPage() {
     const file = formData.get("avatar");
 
     if (!rawName) {
-      throw new Error("名前は必須です。");
+      redirect(buildErrorRedirect("名前は必須です。"));
     }
+
     if (rawName.length > 20) {
-      throw new Error("名前は20文字以内です。");
+      redirect(buildErrorRedirect("名前は20文字以内です。"));
     }
+
     if (rawStatus.length > 120) {
-      throw new Error("ステータスメッセージは120文字以内です。");
+      redirect(buildErrorRedirect("ステータスメッセージは120文字以内です。"));
     }
 
     let avatarPath: string | null = null;
@@ -93,7 +108,19 @@ export default async function ProfileEditPage() {
       const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
       if (!allowed.includes(mime)) {
-        throw new Error("アイコン画像は jpg / png / webp / gif のみ対応です。");
+        redirect(
+          buildErrorRedirect(
+            "アイコン画像は jpg / png / webp / gif のみ対応です。"
+          )
+        );
+      }
+
+      if (file.size > MAX_AVATAR_SIZE_BYTES) {
+        redirect(
+          buildErrorRedirect(
+            `アイコン画像のサイズが大きすぎます。${MAX_AVATAR_SIZE_MB}MB以下の画像を選んでください。`
+          )
+        );
       }
 
       const ext = safeExt(file.name);
@@ -107,7 +134,11 @@ export default async function ProfileEditPage() {
         });
 
       if (upErr) {
-        throw new Error(upErr.message);
+        redirect(
+          buildErrorRedirect(
+            "アイコン画像のアップロードに失敗しました。サイズや形式を確認して再度お試しください。"
+          )
+        );
       }
 
       avatarPath = objectPath;
@@ -123,7 +154,7 @@ export default async function ProfileEditPage() {
       .eq("id", user.id);
 
     if (error) {
-      throw new Error(error.message);
+      redirect(buildErrorRedirect("プロフィールの保存に失敗しました。"));
     }
 
     redirect("/profile");
@@ -167,7 +198,14 @@ export default async function ProfileEditPage() {
           <CardHeader>
             <h2 className="font-semibold">編集フォーム</h2>
           </CardHeader>
+
           <CardBody>
+            {errorMessage ? (
+              <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {errorMessage}
+              </div>
+            ) : null}
+
             <form action={saveProfileAction} className="space-y-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <div className="shrink-0">
@@ -194,7 +232,7 @@ export default async function ProfileEditPage() {
                       className="block w-full text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      jpg / png / webp / gif、最大5MB
+                      jpg / png / webp / gif、最大{MAX_AVATAR_SIZE_MB}MB
                     </p>
                   </div>
 
@@ -211,7 +249,9 @@ export default async function ProfileEditPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">ステータスメッセージ</label>
+                    <label className="text-sm font-medium">
+                      ステータスメッセージ
+                    </label>
                     <textarea
                       name="status_message"
                       rows={4}
@@ -246,3 +286,4 @@ export default async function ProfileEditPage() {
     </Container>
   );
 }
+``
