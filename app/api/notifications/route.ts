@@ -11,7 +11,6 @@ import { createClient } from "@/lib/supabase/server";
  * body: { ids: string[] }
  * - 指定IDを既読にする（notification_reads に挿入）
  */
-
 export async function GET(request: Request) {
   const supabase = await createClient();
 
@@ -45,31 +44,15 @@ export async function GET(request: Request) {
 
   const notifications = notifs ?? [];
 
-  // streak_end の重複を避ける（同一 session_id が複数通知化されても1つに寄せる）
-  const deduped: any[] = [];
-  const seenKeys = new Set<string>();
-
-  for (const n of notifications) {
-    const key =
-      n.type === "streak_end" && n.session_id
-        ? `streak_end:${n.session_id}`
-        : `raw:${n.id}`;
-
-    if (seenKeys.has(key)) continue;
-    seenKeys.add(key);
-    deduped.push(n);
-  }
-
-  const ids = deduped.map((n: any) => n.id);
-
-  const readIdsTarget =
+  const ids = notifications.map((n: any) => n.id);
+  const targetIds =
     ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"];
 
   const { data: reads, error: rErr } = await supabase
     .from("notification_reads")
     .select("notification_id")
     .eq("user_id", user.id)
-    .in("notification_id", readIdsTarget);
+    .in("notification_id", targetIds);
 
   if (rErr) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
@@ -79,7 +62,7 @@ export async function GET(request: Request) {
 
   const actorIds = Array.from(
     new Set(
-      deduped
+      notifications
         .map((n: any) => n.actor_id)
         .filter(Boolean)
     )
@@ -102,7 +85,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const items = deduped.map((n: any) => {
+  const items = notifications.map((n: any) => {
     const notificationUrl =
       n.type === "streak_end" && n.session_id
         ? `/results/${n.session_id}`

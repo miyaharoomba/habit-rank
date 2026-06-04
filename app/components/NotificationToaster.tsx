@@ -35,6 +35,10 @@ function isAdminBroadcast(n: NotifItem) {
   return n.type === "admin_broadcast";
 }
 
+function isToastTarget(n: NotifItem) {
+  return n.type === "admin_broadcast" || n.type === "streak_end";
+}
+
 function routeFor(n: NotifItem) {
   if (n.url && n.url.trim().length > 0) return n.url;
   if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
@@ -51,33 +55,26 @@ function routeFor(n: NotifItem) {
 function titleFor(n: NotifItem) {
   if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
   if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
-
   if (n.type === "admin_broadcast") {
     return (n.message_preview ?? "").trim() || "管理者からのお知らせ";
   }
-
   if (n.type === "support_reply") {
     return "管理者から返信";
   }
-
   return "通知";
 }
 
 function bodyFor(n: NotifItem) {
   const txt = (n.message_preview ?? "").trim();
-
   if (n.type === "streak_end") {
     return txt ? `理由: ${txt}` : "理由: -";
   }
-
   if (n.type === "admin_broadcast") {
     return "タップして詳細を確認してください。";
   }
-
   if (n.type === "support_reply") {
     return txt || "問い合わせに返信がありました。";
   }
-
   return txt || "通知が届きました";
 }
 
@@ -93,11 +90,9 @@ export default function NotificationToaster({
   maxToasts?: number;
 }) {
   const router = useRouter();
-
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
-
   const timersRef = useRef<Map<string, number>>(new Map());
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -114,11 +109,9 @@ export default function NotificationToaster({
   const enqueue = (t: Toast) => {
     setToasts((prev) => {
       if (prev.some((x) => x.id === t.id)) return prev;
-
       const next = [t, ...prev];
       const sticky = next.filter((x) => x.sticky);
       const normal = next.filter((x) => !x.sticky).slice(0, maxToasts);
-
       return [...sticky, ...normal];
     });
 
@@ -160,16 +153,17 @@ export default function NotificationToaster({
       const items = json.items ?? [];
 
       if (!initializedRef.current) {
+        // 初回でも未読の継続終了通知・管理者通知は出す
         for (const n of items) {
           seenRef.current.add(n.id);
 
-          if (isAdminBroadcast(n) && !n.read) {
+          if (!n.read && isToastTarget(n)) {
             enqueue({
               id: n.id,
               title: titleFor(n),
               body: bodyFor(n),
               href: routeFor(n),
-              sticky: true,
+              sticky: isAdminBroadcast(n),
             });
           }
         }
@@ -181,6 +175,9 @@ export default function NotificationToaster({
       for (const n of items) {
         if (seenRef.current.has(n.id)) continue;
         seenRef.current.add(n.id);
+
+        if (n.read) continue;
+        if (!isToastTarget(n)) continue;
 
         enqueue({
           id: n.id,
@@ -212,11 +209,9 @@ export default function NotificationToaster({
       alive = false;
       window.clearInterval(id);
       abortRef.current?.abort();
-
       timersRef.current.forEach((t) => window.clearTimeout(t));
       timersRef.current.clear();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollMs, limit]);
 
   const onClickToast = async (t: Toast) => {
@@ -234,9 +229,7 @@ export default function NotificationToaster({
           key={t.id}
           className={[
             "rounded-xl border shadow-glow px-4 py-3 backdrop-blur",
-            t.sticky
-              ? "border-primary/40 bg-card/95"
-              : "border-border bg-card/90",
+            t.sticky ? "border-primary/40 bg-card/95" : "border-border bg-card/90",
           ].join(" ")}
           role="status"
         >
