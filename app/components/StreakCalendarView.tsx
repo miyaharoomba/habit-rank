@@ -58,21 +58,27 @@ function jstDayKey(value: string) {
   )}`;
 }
 
-function formatDuration(startedAt: string, endedAt: string | null) {
-  if (!endedAt) return "未終了";
-
+function durationSeconds(startedAt: string, endedAt: string | null) {
+  if (!endedAt) return 0;
   const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  return Math.max(0, Math.floor(ms / 1000));
+}
 
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+function formatDurationFromSeconds(totalSeconds: number) {
+  const sec = Math.max(0, Math.floor(totalSeconds));
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
 
   if (days > 0) return `${days}日 ${hours}時間 ${minutes}分 ${seconds}秒`;
   if (hours > 0) return `${hours}時間 ${minutes}分 ${seconds}秒`;
   if (minutes > 0) return `${minutes}分 ${seconds}秒`;
   return `${seconds}秒`;
+}
+
+function formatDuration(startedAt: string, endedAt: string | null) {
+  return formatDurationFromSeconds(durationSeconds(startedAt, endedAt));
 }
 
 function buildCalendarCells(year: number, month: number) {
@@ -124,8 +130,10 @@ export default function StreakCalendarView({
 
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
 
-  const monthTotal = Object.values(grouped).reduce(
-    (sum, rows) => sum + rows.length,
+  const monthRows = Object.values(grouped).flat();
+  const monthTotalCount = monthRows.length;
+  const monthTotalSeconds = monthRows.reduce(
+    (sum, row) => sum + durationSeconds(row.started_at, row.ended_at),
     0
   );
 
@@ -170,10 +178,19 @@ export default function StreakCalendarView({
                 <div className="text-center text-lg sm:text-2xl font-bold tabular-nums">
                   {year}年 {month}月
                 </div>
-                <div className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
-                  今月の終了回数:{" "}
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {monthTotal}
+
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-muted-foreground">
+                  <span>
+                    今月の終了回数:{" "}
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {monthTotalCount}
+                    </span>
+                  </span>
+                  <span>
+                    合計時間:{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatDurationFromSeconds(monthTotalSeconds)}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -308,7 +325,7 @@ export default function StreakCalendarView({
                   <li key={String(row.id)}>
                     <Link
                       href={`/results/${row.id}`}
-                      className="block rounded-xl border border-border bg-background/50 px-3 py-3 hover:bg-secondary/30 transition"
+                      className="block rounded-xl border border-border bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition"
                     >
                       <div className="text-sm font-semibold">
                         継続時間: {formatDuration(row.started_at, row.ended_at)}
