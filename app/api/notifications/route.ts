@@ -43,16 +43,15 @@ export async function GET(request: Request) {
   }
 
   const notifications = notifs ?? [];
-
   const ids = notifications.map((n: any) => n.id);
-  const targetIds =
+  const readIdsTarget =
     ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"];
 
   const { data: reads, error: rErr } = await supabase
     .from("notification_reads")
     .select("notification_id")
     .eq("user_id", user.id)
-    .in("notification_id", targetIds);
+    .in("notification_id", readIdsTarget);
 
   if (rErr) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });

@@ -4,32 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-async function triggerDispatchSoon(baseUrl: string) {
-  await new Promise((r) => setTimeout(r, 500));
-
-  const resp = await fetch(`${baseUrl}/api/push/dispatch`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
-    },
-    cache: "no-store",
-  });
-
-  const text = await resp.text().catch(() => "");
-  return {
-    ok: resp.ok,
-    status: resp.status,
-    body: text,
-  };
-}
-
-function resolveBaseUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
-
 /**
  * 継続開始
  */
@@ -62,7 +36,9 @@ export async function startSession() {
  * 継続終了
  * - mode=restart: 終了して次を自動開始
  * - mode=stop:    完全に終了
- * - 終了後、全ユーザー向けの通知を1件追加する
+ * - FormData.get は同名フィールドが複数あると先頭を拾うことがあるため、
+ *   getAll して「最後の非空」を採用する
+ * - 終了後、notifications に全体通知(recipient_id = null)を追加する
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -96,42 +72,24 @@ export async function finishSession(formData: FormData) {
     throw new Error("finished session id not found");
   }
 
-  // 全体通知を追加
-  try {
-    const { error: notifErr } = await supabase.from("notifications").insert({
-      type: "streak_end",
-      actor_id: user.id,
-      recipient_id: null, // 全ユーザー向け
-      session_id: finishedSessionId,
-      message_preview: reason,
-      thread_id: null,
-      announcement_id: null,
-      support_thread_id: null,
-    });
+  // 通知ベルで他ユーザーの終了通知が見えるよう、全体通知を1件追加
+  const { error: notifErr } = await supabase.from("notifications").insert({
+    type: "streak_end",
+    actor_id: user.id,
+    recipient_id: null,
+    thread_id: null,
+    session_id: finishedSessionId,
+    announcement_id: null,
+    support_thread_id: null,
+    message_preview: reason,
+  });
 
-    if (notifErr) {
-      console.error("finishSession notifications insert failed:", notifErr.message);
-    } else {
-      try {
-        const baseUrl = resolveBaseUrl();
-        const dispatchResult = await triggerDispatchSoon(baseUrl);
-        console.log(
-          "finishSession triggerDispatchSoon:",
-          dispatchResult.status,
-          dispatchResult.body
-        );
-      } catch (dispatchErr) {
-        console.error("finishSession triggerDispatchSoon failed:", dispatchErr);
-      }
-    }
-  } catch (e) {
-    console.error("finishSession global notification failed:", e);
+  if (notifErr) {
+    console.error("finishSession notifications insert failed:", notifErr.message);
   }
 
   revalidatePath("/app");
   revalidatePath("/history");
-  revalidatePath(`/results/${finishedSessionId}`);
-
   redirect(`/results/${finishedSessionId}`);
 }
 
@@ -165,3 +123,4 @@ export async function setDisplayName(formData: FormData) {
 
   revalidatePath("/app");
 }
+``
