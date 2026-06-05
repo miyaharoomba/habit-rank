@@ -171,13 +171,13 @@ export default async function DmThreadPage({
     (profileMap.get(otherUserId)?.display_name ?? "").trim() || "NoName";
 
   // 3) 既読 / 送信取り消しを含めてメッセージ取得
-  const { data: msgs, error: msgErr } = await supabase
-    .from("dm_messages")
-    .select(
-      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, unsent_at"
-    )
-    .eq("thread_id", threadId)
-    .order("created_at", { ascending: true });
+ const { data: msgs, error: msgErr } = await supabase
+  .from("dm_messages")
+  .select(
+    "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, unsent_at"
+  )
+  .eq("thread_id", threadId)
+  .order("created_at", { ascending: true });
 
   if (msgErr) {
     return (

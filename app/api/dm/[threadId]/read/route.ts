@@ -43,8 +43,7 @@ export async function POST(
     .update({ read_at: new Date().toISOString() })
     .eq("thread_id", threadId)
     .neq("sender_id", user.id)
-    .is("read_at", null)
-    .is("unsent_at", null);
+    .is("read_at", null);
 
   if (updErr) {
     return NextResponse.json({ error: updErr.message }, { status: 500 });
