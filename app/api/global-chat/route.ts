@@ -8,7 +8,7 @@ type ChatRow = {
   created_at: string;
   message_type: "text" | "image" | "video" | "file";
   image_url: string | null; // storage path を保存
-  file_url: string | null;  // storage path を保存
+  file_url: string | null; // storage path を保存
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
@@ -72,6 +72,10 @@ export async function GET(request: Request) {
     });
   }
 
+  // 管理者判定
+  const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
+  const canModerate = !adminErr && !!isAdmin;
+
   const items = rows.map((r) => {
     const profile = profileMap.get(r.user_id);
 
@@ -91,7 +95,7 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({ items });
+  return NextResponse.json({ items, canModerate });
 }
 
 export async function POST(request: Request) {

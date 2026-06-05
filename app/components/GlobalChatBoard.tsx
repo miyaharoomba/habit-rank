@@ -28,6 +28,7 @@ type ChatItem = {
 
 type ApiResponse = {
   items: ChatItem[];
+  canModerate?: boolean;
 };
 
 function bytes(size: number) {
@@ -41,9 +42,7 @@ function bytes(size: number) {
 }
 
 function profileHref(userId: string, myUserId: string) {
-  return userId === myUserId
-    ? "/profile"
-    : `/users/${encodeURIComponent(userId)}`;
+  return userId === myUserId ? "/profile" : `/users/${encodeURIComponent(userId)}`;
 }
 
 function Avatar({
@@ -110,28 +109,48 @@ function NameLine({
   );
 }
 
+function DeleteButton({
+  visible,
+  deleting,
+  onClick,
+}: {
+  visible: boolean;
+  deleting: boolean;
+  onClick: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={deleting}
+      className="ml-auto rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive hover:opacity-90 disabled:opacity-50"
+    >
+      {deleting ? "削除中…" : "削除"}
+    </button>
+  );
+}
+
 function BubbleFrame({
   mine,
   avatar,
   header,
   meta,
+  deleteButton,
   children,
 }: {
   mine: boolean;
   avatar: React.ReactNode;
   header: React.ReactNode;
   meta: React.ReactNode;
+  deleteButton?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className={[
-        "flex gap-3",
-        mine ? "justify-end" : "justify-start",
-      ].join(" ")}
-    >
+    <div className={["flex gap-3", mine ? "justify-end" : "justify-start"].join(" ")}>
       {!mine && avatar}
-      <div className={["min-w-0 max-w-[85%]", mine ? "items-end" : ""].join(" ")}>
+      <div className="min-w-0 max-w-[85%]">
         <div
           className={[
             "mb-1 flex items-center gap-2",
@@ -140,6 +159,7 @@ function BubbleFrame({
         >
           {header}
           {meta}
+          {deleteButton}
         </div>
         {children}
       </div>
@@ -152,10 +172,16 @@ function TextBubble({
   item,
   mine,
   myUserId,
+  canModerate,
+  deleting,
+  onDelete,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
+  canModerate: boolean;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   return (
     <BubbleFrame
@@ -177,6 +203,9 @@ function TextBubble({
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
+      deleteButton={
+        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
+      }
     >
       <div
         className={[
@@ -195,11 +224,17 @@ function ImageBubble({
   mine,
   myUserId,
   onOpen,
+  canModerate,
+  deleting,
+  onDelete,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
   onOpen: (kind: "image" | "video", url: string) => void;
+  canModerate: boolean;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   if (!item.image_url) return null;
 
@@ -223,6 +258,9 @@ function ImageBubble({
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
+      deleteButton={
+        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
+      }
     >
       <div
         className={[
@@ -235,17 +273,18 @@ function ImageBubble({
           onClick={() => onOpen("image", item.image_url!)}
           className="block w-full text-left"
           aria-label="画像を拡大表示"
-          title="タップで拡大"
         >
           <img
-            src={item.image_url}
-            alt={item.body || "image"}
-            className="block max-h-[360px] w-full object-cover"
+            src={item.image_url!}
+            alt={item.body?.trim() ? item.body : "画像"
+            }
+            className="block w-full"
+            loading="lazy"
           />
         </button>
 
         {item.body?.trim() ? (
-          <div className="px-4 py-3">
+          <div className="px-4 py-3 pt-0">
             <LinkifiedText text={item.body} />
           </div>
         ) : null}
@@ -259,11 +298,17 @@ function VideoBubble({
   mine,
   myUserId,
   onOpen,
+  canModerate,
+  deleting,
+  onDelete,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
   onOpen: (kind: "image" | "video", url: string) => void;
+  canModerate: boolean;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   if (!item.file_url) return null;
 
@@ -287,6 +332,9 @@ function VideoBubble({
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
+      deleteButton={
+        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
+      }
     >
       <div
         className={[
@@ -294,11 +342,7 @@ function VideoBubble({
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
-        <video
-          src={item.file_url}
-          controls
-          className="block max-h-[360px] w-full bg-black"
-        />
+        {item.file_url}
         <button
           type="button"
           onClick={() => onOpen("video", item.file_url!)}
@@ -321,10 +365,16 @@ function FileBubble({
   item,
   mine,
   myUserId,
+  canModerate,
+  deleting,
+  onDelete,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
+  canModerate: boolean;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   if (!item.file_url) return null;
 
@@ -350,6 +400,9 @@ function FileBubble({
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
+      deleteButton={
+        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
+      }
     >
       <div
         className={[
@@ -360,8 +413,8 @@ function FileBubble({
         <a
           href={item.file_url}
           target="_blank"
-          rel="noopener noreferrer"
-          className="block rounded-xl border border-border bg-background/70 px-4 py-3 hover:bg-background transition"
+          rel="noreferrer"
+          className="block"
         >
           <div className="text-sm font-semibold break-all">
             {item.file_name || "file"}
@@ -397,7 +450,11 @@ export default function GlobalChatBoard({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(null);
+  const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(
+    null
+  );
+  const [canModerate, setCanModerate] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
@@ -409,9 +466,11 @@ export default function GlobalChatBoard({
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const json = (await res.json()) as ApiResponse;
       const rows = [...(json.items ?? [])].reverse();
       setItems(rows);
+      setCanModerate(!!json.canModerate);
       setError(null);
     } catch (e: any) {
       setError(e?.message ?? "fetch failed");
@@ -504,6 +563,33 @@ export default function GlobalChatBoard({
     }
   };
 
+  const deleteMessage = async (messageId: string) => {
+    if (!canModerate || deletingId) return;
+
+    const ok = window.confirm("このメッセージを削除しますか？");
+    if (!ok) return;
+
+    setDeletingId(messageId);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/global-chat/${messageId}`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`);
+      }
+
+      await fetchMessages();
+    } catch (e: any) {
+      setError(e?.message ?? "削除に失敗しました。");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -551,9 +637,10 @@ export default function GlobalChatBoard({
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold">掲示板</h2>
+            <h3 className="text-lg font-bold tracking-tight">掲示板</h3>
             <p className="text-sm text-muted-foreground">全員が読める公開チャット</p>
           </div>
+
           <div className="text-xs text-muted-foreground">
             {loading ? "読み込み中…" : `${items.length}件`}
           </div>
@@ -571,6 +658,7 @@ export default function GlobalChatBoard({
               items.map((item) => {
                 const mine = item.user_id === myUserId;
                 const type = item.message_type ?? "text";
+                const deleting = deletingId === item.id;
 
                 if (type === "image" && item.image_url) {
                   return (
@@ -580,6 +668,9 @@ export default function GlobalChatBoard({
                       mine={mine}
                       myUserId={myUserId}
                       onOpen={(kind, url) => setModal({ kind, url })}
+                      canModerate={canModerate}
+                      deleting={deleting}
+                      onDelete={() => deleteMessage(item.id)}
                     />
                   );
                 }
@@ -592,6 +683,9 @@ export default function GlobalChatBoard({
                       mine={mine}
                       myUserId={myUserId}
                       onOpen={(kind, url) => setModal({ kind, url })}
+                      canModerate={canModerate}
+                      deleting={deleting}
+                      onDelete={() => deleteMessage(item.id)}
                     />
                   );
                 }
@@ -603,6 +697,9 @@ export default function GlobalChatBoard({
                       item={item}
                       mine={mine}
                       myUserId={myUserId}
+                      canModerate={canModerate}
+                      deleting={deleting}
+                      onDelete={() => deleteMessage(item.id)}
                     />
                   );
                 }
@@ -613,10 +710,14 @@ export default function GlobalChatBoard({
                     item={item}
                     mine={mine}
                     myUserId={myUserId}
+                    canModerate={canModerate}
+                    deleting={deleting}
+                    onDelete={() => deleteMessage(item.id)}
                   />
                 );
               })
             )}
+
             <div ref={bottomRef} />
           </div>
 
@@ -689,4 +790,3 @@ export default function GlobalChatBoard({
     </>
   );
 }
-``
