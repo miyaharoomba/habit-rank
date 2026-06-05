@@ -66,15 +66,19 @@ function titleFor(n: NotifItem) {
 
 function bodyFor(n: NotifItem) {
   const txt = (n.message_preview ?? "").trim();
+
   if (n.type === "streak_end") {
     return txt ? `理由: ${txt}` : "理由: -";
   }
+
   if (n.type === "admin_broadcast") {
     return "タップして詳細を確認してください。";
   }
+
   if (n.type === "support_reply") {
     return txt || "問い合わせに返信がありました。";
   }
+
   return txt || "通知が届きました";
 }
 
@@ -263,3 +267,4 @@ export default function NotificationToaster({
     </div>
   );
 }
+``

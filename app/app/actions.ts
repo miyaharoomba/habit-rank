@@ -58,7 +58,7 @@ export async function startSession() {
  * 継続終了
  * - mode=restart: 終了して次を自動開始
  * - mode=stop:    完全に終了
- * - 通知は service role で全体通知として insert する
+ * - 一般ユーザーでも確実に通知が入るよう、notifications への insert は service role で実行
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -94,7 +94,7 @@ export async function finishSession(formData: FormData) {
   }
 
   // ここが重要:
-  // 一般ユーザーでも確実に通知が入るよう、service role で notifications に insert
+  // 一般ユーザーでも絶対に通知が入るよう、service role で全体通知を insert
   try {
     const admin = getAdminClient();
 
@@ -124,9 +124,6 @@ export async function finishSession(formData: FormData) {
 
 /**
  * 表示名を保存（profiles.display_name）
- * - 空文字は禁止
- * - 長すぎ防止
- * - upsert（無ければ作る、あれば更新）
  */
 export async function setDisplayName(formData: FormData) {
   const supabase = await createClient();
@@ -154,4 +151,3 @@ export async function setDisplayName(formData: FormData) {
 
   revalidatePath("/app");
 }
-``
