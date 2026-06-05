@@ -5,11 +5,9 @@ import { createClient } from "@/lib/supabase/server";
  * GET /api/notifications?limit=20
  * - 自分宛て通知 + 全体通知(recipient_id is null) を新しい順で返す
  * - notification_reads を見て未読数を返す
- * - 各通知に url を付けて返す
  *
  * POST /api/notifications
- * body: { ids: string[] }
- * - 指定IDを既読にする（notification_reads に挿入）
+ * - 指定IDを既読化
  */
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -29,6 +27,7 @@ export async function GET(request: Request) {
     ? Math.max(1, Math.min(rawLimit, 50))
     : 20;
 
+  // 自分宛て + 全体通知
   const { data: notifs, error: nErr } = await supabase
     .from("notifications")
     .select(
@@ -44,14 +43,15 @@ export async function GET(request: Request) {
 
   const notifications = notifs ?? [];
   const ids = notifications.map((n: any) => n.id);
-  const readIdsTarget =
+
+  const targetIds =
     ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"];
 
   const { data: reads, error: rErr } = await supabase
     .from("notification_reads")
     .select("notification_id")
     .eq("user_id", user.id)
-    .in("notification_id", readIdsTarget);
+    .in("notification_id", targetIds);
 
   if (rErr) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
