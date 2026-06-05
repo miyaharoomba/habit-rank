@@ -16,7 +16,6 @@ type MessageRow = {
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
-  read_at: string | null;
   unsent_at: string | null;
 };
 
@@ -42,7 +41,6 @@ type MessageForClient = {
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
-  read_at?: string | null;
   unsent_at?: string | null;
 };
 
@@ -80,7 +78,6 @@ export default async function DmThreadPage({
 
     const reason = String(formData.get("reason") ?? "").trim();
     const supabase = await createClient();
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -141,20 +138,6 @@ export default async function DmThreadPage({
   const otherUserId =
     thread.user_low === user.id ? thread.user_high : thread.user_low;
 
-  // ★ サーバー側で先に既読化
-  // 相手が送った未読メッセージを、画面表示のタイミングで既読にする
-  const { error: markErr } = await supabase
-    .from("dm_messages")
-    .update({ read_at: new Date().toISOString() })
-    .eq("thread_id", threadId)
-    .neq("sender_id", user.id)
-    .is("read_at", null)
-    .is("unsent_at", null);
-
-  if (markErr) {
-    console.error("dm read mark failed:", markErr.message);
-  }
-
   // 2) 参加ユーザーのプロフィールをまとめて取得
   const userIds = [user.id, otherUserId];
   const { data: profiles } = await supabase
@@ -170,14 +153,14 @@ export default async function DmThreadPage({
   const otherName =
     (profileMap.get(otherUserId)?.display_name ?? "").trim() || "NoName";
 
-  // 3) 既読 / 送信取り消しを含めてメッセージ取得
- const { data: msgs, error: msgErr } = await supabase
-  .from("dm_messages")
-  .select(
-    "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, unsent_at"
-  )
-  .eq("thread_id", threadId)
-  .order("created_at", { ascending: true });
+  // 3) メッセージ取得（送信取り消し含む）
+  const { data: msgs, error: msgErr } = await supabase
+    .from("dm_messages")
+    .select(
+      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, unsent_at"
+    )
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
 
   if (msgErr) {
     return (
@@ -224,7 +207,6 @@ export default async function DmThreadPage({
       file_size: m.file_size,
       image_url: null,
       file_url: null,
-      read_at: m.read_at,
       unsent_at: m.unsent_at,
     };
 
@@ -323,4 +305,3 @@ export default async function DmThreadPage({
     </Container>
   );
 }
-``

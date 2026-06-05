@@ -31,7 +31,6 @@ type Message = {
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
-  read_at?: string | null;
   unsent_at?: string | null;
 };
 
@@ -71,6 +70,7 @@ function AvatarLink({
   url: string | null;
 }) {
   const initial = (name ?? "?").trim().slice(0, 1) || "?";
+
   return (
     <Link href={href} className="shrink-0">
       {url ? (
@@ -120,23 +120,13 @@ function SubmitButton({ onSettled }: { onSettled: () => void }) {
   return <Button type="submit">{pending ? "送信中…" : "送信"}</Button>;
 }
 
-function BubbleMeta({
-  createdAt,
-  mine,
-  readAt,
-}: {
-  createdAt: string;
-  mine: boolean;
-  readAt?: string | null;
-}) {
+function BubbleMeta({ createdAt }: { createdAt: string }) {
   return (
-    <div className="flex items-center gap-2 text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
-      <span>{formatJst(createdAt)}</span>
-      {mine ? <span>{readAt ? "既読" : "未読"}</span> : null}
+    <div className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+      {formatJst(createdAt)}
     </div>
   );
 }
-
 
 function UnsendButton({
   visible,
@@ -204,7 +194,6 @@ function BubbleText({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  readAt,
   showUnsend,
   unsendBusy,
   onUnsend,
@@ -215,7 +204,6 @@ function BubbleText({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
-  readAt?: string | null;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -231,7 +219,7 @@ function BubbleText({
         />
       }
       header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
-      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
@@ -254,14 +242,12 @@ function BubbleUnsent({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  readAt,
 }: {
   mine: boolean;
   createdAt: string;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
-  readAt?: string | null;
 }) {
   return (
     <BubbleFrame
@@ -274,7 +260,7 @@ function BubbleUnsent({
         />
       }
       header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
-      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
         className={[
@@ -297,7 +283,6 @@ function BubbleImage({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  readAt,
   showUnsend,
   unsendBusy,
   onUnsend,
@@ -310,7 +295,6 @@ function BubbleImage({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
-  readAt?: string | null;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -326,7 +310,7 @@ function BubbleImage({
         />
       }
       header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
-      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
@@ -370,7 +354,6 @@ function BubbleVideo({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  readAt,
   showUnsend,
   unsendBusy,
   onUnsend,
@@ -383,7 +366,6 @@ function BubbleVideo({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
-  readAt?: string | null;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -399,7 +381,7 @@ function BubbleVideo({
         />
       }
       header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
-      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
@@ -440,7 +422,6 @@ function BubbleFile({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  readAt,
   showUnsend,
   unsendBusy,
   onUnsend,
@@ -455,7 +436,6 @@ function BubbleFile({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
-  readAt?: string | null;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -473,7 +453,7 @@ function BubbleFile({
         />
       }
       header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
-      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
@@ -597,29 +577,6 @@ export default function DmChatClient({
 
     return () => window.clearInterval(id);
   }, [router, threadId]);
-
-  // スレッドを見たら既読化
-  useEffect(() => {
-    let mounted = true;
-
-    const markRead = async () => {
-      try {
-        await fetch(`/api/dm/${threadId}/read`, {
-          method: "POST",
-        });
-        if (mounted) {
-          router.refresh();
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    markRead();
-    return () => {
-      mounted = false;
-    };
-  }, [threadId, router, messages.length]);
 
   const openFilePicker = () => {
     setUploadError(null);
@@ -799,7 +756,6 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
-                      readAt={m.read_at}
                     />
                   );
                 }
@@ -816,7 +772,6 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
-                      readAt={m.read_at}
                       showUnsend={showUnsend}
                       unsendBusy={unsendBusy}
                       onUnsend={() => unsendMessage(m.id)}
@@ -836,7 +791,6 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
-                      readAt={m.read_at}
                       showUnsend={showUnsend}
                       unsendBusy={unsendBusy}
                       onUnsend={() => unsendMessage(m.id)}
@@ -858,7 +812,6 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
-                      readAt={m.read_at}
                       showUnsend={showUnsend}
                       unsendBusy={unsendBusy}
                       onUnsend={() => unsendMessage(m.id)}
@@ -875,7 +828,6 @@ export default function DmChatClient({
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}
                     senderProfileHref={senderProfileHref}
-                    readAt={m.read_at}
                     showUnsend={showUnsend}
                     unsendBusy={unsendBusy}
                     onUnsend={() => unsendMessage(m.id)}
@@ -898,7 +850,6 @@ export default function DmChatClient({
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
                       senderProfileHref={u.sender_profile_href}
-                      readAt={null}
                       showUnsend={false}
                       unsendBusy={false}
                       onUnsend={() => {}}
@@ -918,7 +869,6 @@ export default function DmChatClient({
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
                       senderProfileHref={u.sender_profile_href}
-                      readAt={null}
                       showUnsend={false}
                       unsendBusy={false}
                       onUnsend={() => {}}
@@ -939,7 +889,6 @@ export default function DmChatClient({
                     senderName={u.sender_name}
                     senderAvatarUrl={u.sender_avatar_url}
                     senderProfileHref={u.sender_profile_href}
-                    readAt={null}
                     showUnsend={false}
                     unsendBusy={false}
                     onUnsend={() => {}}
