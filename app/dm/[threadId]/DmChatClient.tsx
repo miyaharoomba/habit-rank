@@ -31,6 +31,8 @@ type Message = {
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
+  read_at?: string | null;
+  unsent_at?: string | null;
 };
 
 type LocalUpload = {
@@ -69,7 +71,6 @@ function AvatarLink({
   url: string | null;
 }) {
   const initial = (name ?? "?").trim().slice(0, 1) || "?";
-
   return (
     <Link href={href} className="shrink-0">
       {url ? (
@@ -119,11 +120,43 @@ function SubmitButton({ onSettled }: { onSettled: () => void }) {
   return <Button type="submit">{pending ? "送信中…" : "送信"}</Button>;
 }
 
-function BubbleMeta({ createdAt }: { createdAt: string }) {
+function BubbleMeta({
+  createdAt,
+  mine,
+  readAt,
+}: {
+  createdAt: string;
+  mine: boolean;
+  readAt?: string | null;
+}) {
   return (
-    <div className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
-      {formatJst(createdAt)}
+    <div className="flex items-center gap-2 text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+      <span>{formatJst(createdAt)}</span>
+      {mine ? <span>{readAt ? "既読" : "未読"}</span> : null}
     </div>
+  );
+}
+
+function UnsendButton({
+  visible,
+  busy,
+  onClick,
+}: {
+  visible: boolean;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="ml-auto rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold hover:bg-secondary/40 disabled:opacity-50"
+    >
+      {busy ? "取消中…" : "取り消し"}
+    </button>
   );
 }
 
@@ -132,12 +165,14 @@ function BubbleFrame({
   avatar,
   header,
   meta,
+  action,
   children,
 }: {
   mine: boolean;
   avatar: React.ReactNode;
   header: React.ReactNode;
   meta: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -152,6 +187,7 @@ function BubbleFrame({
         >
           {header}
           {meta}
+          {action}
         </div>
         {children}
       </div>
@@ -167,6 +203,10 @@ function BubbleText({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
+  readAt,
+  showUnsend,
+  unsendBusy,
+  onUnsend,
 }: {
   mine: boolean;
   body: string;
@@ -174,6 +214,10 @@ function BubbleText({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
+  readAt?: string | null;
+  showUnsend: boolean;
+  unsendBusy: boolean;
+  onUnsend: () => void;
 }) {
   return (
     <BubbleFrame
@@ -185,10 +229,11 @@ function BubbleText({
           url={senderAvatarUrl}
         />
       }
-      header={
-        <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+      header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
+      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      action={
+        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
-      meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
         className={[
@@ -197,6 +242,46 @@ function BubbleText({
         ].join(" ")}
       >
         <LinkifiedText text={body} />
+      </div>
+    </BubbleFrame>
+  );
+}
+
+function BubbleUnsent({
+  mine,
+  createdAt,
+  senderName,
+  senderAvatarUrl,
+  senderProfileHref,
+  readAt,
+}: {
+  mine: boolean;
+  createdAt: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  senderProfileHref: string;
+  readAt?: string | null;
+}) {
+  return (
+    <BubbleFrame
+      mine={mine}
+      avatar={
+        <AvatarLink
+          href={senderProfileHref}
+          name={senderName}
+          url={senderAvatarUrl}
+        />
+      }
+      header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
+      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+    >
+      <div
+        className={[
+          "rounded-2xl border border-border px-4 py-3 italic text-sm text-muted-foreground",
+          mine ? "bg-background" : "bg-secondary/20",
+        ].join(" ")}
+      >
+        送信を取り消しました
       </div>
     </BubbleFrame>
   );
@@ -211,6 +296,10 @@ function BubbleImage({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
+  readAt,
+  showUnsend,
+  unsendBusy,
+  onUnsend,
 }: {
   mine: boolean;
   url: string;
@@ -220,6 +309,10 @@ function BubbleImage({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
+  readAt?: string | null;
+  showUnsend: boolean;
+  unsendBusy: boolean;
+  onUnsend: () => void;
 }) {
   return (
     <BubbleFrame
@@ -231,10 +324,11 @@ function BubbleImage({
           url={senderAvatarUrl}
         />
       }
-      header={
-        <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+      header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
+      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      action={
+        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
-      meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
         className={[
@@ -275,6 +369,10 @@ function BubbleVideo({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
+  readAt,
+  showUnsend,
+  unsendBusy,
+  onUnsend,
 }: {
   mine: boolean;
   url: string;
@@ -284,6 +382,10 @@ function BubbleVideo({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
+  readAt?: string | null;
+  showUnsend: boolean;
+  unsendBusy: boolean;
+  onUnsend: () => void;
 }) {
   return (
     <BubbleFrame
@@ -295,10 +397,11 @@ function BubbleVideo({
           url={senderAvatarUrl}
         />
       }
-      header={
-        <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+      header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
+      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      action={
+        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
-      meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
         className={[
@@ -336,6 +439,10 @@ function BubbleFile({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
+  readAt,
+  showUnsend,
+  unsendBusy,
+  onUnsend,
 }: {
   mine: boolean;
   url: string;
@@ -347,6 +454,10 @@ function BubbleFile({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
+  readAt?: string | null;
+  showUnsend: boolean;
+  unsendBusy: boolean;
+  onUnsend: () => void;
 }) {
   const label = mime?.includes("pdf") ? "PDF" : "FILE";
 
@@ -360,10 +471,11 @@ function BubbleFile({
           url={senderAvatarUrl}
         />
       }
-      header={
-        <NameLine mine={mine} href={senderProfileHref} name={senderName} />
+      header={<NameLine mine={mine} href={senderProfileHref} name={senderName} />}
+      meta={<BubbleMeta createdAt={createdAt} mine={mine} readAt={readAt} />}
+      action={
+        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
-      meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
         className={[
@@ -411,6 +523,7 @@ export default function DmChatClient({
   const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(
     null
   );
+  const [unsendingId, setUnsendingId] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -474,13 +587,38 @@ export default function DmChatClient({
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
 
+  // 相手からの新着を数秒ごとに取り込む
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       router.refresh();
     }, 2500);
+
     return () => window.clearInterval(id);
   }, [router, threadId]);
+
+  // スレッドを見たら既読化
+  useEffect(() => {
+    let mounted = true;
+
+    const markRead = async () => {
+      try {
+        await fetch(`/api/dm/${threadId}/read`, {
+          method: "POST",
+        });
+        if (mounted) {
+          router.refresh();
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    markRead();
+    return () => {
+      mounted = false;
+    };
+  }, [threadId, router, messages.length]);
 
   const openFilePicker = () => {
     setUploadError(null);
@@ -557,6 +695,33 @@ export default function DmChatClient({
     }
   };
 
+  const unsendMessage = async (messageId: string) => {
+    if (unsendingId) return;
+
+    const ok = window.confirm("このメッセージの送信を取り消しますか？");
+    if (!ok) return;
+
+    setUnsendingId(messageId);
+    setUploadError(null);
+
+    try {
+      const res = await fetch(`/api/dm/messages/${messageId}`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`);
+      }
+
+      router.refresh();
+    } catch (err: any) {
+      setUploadError(err?.message ?? "送信取り消しに失敗しました。");
+    } finally {
+      setUnsendingId(null);
+    }
+  };
+
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -621,6 +786,23 @@ export default function DmChatClient({
                   m.sender_profile_href ??
                   (mine ? "/profile" : `/users/${encodeURIComponent(m.sender_id)}`);
 
+                const showUnsend = mine && !m.unsent_at;
+                const unsendBusy = unsendingId === m.id;
+
+                if (m.unsent_at) {
+                  return (
+                    <BubbleUnsent
+                      key={m.id}
+                      mine={mine}
+                      createdAt={m.created_at}
+                      senderName={senderName}
+                      senderAvatarUrl={senderAvatarUrl}
+                      senderProfileHref={senderProfileHref}
+                      readAt={m.read_at}
+                    />
+                  );
+                }
+
                 if (m.message_type === "image" && m.image_url) {
                   return (
                     <BubbleImage
@@ -633,6 +815,10 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      readAt={m.read_at}
+                      showUnsend={showUnsend}
+                      unsendBusy={unsendBusy}
+                      onUnsend={() => unsendMessage(m.id)}
                     />
                   );
                 }
@@ -649,6 +835,10 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      readAt={m.read_at}
+                      showUnsend={showUnsend}
+                      unsendBusy={unsendBusy}
+                      onUnsend={() => unsendMessage(m.id)}
                     />
                   );
                 }
@@ -667,6 +857,10 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      readAt={m.read_at}
+                      showUnsend={showUnsend}
+                      unsendBusy={unsendBusy}
+                      onUnsend={() => unsendMessage(m.id)}
                     />
                   );
                 }
@@ -680,6 +874,10 @@ export default function DmChatClient({
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}
                     senderProfileHref={senderProfileHref}
+                    readAt={m.read_at}
+                    showUnsend={showUnsend}
+                    unsendBusy={unsendBusy}
+                    onUnsend={() => unsendMessage(m.id)}
                   />
                 );
               })}
@@ -699,6 +897,10 @@ export default function DmChatClient({
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
                       senderProfileHref={u.sender_profile_href}
+                      readAt={null}
+                      showUnsend={false}
+                      unsendBusy={false}
+                      onUnsend={() => {}}
                     />
                   );
                 }
@@ -715,6 +917,10 @@ export default function DmChatClient({
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
                       senderProfileHref={u.sender_profile_href}
+                      readAt={null}
+                      showUnsend={false}
+                      unsendBusy={false}
+                      onUnsend={() => {}}
                     />
                   );
                 }
@@ -732,6 +938,10 @@ export default function DmChatClient({
                     senderName={u.sender_name}
                     senderAvatarUrl={u.sender_avatar_url}
                     senderProfileHref={u.sender_profile_href}
+                    readAt={null}
+                    showUnsend={false}
+                    unsendBusy={false}
+                    onUnsend={() => {}}
                   />
                 );
               })}
@@ -812,4 +1022,3 @@ export default function DmChatClient({
     </>
   );
 }
-``

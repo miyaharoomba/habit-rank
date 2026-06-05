@@ -1,4 +1,3 @@
-// app/dm/[threadId]/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
@@ -11,15 +10,14 @@ type MessageRow = {
   sender_id: string;
   body: string;
   created_at: string;
-
   message_type: "text" | "image" | "video" | "file";
-
   image_path: string | null;
-
   file_path: string | null;
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
+  read_at: string | null;
+  unsent_at: string | null;
 };
 
 type ProfileRow = {
@@ -36,17 +34,16 @@ type MessageForClient = {
   sender_profile_href: string;
   body: string;
   created_at: string;
-
   message_type?: "text" | "image" | "video" | "file";
-
   image_path?: string | null;
   image_url?: string | null;
-
   file_path?: string | null;
   file_url?: string | null;
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
+  read_at?: string | null;
+  unsent_at?: string | null;
 };
 
 function mediaProxyUrl(path: string) {
@@ -67,8 +64,8 @@ export default async function DmThreadPage({
 }) {
   const { threadId } = await params;
   const sp = await searchParams;
-
   const supabase = await createClient();
+
   const {
     data: { user },
     error: userErr,
@@ -82,7 +79,6 @@ export default async function DmThreadPage({
     "use server";
 
     const reason = String(formData.get("reason") ?? "").trim();
-
     const supabase = await createClient();
     const {
       data: { user },
@@ -141,8 +137,7 @@ export default async function DmThreadPage({
     );
   }
 
-  const otherUserId =
-    thread.user_low === user.id ? thread.user_high : thread.user_low;
+  const otherUserId = thread.user_low === user.id ? thread.user_high : thread.user_low;
 
   // 2) 参加ユーザーのプロフィールをまとめて取得
   const userIds = [user.id, otherUserId];
@@ -159,11 +154,11 @@ export default async function DmThreadPage({
   const otherName =
     (profileMap.get(otherUserId)?.display_name ?? "").trim() || "NoName";
 
-  // 3) メッセージ取得（画像/動画/ファイル含む）
+  // 3) メッセージ取得（既読/送信取り消し含む）
   const { data: msgs, error: msgErr } = await supabase
     .from("dm_messages")
     .select(
-      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size"
+      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, unsent_at"
     )
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
@@ -213,6 +208,8 @@ export default async function DmThreadPage({
       file_size: m.file_size,
       image_url: null,
       file_url: null,
+      read_at: m.read_at,
+      unsent_at: m.unsent_at,
     };
 
     if (m.message_type === "text") return base;
@@ -256,7 +253,6 @@ export default async function DmThreadPage({
             <summary className="cursor-pointer select-none rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary/40">
               通報
             </summary>
-
             <div className="absolute right-0 mt-2 w-[320px] rounded-xl border border-border bg-card p-3 shadow-glow z-50">
               {reportStatus === "ok" && (
                 <div className="mb-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
@@ -300,14 +296,11 @@ export default async function DmThreadPage({
             <h2 className="font-semibold">チャット</h2>
           </CardHeader>
           <CardBody>
-            <DmChatClient
-              threadId={threadId}
-              myUserId={user.id}
-              messages={messages as any}
-            />
+            <DmChatClient threadId={threadId} myUserId={user.id} messages={messages} />
           </CardBody>
         </Card>
       </div>
     </Container>
   );
 }
+``
