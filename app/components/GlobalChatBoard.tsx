@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import {
   useEffect,
@@ -7,11 +6,11 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ReactNode,
 } from "react";
 import { formatJstStartLabel } from "@/lib/time";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
-
 
 type ChatItem = {
   id: string;
@@ -80,14 +79,6 @@ function Avatar({
   );
 }
 
-function ChatMeta({ createdAt }: { createdAt: string }) {
-  return (
-    <div className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
-      {formatJstStartLabel(createdAt)}
-    </div>
-  );
-}
-
 function NameLine({
   mine,
   userId,
@@ -105,25 +96,39 @@ function NameLine({
 }) {
   const href = profileHref(userId, myUserId);
 
-  if (mine) {
-    return (
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="text-xs font-semibold">あなた</div>
+  return (
+    <div
+      className={[
+        "flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1",
+        mine ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
+      {mine ? (
+        <div className="text-xs font-semibold shrink-0">あなた</div>
+      ) : (
+        <Link
+          href={href}
+          className="min-w-0 text-xs font-semibold hover:underline break-words"
+        >
+          {userName}
+        </Link>
+      )}
+
+      {/* 称号は残すが、幅を少し制限してごちゃつきを防ぐ */}
+      <div className="min-w-0 max-w-[160px] sm:max-w-[220px]">
         <TitleBadge label={titleLabel} rank={titleRank} compact />
       </div>
-    );
-  }
-
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Link href={href} className="text-xs font-semibold hover:underline break-all">
-        {userName}
-      </Link>
-      <TitleBadge label={titleLabel} rank={titleRank} compact />
     </div>
   );
 }
 
+function ChatMeta({ createdAt }: { createdAt: string }) {
+  return (
+    <div className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+      {formatJstStartLabel(createdAt)}
+    </div>
+  );
+}
 
 function DeleteButton({
   visible,
@@ -141,10 +146,58 @@ function DeleteButton({
       type="button"
       onClick={onClick}
       disabled={deleting}
-      className="ml-auto rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive hover:opacity-90 disabled:opacity-50"
+      className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-[10px] font-semibold text-destructive hover:opacity-90 disabled:opacity-50"
     >
       {deleting ? "削除中…" : "削除"}
     </button>
+  );
+}
+
+function MessageHeader({
+  mine,
+  item,
+  myUserId,
+  canModerate,
+  deleting,
+  onDelete,
+}: {
+  mine: boolean;
+  item: ChatItem;
+  myUserId: string;
+  canModerate: boolean;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={[
+        "mb-2 flex min-w-0 flex-col gap-1.5",
+        mine ? "items-end" : "items-start",
+      ].join(" ")}
+    >
+      <NameLine
+        mine={mine}
+        userId={item.user_id}
+        userName={item.user_name}
+        myUserId={myUserId}
+        titleLabel={item.user_title_label}
+        titleRank={item.user_title_rank}
+      />
+
+      <div
+        className={[
+          "flex min-w-0 w-full items-center gap-2",
+          mine ? "justify-end" : "justify-start",
+        ].join(" ")}
+      >
+        <ChatMeta createdAt={item.created_at} />
+        <DeleteButton
+          visible={canModerate}
+          deleting={deleting}
+          onClick={onDelete}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -152,33 +205,22 @@ function BubbleFrame({
   mine,
   avatar,
   header,
-  meta,
-  deleteButton,
   children,
 }: {
   mine: boolean;
-  avatar: React.ReactNode;
-  header: React.ReactNode;
-  meta: React.ReactNode;
-  deleteButton?: React.ReactNode;
-  children: React.ReactNode;
+  avatar: ReactNode;
+  header: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className={["flex gap-3", mine ? "justify-end" : "justify-start"].join(" ")}>
       {!mine && avatar}
+
       <div className="min-w-0 max-w-[85%]">
-        <div
-          className={[
-            "mb-1 flex items-center gap-2",
-            mine ? "justify-end" : "justify-start",
-          ].join(" ")}
-        >
-          {header}
-          {meta}
-          {deleteButton}
-        </div>
+        {header}
         {children}
       </div>
+
       {mine && avatar}
     </div>
   );
@@ -211,18 +253,14 @@ function TextBubble({
         />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          userId={item.user_id}
-          userName={item.user_name}
+          item={item}
           myUserId={myUserId}
-          titleLabel={item.user_title_label}
-          titleRank={item.user_title_rank}
+          canModerate={canModerate}
+          deleting={deleting}
+          onDelete={onDelete}
         />
-      }
-      meta={<ChatMeta createdAt={item.created_at} />}
-      deleteButton={
-        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
       }
     >
       <div
@@ -268,18 +306,14 @@ function ImageBubble({
         />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          userId={item.user_id}
-          userName={item.user_name}
+          item={item}
           myUserId={myUserId}
-          titleLabel={item.user_title_label}
-          titleRank={item.user_title_rank}
+          canModerate={canModerate}
+          deleting={deleting}
+          onDelete={onDelete}
         />
-      }
-      meta={<ChatMeta createdAt={item.created_at} />}
-      deleteButton={
-        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
       }
     >
       <div
@@ -295,9 +329,8 @@ function ImageBubble({
           aria-label="画像を拡大表示"
         >
           <img
-            src={item.image_url!}
-            alt={item.body?.trim() ? item.body : "画像"
-            }
+            src={item.image_url}
+            alt={item.body?.trim() ? item.body : "画像"}
             className="block w-full"
             loading="lazy"
           />
@@ -344,46 +377,41 @@ function VideoBubble({
         />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          userId={item.user_id}
-          userName={item.user_name}
+          item={item}
           myUserId={myUserId}
-          titleLabel={item.user_title_label}
-          titleRank={item.user_title_rank}
+          canModerate={canModerate}
+          deleting={deleting}
+          onDelete={onDelete}
         />
-      }
-      meta={<ChatMeta createdAt={item.created_at} />}
-      deleteButton={
-        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
       }
     >
       <div
-  className={[
-    "overflow-hidden rounded-2xl border border-border",
-    mine ? "bg-primary/10" : "bg-secondary/30",
-  ].join(" ")}
->
-  <video
-    src={item.file_url}
-    controls
-    className="block max-h-[360px] w-full bg-black"
-  />
+        className={[
+          "overflow-hidden rounded-2xl border border-border",
+          mine ? "bg-primary/10" : "bg-secondary/30",
+        ].join(" ")}
+      >
+        <video
+          src={item.file_url}
+          controls
+          className="block max-h-[360px] w-full bg-black"
+        />
+        <button
+          type="button"
+          onClick={() => onOpen("video", item.file_url!)}
+          className="w-full px-4 py-2 text-left text-xs text-primary hover:underline"
+        >
+          大きく表示
+        </button>
 
-  <button
-    type="button"
-    onClick={() => onOpen("video", item.file_url!)}
-    className="w-full px-4 py-2 text-left text-xs text-primary hover:underline"
-  >
-    大きく表示
-  </button>
-
-  {item.body?.trim() ? (
-    <div className="px-4 py-3 pt-0">
-      <LinkifiedText text={item.body} />
-    </div>
-  ) : null}
-</div>
+        {item.body?.trim() ? (
+          <div className="px-4 py-3 pt-0">
+            <LinkifiedText text={item.body} />
+          </div>
+        ) : null}
+      </div>
     </BubbleFrame>
   );
 }
@@ -419,19 +447,14 @@ function FileBubble({
         />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          userId={item.user_id}
-          userName={item.user_name}
+          item={item}
           myUserId={myUserId}
-          titleLabel={item.user_title_label}
-          titleRank={item.user_title_rank}
+          canModerate={canModerate}
+          deleting={deleting}
+          onDelete={onDelete}
         />
-      }
-
-      meta={<ChatMeta createdAt={item.created_at} />}
-      deleteButton={
-        <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
       }
     >
       <div
@@ -820,3 +843,5 @@ export default function GlobalChatBoard({
     </>
   );
 }
+``
+
