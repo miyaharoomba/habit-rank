@@ -1,5 +1,5 @@
 import Container from "@/app/components/ui/Container";
-import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import Card, { CardHeader, CardBody } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -130,10 +130,10 @@ export default async function DmListPage() {
         </div>
 
         <div className="flex gap-3">
-          <Link className="text-sm text-primary hover:underline" href="/app">
+          <Link href="/app" className="text-sm text-primary hover:underline">
             /app
           </Link>
-          <Link className="text-sm text-primary hover:underline" href="/ranking">
+          <Link href="/ranking" className="text-sm text-primary hover:underline">
             /ranking
           </Link>
         </div>
@@ -155,12 +155,14 @@ export default async function DmListPage() {
                   const avatar = avatarUrl(t.avatar_path);
                   const initial =
                     (t.other_display_name ?? "?").trim().slice(0, 1) || "?";
+                  const lastMessage =
+                    (t.last_message ?? "").trim() || "（まだメッセージがありません）";
 
                   return (
                     <li key={t.thread_id}>
                       <Link
                         href={`/dm/${t.thread_id}`}
-                        className="block rounded-xl border border-border bg-background/60 px-4 py-4 hover:bg-secondary/30 transition"
+                        className="block rounded-xl border border-border bg-background/60 px-4 py-4 transition hover:bg-secondary/30"
                       >
                         <div className="flex items-start gap-3">
                           <div className="shrink-0">
@@ -178,24 +180,40 @@ export default async function DmListPage() {
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="text-sm font-semibold break-words">
-                                {t.other_display_name}
+                            {/* 上段: 名前＋称号 / 時刻 */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                                  <div className="min-w-0 text-sm font-semibold break-words">
+                                    {t.other_display_name}
+                                  </div>
+
+                                  <div className="min-w-0 max-w-[150px] sm:max-w-[220px]">
+                                    <TitleBadge
+                                      label={t.title_label}
+                                      rank={t.title_rank}
+                                      compact
+                                    />
+                                  </div>
+                                </div>
                               </div>
-                              <TitleBadge
-                                label={t.title_label}
-                                rank={t.title_rank}
-                                compact
-                              />
+
+                              <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+                                {t.last_message_at ? formatJst(t.last_message_at) : ""}
+                              </div>
                             </div>
 
-                            <div className="mt-1 text-sm text-muted-foreground break-words">
-                              {t.last_message ?? "（まだメッセージがありません）"}
+                            {/* 下段: 最終メッセージ */}
+                            <div
+                              className="mt-2 text-sm text-muted-foreground break-words overflow-hidden"
+                              style={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                              }}
+                            >
+                              {lastMessage}
                             </div>
-                          </div>
-
-                          <div className="shrink-0 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
-                            {t.last_message_at ? formatJst(t.last_message_at) : ""}
                           </div>
                         </div>
                       </Link>
@@ -210,3 +228,4 @@ export default async function DmListPage() {
     </Container>
   );
 }
+``
