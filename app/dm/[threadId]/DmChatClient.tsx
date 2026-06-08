@@ -107,21 +107,27 @@ function NameLine({
   titleLabel?: string | null;
   titleRank?: TitleRank;
 }) {
-  if (mine) {
-    return (
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="text-xs font-semibold">あなた</div>
+  return (
+    <div
+      className={[
+        "flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1",
+        mine ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
+      {mine ? (
+        <div className="text-xs font-semibold shrink-0">あなた</div>
+      ) : (
+        <Link
+          href={href}
+          className="min-w-0 text-xs font-semibold hover:underline break-all sm:break-normal"
+        >
+          {name}
+        </Link>
+      )}
+
+      <div className="min-w-0 max-w-[160px] sm:max-w-[220px]">
         <TitleBadge label={titleLabel} rank={titleRank} compact />
       </div>
-    );
-  }
-
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Link href={href} className="text-xs font-semibold hover:underline break-all">
-        {name}
-      </Link>
-      <TitleBadge label={titleLabel} rank={titleRank} compact />
     </div>
   );
 }
@@ -162,10 +168,59 @@ function UnsendButton({
       type="button"
       onClick={onClick}
       disabled={busy}
-      className="ml-auto rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold hover:bg-secondary/40 disabled:opacity-50"
+      className="rounded-md border border-border bg-background px-2 py-1 text-[10px] font-semibold hover:bg-secondary/40 disabled:opacity-50"
     >
       {busy ? "取消中…" : "取り消し"}
     </button>
+  );
+}
+
+function MessageHeader({
+  mine,
+  senderProfileHref,
+  senderName,
+  senderTitleLabel,
+  senderTitleRank,
+  createdAt,
+  showUnsend,
+  unsendBusy,
+  onUnsend,
+}: {
+  mine: boolean;
+  senderProfileHref: string;
+  senderName: string;
+  senderTitleLabel?: string | null;
+  senderTitleRank?: TitleRank;
+  createdAt: string;
+  showUnsend: boolean;
+  unsendBusy: boolean;
+  onUnsend: () => void;
+}) {
+  return (
+    <div
+      className={[
+        "mb-2 flex min-w-0 flex-col gap-1.5",
+        mine ? "items-end" : "items-start",
+      ].join(" ")}
+    >
+      <NameLine
+        mine={mine}
+        href={senderProfileHref}
+        name={senderName}
+        titleLabel={senderTitleLabel}
+        titleRank={senderTitleRank}
+      />
+
+      <div
+        className={[
+          "flex min-w-0 w-full items-center gap-2",
+          mine ? "justify-end" : "justify-start",
+        ].join(" ")}
+      >
+        <BubbleMeta createdAt={createdAt} />
+        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
+      </div>
+    </div>
   );
 }
 
@@ -173,31 +228,18 @@ function BubbleFrame({
   mine,
   avatar,
   header,
-  meta,
-  action,
   children,
 }: {
   mine: boolean;
   avatar: ReactNode;
   header: ReactNode;
-  meta: ReactNode;
-  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className={["flex gap-3", mine ? "justify-end" : "justify-start"].join(" ")}>
       {!mine && avatar}
       <div className="min-w-0 max-w-[85%]">
-        <div
-          className={[
-            "mb-1 flex items-center gap-2",
-            mine ? "justify-end" : "justify-start",
-          ].join(" ")}
-        >
-          {header}
-          {meta}
-          {action}
-        </div>
+        {header}
         {children}
       </div>
       {mine && avatar}
@@ -234,24 +276,20 @@ function BubbleText({
     <BubbleFrame
       mine={mine}
       avatar={
-        <AvatarLink
-          href={senderProfileHref}
-          name={senderName}
-          url={senderAvatarUrl}
-        />
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          href={senderProfileHref}
-          name={senderName}
-          titleLabel={senderTitleLabel}
-          titleRank={senderTitleRank}
+          senderProfileHref={senderProfileHref}
+          senderName={senderName}
+          senderTitleLabel={senderTitleLabel}
+          senderTitleRank={senderTitleRank}
+          createdAt={createdAt}
+          showUnsend={showUnsend}
+          unsendBusy={unsendBusy}
+          onUnsend={onUnsend}
         />
-      }
-      meta={<BubbleMeta createdAt={createdAt} />}
-      action={
-        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
     >
       <div
@@ -287,22 +325,32 @@ function BubbleUnsent({
     <BubbleFrame
       mine={mine}
       avatar={
-        <AvatarLink
-          href={senderProfileHref}
-          name={senderName}
-          url={senderAvatarUrl}
-        />
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
       }
       header={
-        <NameLine
-          mine={mine}
-          href={senderProfileHref}
-          name={senderName}
-          titleLabel={senderTitleLabel}
-          titleRank={senderTitleRank}
-        />
+        <div
+          className={[
+            "mb-2 flex min-w-0 flex-col gap-1.5",
+            mine ? "items-end" : "items-start",
+          ].join(" ")}
+        >
+          <NameLine
+            mine={mine}
+            href={senderProfileHref}
+            name={senderName}
+            titleLabel={senderTitleLabel}
+            titleRank={senderTitleRank}
+          />
+          <div
+            className={[
+              "flex min-w-0 w-full items-center gap-2",
+              mine ? "justify-end" : "justify-start",
+            ].join(" ")}
+          >
+            <BubbleMeta createdAt={createdAt} />
+          </div>
+        </div>
       }
-      meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
         className={[
@@ -349,24 +397,20 @@ function BubbleImage({
     <BubbleFrame
       mine={mine}
       avatar={
-        <AvatarLink
-          href={senderProfileHref}
-          name={senderName}
-          url={senderAvatarUrl}
-        />
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          href={senderProfileHref}
-          name={senderName}
-          titleLabel={senderTitleLabel}
-          titleRank={senderTitleRank}
+          senderProfileHref={senderProfileHref}
+          senderName={senderName}
+          senderTitleLabel={senderTitleLabel}
+          senderTitleRank={senderTitleRank}
+          createdAt={createdAt}
+          showUnsend={showUnsend}
+          unsendBusy={unsendBusy}
+          onUnsend={onUnsend}
         />
-      }
-      meta={<BubbleMeta createdAt={createdAt} />}
-      action={
-        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
     >
       <div
@@ -432,24 +476,20 @@ function BubbleVideo({
     <BubbleFrame
       mine={mine}
       avatar={
-        <AvatarLink
-          href={senderProfileHref}
-          name={senderName}
-          url={senderAvatarUrl}
-        />
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          href={senderProfileHref}
-          name={senderName}
-          titleLabel={senderTitleLabel}
-          titleRank={senderTitleRank}
+          senderProfileHref={senderProfileHref}
+          senderName={senderName}
+          senderTitleLabel={senderTitleLabel}
+          senderTitleRank={senderTitleRank}
+          createdAt={createdAt}
+          showUnsend={showUnsend}
+          unsendBusy={unsendBusy}
+          onUnsend={onUnsend}
         />
-      }
-      meta={<BubbleMeta createdAt={createdAt} />}
-      action={
-        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
     >
       <div
@@ -516,24 +556,20 @@ function BubbleFile({
     <BubbleFrame
       mine={mine}
       avatar={
-        <AvatarLink
-          href={senderProfileHref}
-          name={senderName}
-          url={senderAvatarUrl}
-        />
+        <AvatarLink href={senderProfileHref} name={senderName} url={senderAvatarUrl} />
       }
       header={
-        <NameLine
+        <MessageHeader
           mine={mine}
-          href={senderProfileHref}
-          name={senderName}
-          titleLabel={senderTitleLabel}
-          titleRank={senderTitleRank}
+          senderProfileHref={senderProfileHref}
+          senderName={senderName}
+          senderTitleLabel={senderTitleLabel}
+          senderTitleRank={senderTitleRank}
+          createdAt={createdAt}
+          showUnsend={showUnsend}
+          unsendBusy={unsendBusy}
+          onUnsend={onUnsend}
         />
-      }
-      meta={<BubbleMeta createdAt={createdAt} />}
-      action={
-        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       }
     >
       <div
@@ -648,7 +684,6 @@ export default function DmChatClient({
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
 
-  // 相手からの新着を数秒ごとに取り込む
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
