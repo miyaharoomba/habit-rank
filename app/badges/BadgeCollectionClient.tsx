@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -8,6 +7,7 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 type BadgeRow = {
   id: string;
   title: string;
+  title_label: string | null;
   description: string;
   badge_rank: "platinum" | "gold" | "silver" | "bronze";
   condition_type: string;
@@ -18,31 +18,41 @@ type BadgeRow = {
 type UserBadgeRow = {
   badge_id: string;
   unlocked_at: string;
-  is_pinned: boolean;
 };
 
 function rankLabel(rank: BadgeRow["badge_rank"]) {
   switch (rank) {
-    case "platinum": return "プラチナ";
-    case "gold": return "ゴールド";
-    case "silver": return "シルバー";
-    default: return "ブロンズ";
+    case "platinum":
+      return "プラチナ";
+    case "gold":
+      return "ゴールド";
+    case "silver":
+      return "シルバー";
+    default:
+      return "ブロンズ";
   }
 }
 
 function rankClass(rank: BadgeRow["badge_rank"], unlocked: boolean) {
   if (!unlocked) return "border-border bg-background text-muted-foreground opacity-70";
+
   switch (rank) {
-    case "platinum": return "border-sky-400 bg-gradient-to-br from-sky-100 to-indigo-100 text-sky-900";
-    case "gold": return "border-amber-400 bg-gradient-to-br from-amber-50 to-yellow-100 text-amber-900";
-    case "silver": return "border-slate-300 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-800";
-    default: return "border-orange-300 bg-gradient-to-br from-orange-50 to-amber-100 text-orange-900";
+    case "platinum":
+      return "border-sky-400 bg-gradient-to-br from-sky-100 to-indigo-100 text-sky-900";
+    case "gold":
+      return "border-amber-400 bg-gradient-to-br from-amber-50 to-yellow-100 text-amber-900";
+    case "silver":
+      return "border-slate-300 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-800";
+    default:
+      return "border-orange-300 bg-gradient-to-br from-orange-50 to-amber-100 text-orange-900";
   }
 }
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 }
 
 export default function BadgeCollectionClient({
@@ -51,6 +61,7 @@ export default function BadgeCollectionClient({
   profileHref,
   badges,
   earned,
+  currentTitleBadgeId,
   readOnly,
 }: {
   title: string;
@@ -58,10 +69,16 @@ export default function BadgeCollectionClient({
   profileHref: string;
   badges: BadgeRow[];
   earned: UserBadgeRow[];
+  currentTitleBadgeId: string | null;
   readOnly: boolean;
 }) {
   const [filter, setFilter] = useState<"all" | "earned" | "unearned">("all");
   const [rank, setRank] = useState<"all" | BadgeRow["badge_rank"]>("all");
+  const [activeTitleBadgeId, setActiveTitleBadgeId] = useState<string | null>(
+    currentTitleBadgeId
+  );
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const earnedMap = useMemo(() => {
     const m = new Map<string, UserBadgeRow>();
@@ -93,16 +110,69 @@ export default function BadgeCollectionClient({
     };
   }, [badges, earnedMap]);
 
+  const setTitle = async (badgeId: string) => {
+    if (readOnly) return;
+    setSaving(badgeId);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/profile/title", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ badgeId }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+
+      setActiveTitleBadgeId(badgeId);
+    } catch (e: any) {
+      setError(e?.message ?? "称号設定に失敗しました。");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const clearTitle = async () => {
+    if (readOnly) return;
+    setSaving("clear");
+    setError(null);
+
+    try {
+      const res = await fetch("/api/profile/title", {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+
+      setActiveTitleBadgeId(null);
+    } catch (e: any) {
+      setError(e?.message ?? "称号解除に失敗しました。");
+    } finally {
+      setSaving(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">{title}</h1>
         <p className="text-sm sm:text-base text-muted-foreground">{subtitle}</p>
+
         <div className="flex flex-wrap gap-2 pt-1">
-          <Link href={profileHref} className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40">
+          <Link
+            href={profileHref}
+            className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
+          >
             ← プロフィールへ
           </Link>
-          <Link href="/app" className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40">
+          <Link
+            href="/app"
+            className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
+          >
             /app
           </Link>
         </div>
@@ -114,19 +184,46 @@ export default function BadgeCollectionClient({
             <div className="flex items-end justify-between gap-3">
               <div>
                 <div className="text-sm text-muted-foreground">獲得進捗</div>
-                <div className="text-2xl font-bold tabular-nums">{earnedCount} / {total}</div>
+                <div className="text-2xl font-bold tabular-nums">
+                  {earnedCount} / {total}
+                </div>
               </div>
               <div className="text-sm font-semibold">{progress}%</div>
             </div>
+
             <div className="h-3 rounded-full bg-secondary/40 overflow-hidden">
               <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
             </div>
+
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span>🥉 {countsByRank.bronze}</span>
               <span>🥈 {countsByRank.silver}</span>
               <span>🥇 {countsByRank.gold}</span>
               <span>🏆 {countsByRank.platinum}</span>
             </div>
+
+            {!readOnly ? (
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <div className="text-xs text-muted-foreground">現在の称号:</div>
+                <div className="rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold">
+                  {activeTitleBadgeId
+                    ? badges.find((b) => b.id === activeTitleBadgeId)?.title_label || "未設定"
+                    : "未設定"}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearTitle}
+                  disabled={saving === "clear" || activeTitleBadgeId === null}
+                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-secondary/40 disabled:opacity-50"
+                >
+                  {saving === "clear" ? "解除中..." : "称号を外す"}
+                </button>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="text-sm text-destructive">{error}</div>
+            ) : null}
           </div>
         </CardHeader>
       </Card>
@@ -143,6 +240,7 @@ export default function BadgeCollectionClient({
               <option value="earned">獲得済み</option>
               <option value="unearned">未獲得</option>
             </select>
+
             <select
               value={rank}
               onChange={(e) => setRank(e.target.value as any)}
@@ -154,13 +252,20 @@ export default function BadgeCollectionClient({
               <option value="silver">シルバー</option>
               <option value="bronze">ブロンズ</option>
             </select>
-            {readOnly ? <span className="text-xs text-muted-foreground">読み取り専用</span> : null}
+
+            {readOnly ? (
+              <span className="text-xs text-muted-foreground">読み取り専用</span>
+            ) : null}
           </div>
         </CardHeader>
+
         <CardBody>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 px-4 pb-4">
+          <div className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-2 xl:grid-cols-3">
             {rows.map((badge) => {
               const unlocked = earnedMap.get(badge.id);
+              const titleLabel = (badge.title_label ?? "").trim();
+              const isActive = activeTitleBadgeId === badge.id;
+
               return (
                 <div
                   key={badge.id}
@@ -171,22 +276,58 @@ export default function BadgeCollectionClient({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold opacity-80">{rankLabel(badge.badge_rank)}</div>
+                      <div className="text-xs font-semibold opacity-80">
+                        {rankLabel(badge.badge_rank)}
+                      </div>
                       <div className="mt-1 text-base font-bold break-words">
                         {unlocked ? badge.title : "？？？？"}
                       </div>
                     </div>
-                    {unlocked ? <div className="text-lg">🏆</div> : <div className="text-lg opacity-50">🔒</div>}
+
+                    {unlocked ? (
+                      <div className="text-lg">🏆</div>
+                    ) : (
+                      <div className="text-lg opacity-50">🔒</div>
+                    )}
                   </div>
+
                   <div className="mt-2 text-sm break-words">
                     {unlocked ? badge.description : "未獲得のトロフィーです。"}
                   </div>
+
                   <div className="mt-3 text-xs opacity-80">
                     条件: {badge.condition_type} / {badge.condition_value}
                   </div>
+
                   <div className="mt-2 text-xs opacity-80">
-                    {unlocked ? `獲得日: ${formatDate(unlocked.unlocked_at)}` : "まだ獲得していません"}
+                    {unlocked
+                      ? `獲得日: ${formatDate(unlocked.unlocked_at)}`
+                      : "まだ獲得していません"}
                   </div>
+
+                  <div className="mt-3 rounded-lg border border-border/60 bg-background/70 px-3 py-2">
+                    <div className="text-[11px] text-muted-foreground">称号</div>
+                    <div className="mt-1 text-sm font-semibold break-words">
+                      {unlocked ? titleLabel || "称号なし" : "？？？？"}
+                    </div>
+                  </div>
+
+                  {!readOnly && unlocked ? (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setTitle(badge.id)}
+                        disabled={saving === badge.id || isActive}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40 disabled:opacity-50"
+                      >
+                        {isActive
+                          ? "現在設定中"
+                          : saving === badge.id
+                          ? "設定中..."
+                          : "この称号を使う"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

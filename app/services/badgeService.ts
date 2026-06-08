@@ -1,9 +1,9 @@
-
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 type BadgeRow = {
   id: string;
   title: string;
+  title_label: string | null;
   description: string;
   badge_rank: "platinum" | "gold" | "silver" | "bronze";
   condition_type:
@@ -34,7 +34,10 @@ function getAdminClient() {
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
-      auth: { persistSession: false, autoRefreshToken: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     }
   );
 }
@@ -70,11 +73,23 @@ async function getUserStats(userId: string): Promise<UserStats> {
 
   for (const row of rows as Array<{ started_at: string; ended_at: string | null }>) {
     if (!row.ended_at) continue;
-    const sec = Math.max(0, (new Date(row.ended_at).getTime() - new Date(row.started_at).getTime()) / 1000);
+
+    const sec =
+      Math.max(
+        0,
+        new Date(row.ended_at).getTime() - new Date(row.started_at).getTime()
+      ) / 1000;
+
     total_hours += sec / 3600;
-    max_streak_days = Math.max(max_streak_days, daysBetween(row.started_at, row.ended_at));
+    max_streak_days = Math.max(
+      max_streak_days,
+      daysBetween(row.started_at, row.ended_at)
+    );
+
     const hour = jstHour(row.ended_at);
-    if (hour >= 5 && hour <= 7) early_bird_sessions += 1;
+    if (hour >= 5 && hour <= 7) {
+      early_bird_sessions += 1;
+    }
   }
 
   return {
@@ -102,13 +117,23 @@ function qualifies(badge: BadgeRow, stats: UserStats) {
   }
 }
 
+function unlockMessage(badge: BadgeRow) {
+  const titleLabel = (badge.title_label ?? "").trim();
+  if (titleLabel) {
+    return `「${badge.title}」を獲得しました。称号「${titleLabel}」が使えるようになりました。`;
+  }
+  return `「${badge.title}」を獲得しました。`;
+}
+
 export async function checkAndAwardBadges(userId: string) {
   const admin = getAdminClient();
   const stats = await getUserStats(userId);
 
   const { data: badges, error: badgeErr } = await admin
     .from("badges")
-    .select("id, title, description, badge_rank, condition_type, condition_value, icon_path")
+    .select(
+      "id, title, title_label, description, badge_rank, condition_type, condition_value, icon_path"
+    )
     .order("created_at", { ascending: true });
 
   if (badgeErr) throw new Error(badgeErr.message);
@@ -134,45 +159,53 @@ export async function checkAndAwardBadges(userId: string) {
     });
 
     if (insertErr) {
-      // unique 競合などは握りつぶす
       if ((insertErr as any).code !== "23505") {
         console.error("user_badges insert failed:", insertErr.message);
       }
-    } else {
-      unlocked.push(badge);
+      continue;
+    }
 
-      // 既存通知テーブルに個別通知として流す
-      const { error: notifErr } = await admin.from("notifications").insert({
-        recipient_id: userId,
-        actor_id: userId,
-        type: "trophy_unlock",
-        thread_id: null,
-        session_id: null,
-        announcement_id: null,
-        support_thread_id: null,
-        message_preview: `「${badge.title}」を獲得しました。`,
-      });
+    unlocked.push(badge);
 
-      if (notifErr) {
-        console.error("trophy_unlock notification insert failed:", notifErr.message);
-      }
+    const { error: notifErr } = await admin.from("notifications").insert({
+      recipient_id: userId,
+      actor_id: userId,
+      type: "trophy_unlock",
+      thread_id: null,
+      session_id: null,
+      announcement_id: null,
+      support_thread_id: null,
+      message_preview: unlockMessage(badge),
+    });
+
+    if (notifErr) {
+      console.error("trophy_unlock notification insert failed:", notifErr.message);
     }
   }
 
-  // プラチナ特殊判定: プラチナ以外を全部持っていたら付与
-  const platinum = ((badges ?? []) as BadgeRow[]).find((b) => b.condition_type === "complete_all");
+  // プラチナ特殊判定
+  const platinum = ((badges ?? []) as BadgeRow[]).find(
+    (b) => b.condition_type === "complete_all"
+  );
+
   if (platinum && !owned.has(platinum.id)) {
     const nonPlatinumIds = ((badges ?? []) as BadgeRow[])
       .filter((b) => b.id !== platinum.id)
       .map((b) => b.id);
-    const hasAll = nonPlatinumIds.every((id) => owned.has(id) || unlocked.some((u) => u.id === id));
+
+    const hasAll = nonPlatinumIds.every(
+      (id) => owned.has(id) || unlocked.some((u) => u.id === id)
+    );
 
     if (hasAll) {
       const { error: insertErr } = await admin.from("user_badges").insert({
         user_id: userId,
         badge_id: platinum.id,
       });
-      if (!insertErr) unlocked.push(platinum);
+
+      if (!insertErr) {
+        unlocked.push(platinum);
+      }
     }
   }
 
