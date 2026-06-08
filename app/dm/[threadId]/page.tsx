@@ -23,6 +23,7 @@ type ProfileRow = {
   id: string;
   display_name: string | null;
   avatar_path: string | null;
+  current_title_badge_id: string | null;
 };
 
 type MessageForClient = {
@@ -31,6 +32,8 @@ type MessageForClient = {
   sender_name: string;
   sender_avatar_url: string | null;
   sender_profile_href: string;
+  sender_title_label?: string | null;
+  sender_title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -141,9 +144,9 @@ export default async function DmThreadPage({
   // 2) 参加ユーザーのプロフィールをまとめて取得
   const userIds = [user.id, otherUserId];
   const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_path")
-    .in("id", userIds);
+  .from("profiles")
+  .select("id, display_name, avatar_path, current_title_badge_id")
+  .in("id", userIds);
 
   const profileMap = new Map<string, ProfileRow>();
   (profiles ?? []).forEach((p: ProfileRow) => {
@@ -152,6 +155,30 @@ export default async function DmThreadPage({
 
   const otherName =
     (profileMap.get(otherUserId)?.display_name ?? "").trim() || "NoName";
+
+  const titleBadgeIds = Array.from(
+  new Set(
+    (profiles ?? [])
+      .map((p: any) => p.current_title_badge_id)
+      .filter(Boolean)
+  )
+) as string[];
+
+const badgeMap = new Map<
+  string,
+  { id: string; title_label: string | null; badge_rank: "platinum" | "gold" | "silver" | "bronze" }
+>();
+
+if (titleBadgeIds.length > 0) {
+  const { data: titleBadges } = await supabase
+    .from("badges")
+    .select("id, title_label, badge_rank")
+    .in("id", titleBadgeIds);
+
+  (titleBadges ?? []).forEach((b: any) => {
+    badgeMap.set(b.id, b);
+  });
+}
 
   // 3) メッセージ取得（送信取り消し含む）
   const { data: msgs, error: msgErr } = await supabase
@@ -191,23 +218,27 @@ export default async function DmThreadPage({
     const base: MessageForClient = {
       id: m.id,
       sender_id: m.sender_id,
-      sender_name: (senderProfile?.display_name ?? "").trim() || "NoName",
+      sender_name:
+        senderProfile?.display_name?.trim() || "NoName",
       sender_avatar_url: avatarProxyUrl(senderProfile?.avatar_path ?? null),
-      sender_profile_href:
-        m.sender_id === user.id
-          ? "/profile"
-          : `/users/${encodeURIComponent(m.sender_id)}`,
+      sender_profile_href: `/profile/${m.sender_id}`,
+      sender_title_label:
+        senderProfile?.current_title_badge_id
+          ? badgeMap.get(senderProfile.current_title_badge_id)?.title_label ?? null
+          : null,
+      sender_title_rank:
+        senderProfile?.current_title_badge_id
+          ? badgeMap.get(senderProfile.current_title_badge_id)?.badge_rank ?? null
+          : null,
       body: m.body,
       created_at: m.created_at,
       message_type: m.message_type,
       image_path: m.image_path,
       file_path: m.file_path,
-      file_name: m.file_name,
-      file_mime: m.file_mime,
-      file_size: m.file_size,
-      image_url: null,
-      file_url: null,
-      unsent_at: m.unsent_at,
+      file_name: m.file_name ?? undefined,
+      file_mime: m.file_mime ?? undefined,
+      file_size: m.file_size ?? undefined,
+      unsent_at: m.unsent_at ?? undefined,
     };
 
     if (m.message_type === "text") return base;

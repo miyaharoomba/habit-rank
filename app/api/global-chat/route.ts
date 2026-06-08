@@ -7,8 +7,8 @@ type ChatRow = {
   body: string;
   created_at: string;
   message_type: "text" | "image" | "video" | "file";
-  image_url: string | null; // storage path を保存
-  file_url: string | null; // storage path を保存
+  image_url: string | null;
+  file_url: string | null;
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
@@ -18,6 +18,13 @@ type ProfileRow = {
   id: string;
   display_name: string | null;
   avatar_path: string | null;
+  current_title_badge_id: string | null;
+};
+
+type BadgeLiteRow = {
+  id: string;
+  title_label: string | null;
+  badge_rank: "platinum" | "gold" | "silver" | "bronze";
 };
 
 function mediaProxyUrl(path: string) {
@@ -64,11 +71,31 @@ export async function GET(request: Request) {
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_path")
+      .select("id, display_name, avatar_path, current_title_badge_id")
       .in("id", userIds);
 
-    (profiles ?? []).forEach((p: ProfileRow) => {
-      profileMap.set(p.id, p);
+    (profiles ?? []).forEach((p: any) => {
+      profileMap.set(p.id, p as ProfileRow);
+    });
+  }
+
+  const badgeIds = Array.from(
+    new Set(
+      Array.from(profileMap.values())
+        .map((p) => p.current_title_badge_id)
+        .filter(Boolean)
+    )
+  ) as string[];
+
+  const badgeMap = new Map<string, BadgeLiteRow>();
+  if (badgeIds.length > 0) {
+    const { data: badges } = await supabase
+      .from("badges")
+      .select("id, title_label, badge_rank")
+      .in("id", badgeIds);
+
+    (badges ?? []).forEach((b: any) => {
+      badgeMap.set(b.id, b as BadgeLiteRow);
     });
   }
 
@@ -78,12 +105,18 @@ export async function GET(request: Request) {
 
   const items = rows.map((r) => {
     const profile = profileMap.get(r.user_id);
+    const currentBadge =
+      profile?.current_title_badge_id
+        ? badgeMap.get(profile.current_title_badge_id)
+        : null;
 
     return {
       id: r.id,
       user_id: r.user_id,
       user_name: (profile?.display_name ?? "").trim() || "NoName",
       user_avatar_url: avatarProxyUrl(profile?.avatar_path ?? null),
+      user_title_label: currentBadge?.title_label?.trim() || null,
+      user_title_rank: currentBadge?.badge_rank ?? null,
       body: r.body,
       created_at: r.created_at,
       message_type: r.message_type ?? "text",
@@ -142,4 +175,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, item: data });
 }
-``

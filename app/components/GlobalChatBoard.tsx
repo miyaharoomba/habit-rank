@@ -10,12 +10,16 @@ import {
 } from "react";
 import { formatJstStartLabel } from "@/lib/time";
 import LinkifiedText from "@/app/components/LinkifiedText";
+import TitleBadge from "@/app/components/TitleBadge";
+
 
 type ChatItem = {
   id: string;
   user_id: string;
   user_name: string;
   user_avatar_url?: string | null;
+  user_title_label?: string | null;
+  user_title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -89,25 +93,37 @@ function NameLine({
   userId,
   userName,
   myUserId,
+  titleLabel,
+  titleRank,
 }: {
   mine: boolean;
   userId: string;
   userName: string;
   myUserId: string;
+  titleLabel?: string | null;
+  titleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
 }) {
+  const href = profileHref(userId, myUserId);
+
   if (mine) {
-    return <div className="text-xs font-semibold">あなた</div>;
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="text-xs font-semibold">あなた</div>
+        <TitleBadge label={titleLabel} rank={titleRank} compact />
+      </div>
+    );
   }
 
   return (
-    <Link
-      href={profileHref(userId, myUserId)}
-      className="text-xs font-semibold hover:underline break-all"
-    >
-      {userName}
-    </Link>
+    <div className="flex min-w-0 items-center gap-2">
+      <Link href={href} className="text-xs font-semibold hover:underline break-all">
+        {userName}
+      </Link>
+      <TitleBadge label={titleLabel} rank={titleRank} compact />
+    </div>
   );
 }
+
 
 function DeleteButton({
   visible,
@@ -200,6 +216,8 @@ function TextBubble({
           userId={item.user_id}
           userName={item.user_name}
           myUserId={myUserId}
+          titleLabel={item.user_title_label}
+          titleRank={item.user_title_rank}
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
@@ -255,6 +273,8 @@ function ImageBubble({
           userId={item.user_id}
           userName={item.user_name}
           myUserId={myUserId}
+          titleLabel={item.user_title_label}
+          titleRank={item.user_title_rank}
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
@@ -329,6 +349,8 @@ function VideoBubble({
           userId={item.user_id}
           userName={item.user_name}
           myUserId={myUserId}
+          titleLabel={item.user_title_label}
+          titleRank={item.user_title_rank}
         />
       }
       meta={<ChatMeta createdAt={item.created_at} />}
@@ -397,8 +419,11 @@ function FileBubble({
           userId={item.user_id}
           userName={item.user_name}
           myUserId={myUserId}
+          titleLabel={item.user_title_label}
+          titleRank={item.user_title_rank}
         />
       }
+
       meta={<ChatMeta createdAt={item.created_at} />}
       deleteButton={
         <DeleteButton visible={canModerate} deleting={deleting} onClick={onDelete} />
