@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ReactNode,
 } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,7 @@ import { formatJst } from "@/lib/time";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 
+type TitleRank = "platinum" | "gold" | "silver" | "bronze" | null;
 
 type Message = {
   id: string;
@@ -26,9 +28,7 @@ type Message = {
   sender_avatar_url?: string | null;
   sender_profile_href?: string;
   sender_title_label?: string | null;
-  sender_title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
-  senderTitleLabel?: string | null;
-  senderTitleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  sender_title_rank?: TitleRank;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -105,7 +105,7 @@ function NameLine({
   href: string;
   name: string;
   titleLabel?: string | null;
-  titleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  titleRank?: TitleRank;
 }) {
   if (mine) {
     return (
@@ -178,11 +178,11 @@ function BubbleFrame({
   children,
 }: {
   mine: boolean;
-  avatar: React.ReactNode;
-  header: React.ReactNode;
-  meta: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  avatar: ReactNode;
+  header: ReactNode;
+  meta: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className={["flex gap-3", mine ? "justify-end" : "justify-start"].join(" ")}>
@@ -212,10 +212,10 @@ function BubbleText({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  showUnsend,
-  unsendBusy,
   senderTitleLabel,
   senderTitleRank,
+  showUnsend,
+  unsendBusy,
   onUnsend,
 }: {
   mine: boolean;
@@ -225,7 +225,7 @@ function BubbleText({
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
-  senderTitleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  senderTitleRank?: TitleRank;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -241,15 +241,14 @@ function BubbleText({
         />
       }
       header={
-  <NameLine
-    mine={mine}
-    href={senderProfileHref}
-    name={senderName}
-        titleLabel={senderTitleLabel}
-        titleRank={senderTitleRank}
-  />
-}
-
+        <NameLine
+          mine={mine}
+          href={senderProfileHref}
+          name={senderName}
+          titleLabel={senderTitleLabel}
+          titleRank={senderTitleRank}
+        />
+      }
       meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
@@ -282,7 +281,7 @@ function BubbleUnsent({
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
-  senderTitleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  senderTitleRank?: TitleRank;
 }) {
   return (
     <BubbleFrame
@@ -295,15 +294,14 @@ function BubbleUnsent({
         />
       }
       header={
-  <NameLine
-    mine={mine}
-    href={senderProfileHref}
-    name={senderName}
-    titleLabel={senderTitleLabel}
-    titleRank={senderTitleRank}
-  />
-}
-
+        <NameLine
+          mine={mine}
+          href={senderProfileHref}
+          name={senderName}
+          titleLabel={senderTitleLabel}
+          titleRank={senderTitleRank}
+        />
+      }
       meta={<BubbleMeta createdAt={createdAt} />}
     >
       <div
@@ -342,7 +340,7 @@ function BubbleImage({
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
-  senderTitleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  senderTitleRank?: TitleRank;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -358,15 +356,14 @@ function BubbleImage({
         />
       }
       header={
-  <NameLine
-    mine={mine}
-    href={senderProfileHref}
-    name={senderName}
-    titleLabel={senderTitleLabel}
-    titleRank={senderTitleRank}
-  />
-}
-
+        <NameLine
+          mine={mine}
+          href={senderProfileHref}
+          name={senderName}
+          titleLabel={senderTitleLabel}
+          titleRank={senderTitleRank}
+        />
+      }
       meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
@@ -426,7 +423,7 @@ function BubbleVideo({
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
-  senderTitleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  senderTitleRank?: TitleRank;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -442,14 +439,14 @@ function BubbleVideo({
         />
       }
       header={
-  <NameLine
-    mine={mine}
-    href={senderProfileHref}
-    name={senderName}
-    titleLabel={senderTitleLabel}
-    titleRank={senderTitleRank}
-  />
-}
+        <NameLine
+          mine={mine}
+          href={senderProfileHref}
+          name={senderName}
+          titleLabel={senderTitleLabel}
+          titleRank={senderTitleRank}
+        />
+      }
       meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
@@ -491,10 +488,10 @@ function BubbleFile({
   senderName,
   senderAvatarUrl,
   senderProfileHref,
-  showUnsend,
-  unsendBusy,
   senderTitleLabel,
   senderTitleRank,
+  showUnsend,
+  unsendBusy,
   onUnsend,
 }: {
   mine: boolean;
@@ -507,10 +504,10 @@ function BubbleFile({
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
+  senderTitleLabel?: string | null;
+  senderTitleRank?: TitleRank;
   showUnsend: boolean;
   unsendBusy: boolean;
-  senderTitleLabel?: string | null;
-  senderTitleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
   onUnsend: () => void;
 }) {
   const label = mime?.includes("pdf") ? "PDF" : "FILE";
@@ -526,15 +523,14 @@ function BubbleFile({
         />
       }
       header={
-  <NameLine
-    mine={mine}
-    href={senderProfileHref}
-    name={senderName}
-    titleLabel={senderTitleLabel}
-    titleRank={senderTitleRank}
-  />
-}
-
+        <NameLine
+          mine={mine}
+          href={senderProfileHref}
+          name={senderName}
+          titleLabel={senderTitleLabel}
+          titleRank={senderTitleRank}
+        />
+      }
       meta={<BubbleMeta createdAt={createdAt} />}
       action={
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
@@ -601,6 +597,8 @@ export default function DmChatClient({
   const selfName = (selfSeedMessage?.sender_name ?? "").trim() || "あなた";
   const selfAvatarUrl = selfSeedMessage?.sender_avatar_url ?? null;
   const selfProfileHref = "/profile";
+  const selfTitleLabel = selfSeedMessage?.sender_title_label ?? null;
+  const selfTitleRank = selfSeedMessage?.sender_title_rank ?? null;
 
   const scrollToBottom = (smooth: boolean) => {
     const el = bottomRef.current;
@@ -825,12 +823,10 @@ export default function DmChatClient({
                 const senderProfileHref =
                   m.sender_profile_href ??
                   (mine ? "/profile" : `/users/${encodeURIComponent(m.sender_id)}`);
-
-                const showUnsend = mine && !m.unsent_at;
-                const unsendBusy = unsendingId === m.id;
                 const senderTitleLabel = m.sender_title_label ?? null;
                 const senderTitleRank = m.sender_title_rank ?? null;
-
+                const showUnsend = mine && !m.unsent_at;
+                const unsendBusy = unsendingId === m.id;
 
                 if (m.unsent_at) {
                   return (
@@ -841,6 +837,8 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      senderTitleLabel={senderTitleLabel}
+                      senderTitleRank={senderTitleRank}
                     />
                   );
                 }
@@ -857,6 +855,8 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      senderTitleLabel={senderTitleLabel}
+                      senderTitleRank={senderTitleRank}
                       showUnsend={showUnsend}
                       unsendBusy={unsendBusy}
                       onUnsend={() => unsendMessage(m.id)}
@@ -876,6 +876,8 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      senderTitleLabel={senderTitleLabel}
+                      senderTitleRank={senderTitleRank}
                       showUnsend={showUnsend}
                       unsendBusy={unsendBusy}
                       onUnsend={() => unsendMessage(m.id)}
@@ -897,6 +899,8 @@ export default function DmChatClient({
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
+                      senderTitleLabel={senderTitleLabel}
+                      senderTitleRank={senderTitleRank}
                       showUnsend={showUnsend}
                       unsendBusy={unsendBusy}
                       onUnsend={() => unsendMessage(m.id)}
@@ -913,6 +917,8 @@ export default function DmChatClient({
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}
                     senderProfileHref={senderProfileHref}
+                    senderTitleLabel={senderTitleLabel}
+                    senderTitleRank={senderTitleRank}
                     showUnsend={showUnsend}
                     unsendBusy={unsendBusy}
                     onUnsend={() => unsendMessage(m.id)}
@@ -935,6 +941,8 @@ export default function DmChatClient({
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
                       senderProfileHref={u.sender_profile_href}
+                      senderTitleLabel={selfTitleLabel}
+                      senderTitleRank={selfTitleRank}
                       showUnsend={false}
                       unsendBusy={false}
                       onUnsend={() => {}}
@@ -954,6 +962,8 @@ export default function DmChatClient({
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
                       senderProfileHref={u.sender_profile_href}
+                      senderTitleLabel={selfTitleLabel}
+                      senderTitleRank={selfTitleRank}
                       showUnsend={false}
                       unsendBusy={false}
                       onUnsend={() => {}}
@@ -974,6 +984,8 @@ export default function DmChatClient({
                     senderName={u.sender_name}
                     senderAvatarUrl={u.sender_avatar_url}
                     senderProfileHref={u.sender_profile_href}
+                    senderTitleLabel={selfTitleLabel}
+                    senderTitleRank={selfTitleRank}
                     showUnsend={false}
                     unsendBusy={false}
                     onUnsend={() => {}}
@@ -1042,7 +1054,7 @@ export default function DmChatClient({
           <Input
             name="body"
             value={draft}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
             placeholder="メッセージを入力…"
             disabled={uploading}
           />
@@ -1057,4 +1069,3 @@ export default function DmChatClient({
     </>
   );
 }
-``
