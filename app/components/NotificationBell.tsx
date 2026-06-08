@@ -42,6 +42,15 @@ function bellIcon(className = "h-5 w-5") {
   );
 }
 
+function iconFor(n: NotifItem) {
+  if (n.type === "trophy_unlock") return "🏆";
+  if (n.type === "streak_end") return "⏱️";
+  if (n.type === "dm") return "✉️";
+  if (n.type === "admin_broadcast") return "📢";
+  if (n.type === "support_reply") return "💬";
+  return "🔔";
+}
+
 export default function NotificationBell({
   limit = 20,
   pollMs = 5000,
@@ -265,13 +274,9 @@ export default function NotificationBell({
           </div>
 
           {initialLoading && items.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-muted-foreground">
-              読み込み中...
-            </div>
+            <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>
           ) : error && items.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-destructive">
-              エラー: {error}
-            </div>
+            <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>
           ) : items.length === 0 ? (
             <div className="px-4 py-8 text-sm text-muted-foreground">
               通知はまだありません。
@@ -279,7 +284,13 @@ export default function NotificationBell({
           ) : (
             <ul className="divide-y divide-border">
               {items.map((n) => (
-                <li key={n.id} className={n.read ? "" : "bg-primary/5"}>
+                <li
+                  key={n.id}
+                  className={[
+                    n.read ? "" : "bg-primary/5",
+                    n.type === "trophy_unlock" ? "border-l-2 border-amber-300/70" : "",
+                  ].join(" ")}
+                >
                   <Link
                     href={routeFor(n)}
                     onClick={() => {
@@ -290,10 +301,13 @@ export default function NotificationBell({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">
-                          {titleFor(n)}
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 text-sm">{iconFor(n)}</span>
+                          <div className="text-sm font-semibold truncate">
+                            {titleFor(n)}
+                          </div>
                         </div>
-                        <div className="mt-0.5 text-xs text-muted-foreground break-words">
+                        <div className="mt-1 text-xs text-muted-foreground break-words">
                           {bodyFor(n)}
                         </div>
                       </div>
@@ -321,3 +335,4 @@ export default function NotificationBell({
     </div>
   );
 }
+``

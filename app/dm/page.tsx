@@ -3,8 +3,8 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
 import { formatJst } from "@/lib/time";
+import TitleBadge from "@/app/components/TitleBadge";
 
 type ThreadRow = {
   thread_id: string;
@@ -13,11 +13,20 @@ type ThreadRow = {
   last_message: string | null;
   last_message_at: string | null;
   avatar_path?: string | null;
+  title_label?: string | null;
+  title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
 };
 
 type ProfileRow = {
   id: string;
   avatar_path: string | null;
+  current_title_badge_id: string | null;
+};
+
+type BadgeLiteRow = {
+  id: string;
+  title_label: string | null;
+  badge_rank: "platinum" | "gold" | "silver" | "bronze";
 };
 
 function avatarUrl(path: string | null | undefined) {
@@ -45,7 +54,7 @@ export default async function DmListPage() {
       <Container>
         <Card>
           <CardHeader>
-            <h1 className="text-xl font-bold">DM</h1>
+            <h1 className="text-xl font-bold tracking-tight">DM</h1>
           </CardHeader>
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {error.message}</p>
@@ -57,34 +66,74 @@ export default async function DmListPage() {
 
   const baseThreads = (data ?? []) as ThreadRow[];
   const userIds = Array.from(new Set(baseThreads.map((t) => t.other_user_id)));
+
   const avatarMap = new Map<string, string | null>();
+  const titleBadgeIdMap = new Map<string, string | null>();
 
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path")
+      .select("id, avatar_path, current_title_badge_id")
       .in("id", userIds);
 
-    (profiles ?? []).forEach((p: ProfileRow) => {
-      avatarMap.set(p.id, p.avatar_path ?? null);
+    if (profilesErr) {
+      throw new Error(profilesErr.message);
+    }
+
+    (profiles ?? []).forEach((p: any) => {
+      const row = p as ProfileRow;
+      avatarMap.set(row.id, row.avatar_path ?? null);
+      titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
     });
   }
 
-  const threads = baseThreads.map((t) => ({
-    ...t,
-    avatar_path: avatarMap.get(t.other_user_id) ?? null,
-  }));
+  const badgeIds = Array.from(
+    new Set(Array.from(titleBadgeIdMap.values()).filter(Boolean))
+  ) as string[];
+
+  const badgeMap = new Map<string, BadgeLiteRow>();
+
+  if (badgeIds.length > 0) {
+    const { data: badges, error: badgesErr } = await supabase
+      .from("badges")
+      .select("id, title_label, badge_rank")
+      .in("id", badgeIds);
+
+    if (badgesErr) {
+      throw new Error(badgesErr.message);
+    }
+
+    (badges ?? []).forEach((b: any) => {
+      const row = b as BadgeLiteRow;
+      badgeMap.set(row.id, row);
+    });
+  }
+
+  const threads = baseThreads.map((t) => {
+    const badgeId = titleBadgeIdMap.get(t.other_user_id) ?? null;
+    const badge = badgeId ? badgeMap.get(badgeId) ?? null : null;
+
+    return {
+      ...t,
+      avatar_path: avatarMap.get(t.other_user_id) ?? null,
+      title_label: badge?.title_label?.trim() || null,
+      title_rank: badge?.badge_rank ?? null,
+    };
+  });
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">DM</h1>
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">DM</h1>
+          <p className="text-sm text-muted-foreground">個別メッセージのやり取り</p>
+        </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/app">
+        <div className="flex gap-3">
+          <Link className="text-sm text-primary hover:underline" href="/app">
             /app
           </Link>
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/ranking">
+          <Link className="text-sm text-primary hover:underline" href="/ranking">
             /ranking
           </Link>
         </div>
@@ -95,55 +144,57 @@ export default async function DmListPage() {
           <CardHeader>
             <h2 className="font-semibold">スレッド一覧</h2>
           </CardHeader>
-
           <CardBody>
             {threads.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
                 まだDMがありません。参加者一覧から「メッセージ」で開始しよう。
-              </p>
+              </div>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {threads.map((t) => {
                   const avatar = avatarUrl(t.avatar_path);
-                  const initial = (t.other_display_name ?? "?").trim().slice(0, 1) || "?";
+                  const initial =
+                    (t.other_display_name ?? "?").trim().slice(0, 1) || "?";
 
                   return (
-                    <li
-                      key={t.thread_id}
-                      className="rounded-lg border border-border bg-secondary/40 px-4 py-3 hover:bg-secondary/50 transition"
-                    >
-                      <Link href={`/dm/${t.thread_id}`} className="block">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          {/* 左側：アイコン + 名前 + 最終メッセージ */}
-                          <div className="min-w-0 flex flex-1 gap-3">
-                            <div className="shrink-0">
-                              {avatar ? (
-                                <img
-                                  src={avatar}
-                                  alt="avatar"
-                                  className="h-12 w-12 rounded-full object-cover border border-border"
-                                />
-                              ) : (
-                                <div className="h-12 w-12 rounded-full border border-border bg-background/60 flex items-center justify-center text-sm font-bold text-muted-foreground">
-                                  {initial}
-                                </div>
-                              )}
-                            </div>
+                    <li key={t.thread_id}>
+                      <Link
+                        href={`/dm/${t.thread_id}`}
+                        className="block rounded-xl border border-border bg-background/60 px-4 py-4 hover:bg-secondary/30 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="shrink-0">
+                            {avatar ? (
+                              <img
+                                src={avatar}
+                                alt={t.other_display_name || "avatar"}
+                                className="h-12 w-12 rounded-full object-cover border border-border"
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-full border border-border bg-secondary/40 flex items-center justify-center text-base font-bold text-muted-foreground">
+                                {initial}
+                              </div>
+                            )}
+                          </div>
 
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold leading-tight break-words sm:truncate">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-sm font-semibold break-words">
                                 {t.other_display_name}
                               </div>
+                              <TitleBadge
+                                label={t.title_label}
+                                rank={t.title_rank}
+                                compact
+                              />
+                            </div>
 
-                              <div className="mt-1 text-xs text-muted-foreground break-words sm:truncate">
-                                {t.last_message ?? "（まだメッセージがありません）"}
-                              </div>
+                            <div className="mt-1 text-sm text-muted-foreground break-words">
+                              {t.last_message ?? "（まだメッセージがありません）"}
                             </div>
                           </div>
 
-                          {/* 右側：日時
-                              モバイルでは下段へ逃がし、名前を潰さない */}
-                          <div className="pl-[60px] sm:pl-0 text-left sm:text-right text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                          <div className="shrink-0 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                             {t.last_message_at ? formatJst(t.last_message_at) : ""}
                           </div>
                         </div>
@@ -159,3 +210,4 @@ export default async function DmListPage() {
     </Container>
   );
 }
+``

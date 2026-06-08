@@ -30,6 +30,7 @@ type Toast = {
   href: string;
   sticky: boolean;
   icon: string;
+  tone: "default" | "trophy";
 };
 
 function isAdminBroadcast(n: NotifItem) {
@@ -110,6 +111,11 @@ function iconFor(n: NotifItem) {
   if (n.type === "streak_end") return "⏱️";
   if (n.type === "admin_broadcast") return "📢";
   return "🔔";
+}
+
+function toneFor(n: NotifItem): "default" | "trophy" {
+  if (n.type === "trophy_unlock") return "trophy";
+  return "default";
 }
 
 export default function NotificationToaster({
@@ -198,6 +204,7 @@ export default function NotificationToaster({
               href: routeFor(n),
               sticky: isAdminBroadcast(n),
               icon: iconFor(n),
+              tone: toneFor(n),
             });
           }
         }
@@ -220,6 +227,7 @@ export default function NotificationToaster({
           href: routeFor(n),
           sticky: isAdminBroadcast(n),
           icon: iconFor(n),
+          tone: toneFor(n),
         });
       }
     } catch (e: any) {
@@ -263,8 +271,12 @@ export default function NotificationToaster({
         <div
           key={t.id}
           className={[
-            "rounded-xl border shadow-glow px-4 py-3 backdrop-blur",
-            t.sticky ? "border-primary/40 bg-card/95" : "border-border bg-card/90",
+            "rounded-xl border px-4 py-3 backdrop-blur shadow-glow",
+            t.sticky
+              ? "border-primary/40 bg-card/95"
+              : t.tone === "trophy"
+              ? "border-amber-300/60 bg-gradient-to-r from-amber-50/95 to-yellow-50/95"
+              : "border-border bg-card/90",
           ].join(" ")}
           role="status"
         >
@@ -276,10 +288,25 @@ export default function NotificationToaster({
               aria-label="通知を開く"
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">{t.icon}</span>
-                <div className="text-sm font-semibold truncate">{t.title}</div>
+                <span className="text-lg shrink-0">{t.icon}</span>
+                <div
+                  className={[
+                    "text-sm font-semibold truncate",
+                    t.tone === "trophy" ? "text-amber-900" : "",
+                  ].join(" ")}
+                >
+                  {t.title}
+                </div>
               </div>
-              <div className="mt-1 text-xs text-muted-foreground break-words">
+
+              <div
+                className={[
+                  "mt-1 text-xs break-words",
+                  t.tone === "trophy"
+                    ? "text-amber-800/80"
+                    : "text-muted-foreground",
+                ].join(" ")}
+              >
                 {t.body}
               </div>
             </button>
