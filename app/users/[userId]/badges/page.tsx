@@ -1,4 +1,3 @@
-
 import { redirect } from "next/navigation";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
@@ -9,6 +8,7 @@ import BadgeCollectionClient from "@/app/badges/BadgeCollectionClient";
 type BadgeRow = {
   id: string;
   title: string;
+  title_label: string | null;
   description: string;
   badge_rank: "platinum" | "gold" | "silver" | "bronze";
   condition_type: string;
@@ -19,7 +19,6 @@ type BadgeRow = {
 type UserBadgeRow = {
   badge_id: string;
   unlocked_at: string;
-  is_pinned: boolean;
 };
 
 export default async function UserBadgesPage({
@@ -35,14 +34,23 @@ export default async function UserBadgesPage({
     error: userErr,
   } = await supabase.auth.getUser();
 
-  if (userErr || !user) redirect("/auth/sign-in");
-  if (userId === user.id) redirect("/badges");
+  if (userErr || !user) {
+    redirect("/auth/sign-in");
+  }
 
-  const { data: profile } = await supabase
+  if (userId === user.id) {
+    redirect("/badges");
+  }
+
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("id, display_name")
     .eq("id", userId)
     .maybeSingle();
+
+  if (profileErr) {
+    throw new Error(profileErr.message);
+  }
 
   if (!profile) {
     return (
@@ -52,10 +60,22 @@ export default async function UserBadgesPage({
             <h1 className="text-xl font-bold tracking-tight">トロフィー</h1>
           </CardHeader>
           <CardBody>
-            <p className="text-sm text-muted-foreground">ユーザーが見つかりません。</p>
+            <p className="text-sm text-muted-foreground">
+              ユーザーが見つかりません。
+            </p>
             <div className="mt-3 flex gap-3">
-              <Link href="/participants" className="text-sm text-primary hover:underline">/participants</Link>
-              <Link href="/app" className="text-sm text-primary hover:underline">/app</Link>
+              <Link
+                href="/participants"
+                className="text-sm text-primary hover:underline"
+              >
+                /participants
+              </Link>
+              <Link
+                href="/app"
+                className="text-sm text-primary hover:underline"
+              >
+                /app
+              </Link>
             </div>
           </CardBody>
         </Card>
@@ -63,19 +83,31 @@ export default async function UserBadgesPage({
     );
   }
 
-  const [{ data: badges, error: bErr }, { data: earned, error: eErr }] = await Promise.all([
+  const [
+    { data: badges, error: badgesErr },
+    { data: earned, error: earnedErr },
+  ] = await Promise.all([
     supabase
       .from("badges")
-      .select("id, title, description, badge_rank, condition_type, condition_value, icon_path")
+      .select(
+        "id, title, title_label, description, badge_rank, condition_type, condition_value, icon_path"
+      )
       .order("created_at", { ascending: true }),
+
     supabase
       .from("user_badges")
-      .select("badge_id, unlocked_at, is_pinned")
-      .eq("user_id", userId),
+      .select("badge_id, unlocked_at")
+      .eq("user_id", userId)
+      .order("unlocked_at", { ascending: false }),
   ]);
 
-  if (bErr) throw new Error(bErr.message);
-  if (eErr) throw new Error(eErr.message);
+  if (badgesErr) {
+    throw new Error(badgesErr.message);
+  }
+
+  if (earnedErr) {
+    throw new Error(earnedErr.message);
+  }
 
   const displayName = (profile.display_name ?? "").trim() || "NoName";
 
@@ -87,8 +119,10 @@ export default async function UserBadgesPage({
         profileHref={`/users/${encodeURIComponent(userId)}`}
         badges={(badges ?? []) as BadgeRow[]}
         earned={(earned ?? []) as UserBadgeRow[]}
+        currentTitleBadgeId={null}
         readOnly={true}
       />
     </Container>
   );
 }
+``
