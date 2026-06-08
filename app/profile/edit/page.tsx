@@ -1,56 +1,48 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import PendingSubmitButton from "@/app/components/ui/PendingSubmitButton";
+import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-
-const MAX_AVATAR_SIZE_MB = 50;
-const MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024;
-
-function safeExt(filename: string) {
-  const last = filename.split(".").pop() || "";
-  const ext = last.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return ext || "bin";
-}
-
-function uuidLike() {
-  // @ts-ignore
-  if (globalThis.crypto?.randomUUID) {
-    // @ts-ignore
-    return globalThis.crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+import { revalidatePath } from "next/cache";
+import TitleSettingCard from "./TitleSettingCard";
 
 type ProfileRow = {
   id: string;
   display_name: string | null;
   avatar_path: string | null;
   status_message: string | null;
+  current_title_badge_id: string | null;
 };
 
-function avatarUrl(path: string | null) {
+type UserBadgeRow = {
+  badge_id: string;
+  unlocked_at: string;
+};
+
+type BadgeRow = {
+  id: string;
+  title: string;
+  title_label: string | null;
+  badge_rank: "platinum" | "gold" | "silver" | "bronze";
+};
+
+function avatarProxyUrl(path: string | null) {
   if (!path) return null;
   return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
 }
 
-function buildErrorRedirect(message: string) {
-  return `/profile/edit?error=${encodeURIComponent(message)}`;
+function extFromName(name: string) {
+  const idx = name.lastIndexOf(".");
+  if (idx < 0) return "bin";
+  return name.slice(idx + 1).toLowerCase();
 }
 
 export default async function ProfileEditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const errorMessage = typeof sp.error === "string" ? sp.error : "";
-
   const supabase = await createClient();
 
   const {
@@ -62,227 +54,312 @@ export default async function ProfileEditPage({
     redirect("/auth/sign-in");
   }
 
-  async function saveProfileAction(formData: FormData) {
+  const [
+    { data: profile, error: profileErr },
+    { data: userBadges, error: userBadgesErr },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, display_name, avatar_path, status_message, current_title_badge_id")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("user_badges")
+      .select("badge_id, unlocked_at")
+      .eq("user_id", user.id)
+      .order("unlocked_at", { ascending: false }),
+  ]);
+
+  if (profileErr) {
+    throw new Error(profileErr.message);
+  }
+
+  if (userBadgesErr) {
+    throw new Error(userBadgesErr.message);
+  }
+
+  const profileRow = (profile ?? {
+    id: user.id,
+    display_name: "",
+    avatar_path: null,
+    status_message: "",
+    current_title_badge_id: null,
+  }) as ProfileRow;
+
+  const earnedRows = (userBadges ?? []) as UserBadgeRow[];
+  const badgeIds = Array.from(new Set(earnedRows.map((x) => x.badge_id)));
+
+  let badgeOptions: Array<{
+    badge_id: string;
+    title: string;
+    title_label: string | null;
+    badge_rank: "platinum" | "gold" | "silver" | "bronze";
+    unlocked_at: string;
+  }> = [];
+
+  if (badgeIds.length > 0) {
+    const { data: badges, error: badgesErr } = await supabase
+      .from("badges")
+      .select("id, title, title_label, badge_rank")
+      .in("id", badgeIds);
+
+    if (badgesErr) {
+      throw new Error(badgesErr.message);
+    }
+
+    const badgeMap = new Map<string, BadgeRow>();
+    (badges ?? []).forEach((b: any) => {
+      badgeMap.set(b.id, b as BadgeRow);
+    });
+
+    badgeOptions = earnedRows
+      .map((ub) => {
+        const badge = badgeMap.get(ub.badge_id);
+        if (!badge) return null;
+        return {
+          badge_id: ub.badge_id,
+          title: badge.title,
+          title_label: badge.title_label,
+          badge_rank: badge.badge_rank,
+          unlocked_at: ub.unlocked_at,
+        };
+      })
+      .filter(Boolean) as Array<{
+      badge_id: string;
+      title: string;
+      title_label: string | null;
+      badge_rank: "platinum" | "gold" | "silver" | "bronze";
+      unlocked_at: string;
+    }>;
+  }
+
+  async function saveProfile(formData: FormData): Promise<void> {
     "use server";
 
     const supabase = await createClient();
 
     const {
       data: { user },
-      error: userErr,
     } = await supabase.auth.getUser();
 
-    if (userErr || !user) {
+    if (!user) {
       redirect("/auth/sign-in");
     }
 
-    const rawName = String(formData.get("display_name") ?? "").trim();
-    const rawStatus = String(formData.get("status_message") ?? "").trim();
-    const file = formData.get("avatar");
+    const displayName = String(formData.get("display_name") ?? "").trim();
+    const statusMessage = String(formData.get("status_message") ?? "").trim();
+    const avatar = formData.get("avatar");
 
-    if (!rawName) {
-      redirect(buildErrorRedirect("名前は必須です。"));
+    if (!displayName) {
+      redirect("/profile/edit?error=displayName");
     }
 
-    if (rawName.length > 20) {
-      redirect(buildErrorRedirect("名前は20文字以内です。"));
+    if (displayName.length > 20) {
+      redirect("/profile/edit?error=displayNameTooLong");
     }
 
-    if (rawStatus.length > 120) {
-      redirect(buildErrorRedirect("ステータスメッセージは120文字以内です。"));
+    if (statusMessage.length > 160) {
+      redirect("/profile/edit?error=statusTooLong");
     }
 
-    let avatarPath: string | null = null;
+    let nextAvatarPath: string | null = profileRow.avatar_path ?? null;
 
-    // 既存 avatar_path を取得して維持する
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("avatar_path")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    avatarPath = (existing?.avatar_path as string | null) ?? null;
-
-    if (file instanceof File && file.size > 0) {
-      const mime = (file.type || "application/octet-stream").toLowerCase();
-      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-
-      if (!allowed.includes(mime)) {
-        redirect(
-          buildErrorRedirect(
-            "アイコン画像は jpg / png / webp / gif のみ対応です。"
-          )
-        );
+    if (avatar instanceof File && avatar.size > 0) {
+      const maxBytes = 50 * 1024 * 1024;
+      if (avatar.size > maxBytes) {
+        redirect("/profile/edit?error=avatarTooLarge");
       }
 
-      if (file.size > MAX_AVATAR_SIZE_BYTES) {
-        redirect(
-          buildErrorRedirect(
-            `アイコン画像のサイズが大きすぎます。${MAX_AVATAR_SIZE_MB}MB以下の画像を選んでください。`
-          )
-        );
+      const mime = avatar.type || "";
+      if (!mime.startsWith("image/")) {
+        redirect("/profile/edit?error=avatarType");
       }
 
-      const ext = safeExt(file.name);
-      const objectPath = `${user.id}/${uuidLike()}.${ext}`;
+      const ext = extFromName(avatar.name || "avatar.bin");
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const arrayBuffer = await avatar.arrayBuffer();
 
-      const { error: upErr } = await supabase.storage
+      const { error: uploadErr } = await supabase.storage
         .from("profile-avatars")
-        .upload(objectPath, file, {
-          contentType: mime,
-          upsert: false,
+        .upload(path, arrayBuffer, {
+          contentType: avatar.type || "application/octet-stream",
+          upsert: true,
         });
 
-      if (upErr) {
-        redirect(
-          buildErrorRedirect(
-            "アイコン画像のアップロードに失敗しました。サイズや形式を確認して再度お試しください。"
-          )
-        );
+      if (uploadErr) {
+        redirect("/profile/edit?error=avatarUpload");
       }
 
-      avatarPath = objectPath;
+      nextAvatarPath = path;
     }
 
-    const { error } = await supabase
+    const { error: updateErr } = await supabase
       .from("profiles")
-      .update({
-        display_name: rawName,
-        status_message: rawStatus || null,
-        avatar_path: avatarPath,
-      })
-      .eq("id", user.id);
+      .upsert(
+        {
+          id: user.id,
+          display_name: displayName,
+          status_message: statusMessage,
+          avatar_path: nextAvatarPath,
+        },
+        { onConflict: "id" }
+      );
 
-    if (error) {
-      redirect(buildErrorRedirect("プロフィールの保存に失敗しました。"));
+    if (updateErr) {
+      redirect("/profile/edit?error=save");
     }
 
-    redirect("/profile");
+    revalidatePath("/profile");
+    revalidatePath("/profile/edit");
+    redirect("/profile?saved=1");
   }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_path, status_message")
-    .eq("id", user.id)
-    .maybeSingle();
+  const avatarUrl = avatarProxyUrl(profileRow.avatar_path);
 
-  if (error || !profile) {
-    throw new Error(error?.message ?? "profile not found");
-  }
-
-  const row = profile as ProfileRow;
-  const avatar = avatarUrl(row.avatar_path);
+  const error =
+    typeof sp.error === "string"
+      ? sp.error
+      : "";
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div role="banner" className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">プロフィール編集</h1>
           <p className="text-sm text-muted-foreground">
-            名前はいつでも変更できます。
+            名前・一言・アイコン・称号を編集できます。
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/profile">
-            /profile
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
+        <div className="flex gap-3">
+          <Link href="/profile">プロフィール</Link>
+          <Link href="/badges">称号</Link>
         </div>
-      </header>
+      </div>
 
-      <div className="mt-6">
+      <div className="mt-6 grid gap-4">
+        {error ? (
+          <Card>
+            <CardBody>
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {error === "displayName" && "表示名は必須です。"}
+                {error === "displayNameTooLong" && "表示名は20文字以内で入力してください。"}
+                {error === "statusTooLong" && "一言は160文字以内で入力してください。"}
+                {error === "avatarTooLarge" && "アイコン画像は50MB以下にしてください。"}
+                {error === "avatarType" && "アイコン画像は画像ファイルを選択してください。"}
+                {error === "avatarUpload" && "アイコン画像のアップロードに失敗しました。"}
+                {error === "save" && "プロフィール保存に失敗しました。"}
+                {![
+                  "displayName",
+                  "displayNameTooLong",
+                  "statusTooLong",
+                  "avatarTooLarge",
+                  "avatarType",
+                  "avatarUpload",
+                  "save",
+                ].includes(error) && "エラーが発生しました。"}
+              </div>
+            </CardBody>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader>
-            <h2 className="font-semibold">編集フォーム</h2>
+            <h2 className="font-semibold">基本情報</h2>
           </CardHeader>
-
           <CardBody>
-            {errorMessage ? (
-              <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {errorMessage}
-              </div>
-            ) : null}
-
-            <form action={saveProfileAction} className="space-y-4">
+            <form action={saveProfile} className="space-y-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <div className="shrink-0">
-                  {avatar ? (
-                    <img
-                      src={avatar}
-                      alt="avatar"
-                      className="h-24 w-24 rounded-full object-cover border border-border"
-                    />
-                  ) : (
-                    <div className="h-24 w-24 rounded-full border border-border bg-secondary/40 flex items-center justify-center text-2xl font-bold text-muted-foreground">
-                      {(row.display_name ?? "?").trim().slice(0, 1) || "?"}
-                    </div>
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1 space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">アイコン画像</label>
-                    <input
-                      type="file"
-                      name="avatar"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="block w-full text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      jpg / png / webp / gif、最大{MAX_AVATAR_SIZE_MB}MB
-                    </p>
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Avatar"
+                        className="h-24 w-24 rounded-full border border-border object-cover"
+                      />
+                    ) : (
+                      <div className="h-24 w-24 rounded-full border border-border bg-secondary/40 flex items-center justify-center text-2xl font-bold text-muted-foreground">
+                        {(profileRow.display_name ?? "?").trim().slice(0, 1) || "?"}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">名前</label>
+                  <div className="min-w-0 flex-1 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      表示名
+                    </label>
                     <input
+                      type="text"
                       name="display_name"
-                      required
+                      defaultValue={profileRow.display_name ?? ""}
                       maxLength={20}
-                      defaultValue={(row.display_name ?? "").trim()}
-                      className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
+                      required
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                     />
-                    <p className="text-xs text-muted-foreground">1〜20文字</p>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">
-                      ステータスメッセージ
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      一言
                     </label>
                     <textarea
                       name="status_message"
+                      defaultValue={profileRow.status_message ?? ""}
+                      maxLength={160}
                       rows={4}
-                      maxLength={120}
-                      defaultValue={(row.status_message ?? "").trim()}
-                      placeholder="一言プロフィールを入力"
-                      className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm resize-y"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                     />
-                    <p className="text-xs text-muted-foreground">0〜120文字</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      アイコン画像
+                    </label>
+                    <input
+                      type="file"
+                      name="avatar"
+                      accept="image/*"
+                      className="block w-full text-sm"
+                    />
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      jpg / png / webp / gif 推奨・最大 50MB
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                    >
+                      保存する
+                    </button>
+
+                    <Link
+                      href="/profile"
+                      className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+                    >
+                      キャンセル
+                    </Link>
                   </div>
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-3">
-                <PendingSubmitButton
-                  idleText="保存する"
-                  pendingText="保存中…"
-                  className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-
-                <Link
-                  href="/profile"
-                  className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-                >
-                  キャンセル
-                </Link>
-              </div>
             </form>
-          </CardBody>
-        </Card>
-      </div>
-    </Container>
-  );
-}
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <h2 className="font-semibold">称号</h2>
+              </CardHeader>
+              <CardBody>
+                <TitleSettingCard
+                  currentTitleBadgeId={profileRow.current_title_badge_id}
+                  options={badgeOptions}
+                />
+              </CardBody>
+            </Card>
+          </div>
+        </Container>
+      );
+    }
