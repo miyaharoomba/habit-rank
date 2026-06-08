@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { formatJstStartLabel } from "@/lib/time";
+import TitleBadge from "@/app/components/TitleBadge";
 
 type BestRow = {
   rank_no: number;
@@ -24,6 +24,13 @@ type CurrentRow = {
 type ProfileRow = {
   id: string;
   avatar_path: string | null;
+  current_title_badge_id: string | null;
+};
+
+type BadgeLiteRow = {
+  id: string;
+  title_label: string | null;
+  badge_rank: "platinum" | "gold" | "silver" | "bronze";
 };
 
 function formatTime(sec: number) {
@@ -64,11 +71,11 @@ function Avatar({
       {avatar ? (
         <img
           src={avatar}
-          alt="avatar"
-          className="h-10 w-10 rounded-full object-cover border border-border"
+          alt={displayName || "avatar"}
+          className="h-12 w-12 rounded-full object-cover border border-border"
         />
       ) : (
-        <div className="h-10 w-10 rounded-full border border-border bg-background/60 flex items-center justify-center text-sm font-bold text-muted-foreground">
+        <div className="h-12 w-12 rounded-full border border-border bg-secondary/40 flex items-center justify-center text-base font-bold text-muted-foreground">
           {initial}
         </div>
       )}
@@ -85,9 +92,11 @@ export default async function RankingPage({
   const activeTab = tab === "current" ? "current" : "best";
 
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) redirect("/auth/sign-in");
 
   const limit_count = 50;
@@ -103,6 +112,7 @@ export default async function RankingPage({
       : { data: null as any, error: null as any };
 
   const error = bestRes.error ?? currentRes.error;
+
   if (error) {
     return (
       <Container>
@@ -129,26 +139,54 @@ export default async function RankingPage({
   const bestRows = (bestRes.data ?? []) as BestRow[];
   const currentRows = (currentRes.data ?? []) as CurrentRow[];
 
-  const targetUserIds = Array.from(
-    new Set((activeTab === "best" ? bestRows : currentRows).map((r) => r.user_id))
-  );
+  const targetRows = activeTab === "best" ? bestRows : currentRows;
+  const targetUserIds = Array.from(new Set(targetRows.map((r) => r.user_id)));
 
   const avatarMap = new Map<string, string | null>();
+  const titleBadgeIdMap = new Map<string, string | null>();
 
   if (targetUserIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path")
+      .select("id, avatar_path, current_title_badge_id")
       .in("id", targetUserIds);
 
-    (profiles ?? []).forEach((p: ProfileRow) => {
-      avatarMap.set(p.id, p.avatar_path ?? null);
+    if (profilesErr) {
+      throw new Error(profilesErr.message);
+    }
+
+    (profiles ?? []).forEach((p: any) => {
+      const row = p as ProfileRow;
+      avatarMap.set(row.id, row.avatar_path ?? null);
+      titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
+    });
+  }
+
+  const badgeIds = Array.from(
+    new Set(Array.from(titleBadgeIdMap.values()).filter(Boolean))
+  ) as string[];
+
+  const badgeMap = new Map<string, BadgeLiteRow>();
+
+  if (badgeIds.length > 0) {
+    const { data: badges, error: badgesErr } = await supabase
+      .from("badges")
+      .select("id, title_label, badge_rank")
+      .in("id", badgeIds);
+
+    if (badgesErr) {
+      throw new Error(badgesErr.message);
+    }
+
+    (badges ?? []).forEach((b: any) => {
+      const row = b as BadgeLiteRow;
+      badgeMap.set(row.id, row);
     });
   }
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ランキング</h1>
           <p className="text-sm text-muted-foreground">
@@ -156,28 +194,27 @@ export default async function RankingPage({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/app">
+        <div className="flex gap-3">
+          <Link className="text-sm text-primary hover:underline" href="/app">
             ← /app
           </Link>
-          <Link className="text-sm text-primary hover:underline whitespace-nowrap" href="/dm">
+          <Link className="text-sm text-primary hover:underline" href="/dm">
             /dm
           </Link>
-          <Link
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-            href="/settings"
-          >
+          <Link className="text-sm text-primary hover:underline" href="/settings">
             設定
           </Link>
         </div>
       </header>
 
-      <div className="mt-5 flex gap-2">
+      <div className="mt-4 flex gap-2">
         <Link
           href="/ranking?tab=best"
           className={[
-            "rounded-lg border border-border px-3 py-2 text-sm font-semibold whitespace-nowrap",
-            activeTab === "best" ? "bg-primary text-primary-foreground" : "bg-secondary/40",
+            "inline-flex rounded-lg border px-4 py-2 text-sm font-semibold transition",
+            activeTab === "best"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background hover:bg-secondary/40",
           ].join(" ")}
         >
           ベスト
@@ -186,77 +223,77 @@ export default async function RankingPage({
         <Link
           href="/ranking?tab=current"
           className={[
-            "rounded-lg border border-border px-3 py-2 text-sm font-semibold whitespace-nowrap",
-            activeTab === "current" ? "bg-primary text-primary-foreground" : "bg-secondary/40",
+            "inline-flex rounded-lg border px-4 py-2 text-sm font-semibold transition",
+            activeTab === "current"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background hover:bg-secondary/40",
           ].join(" ")}
         >
           継続中
         </Link>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-6">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-semibold">
-                TOP {Math.min(50, activeTab === "best" ? bestRows.length : currentRows.length)}
-              </h2>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {activeTab === "best" ? "過去最高" : "現在経過"}
-              </span>
-            </div>
+            <h2 className="font-semibold">
+              TOP {Math.min(50, activeTab === "best" ? bestRows.length : currentRows.length)}
+            </h2>
           </CardHeader>
 
           <CardBody>
             {activeTab === "best" ? (
               bestRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
                   まだベスト記録がありません。開始→終了で記録を作ってみて！
-                </p>
+                </div>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-3">
                   {bestRows.map((r) => {
                     const isMe = r.user_id === user.id;
                     const href = profileHref(r.user_id, user.id);
                     const avatar = avatarUrl(avatarMap.get(r.user_id));
+                    const badgeId = titleBadgeIdMap.get(r.user_id) ?? null;
+                    const title = badgeId ? badgeMap.get(badgeId) ?? null : null;
 
                     return (
                       <li
-                        key={r.user_id}
-                        className={[
-                          "rounded-xl border border-border px-4 py-3 bg-secondary/40",
-                          isMe ? "ring-1 ring-primary/40 bg-primary/10" : "",
-                        ].join(" ")}
+                        key={`${r.rank_no}-${r.user_id}`}
+                        className="rounded-xl border border-border bg-background/60 px-4 py-4"
                       >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
-                              {r.rank_no}
-                            </span>
-
-                            <div className="flex min-w-0 flex-1 gap-3">
-                              <Avatar href={href} avatar={avatar} displayName={r.display_name} />
-
-                              <div className="min-w-0 flex-1">
-                                <Link
-                                  href={href}
-                                  className={[
-                                    "font-semibold leading-tight break-words sm:truncate hover:underline",
-                                    isMe ? "text-primary" : "",
-                                  ].join(" ")}
-                                >
-                                  {r.display_name}
-                                  {isMe ? "（あなた）" : ""}
-                                </Link>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  ベスト記録
-                                </div>
-                              </div>
-                            </div>
+                        <div className="flex items-start gap-3">
+                          <div className="shrink-0 text-lg font-bold tabular-nums w-8 text-center">
+                            {r.rank_no}
                           </div>
 
-                          <div className="pl-11 sm:pl-0 text-left sm:text-right">
-                            <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
+                          <Avatar
+                            href={href}
+                            avatar={avatar}
+                            displayName={r.display_name}
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Link
+                                href={href}
+                                className="text-sm font-semibold hover:underline break-all"
+                              >
+                                {r.display_name}
+                                {isMe ? "（あなた）" : ""}
+                              </Link>
+
+                              <TitleBadge
+                                label={title?.title_label ?? null}
+                                rank={title?.badge_rank ?? null}
+                                compact
+                              />
+                            </div>
+
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              ベスト記録
+                            </div>
+
+                            <div className="mt-1 text-base font-bold tabular-nums">
                               {formatTime(Number(r.best_seconds))}
                             </div>
                           </div>
@@ -267,58 +304,61 @@ export default async function RankingPage({
                 </ul>
               )
             ) : currentRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
                 継続中の人がいません（誰も継続中状態ではない）。
-              </p>
+              </div>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {currentRows.map((r) => {
                   const isMe = r.user_id === user.id;
                   const href = profileHref(r.user_id, user.id);
                   const avatar = avatarUrl(avatarMap.get(r.user_id));
+                  const badgeId = titleBadgeIdMap.get(r.user_id) ?? null;
+                  const title = badgeId ? badgeMap.get(badgeId) ?? null : null;
 
                   return (
                     <li
-                      key={r.user_id}
-                      className={[
-                        "rounded-xl border border-border px-4 py-3 bg-secondary/40",
-                        isMe ? "ring-1 ring-primary/40 bg-primary/10" : "",
-                      ].join(" ")}
+                      key={`${r.rank_no}-${r.user_id}`}
+                      className="rounded-xl border border-border bg-background/60 px-4 py-4"
                     >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/60 border border-border text-sm font-bold tabular-nums">
-                            {r.rank_no}
-                          </span>
-
-                          <div className="flex min-w-0 flex-1 gap-3">
-                            <Avatar href={href} avatar={avatar} displayName={r.display_name} />
-
-                            <div className="min-w-0 flex-1">
-                              <Link
-                                href={href}
-                                className={[
-                                  "font-semibold leading-tight break-words sm:truncate hover:underline",
-                                  isMe ? "text-primary" : "",
-                                ].join(" ")}
-                              >
-                                {r.display_name}
-                                {isMe ? "（あなた）" : ""}
-                              </Link>
-
-                              <div className="text-xs text-muted-foreground tabular-nums">
-                                開始：{formatJstStartLabel(r.started_at)}
-                              </div>
-                            </div>
-                          </div>
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 text-lg font-bold tabular-nums w-8 text-center">
+                          {r.rank_no}
                         </div>
 
-                        <div className="text-left sm:text-right pl-11 sm:pl-0">
-                          <div className="text-sm font-semibold tabular-nums whitespace-nowrap">
-                            {formatTime(Number(r.current_seconds))}
+                        <Avatar
+                          href={href}
+                          avatar={avatar}
+                          displayName={r.display_name}
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={href}
+                              className="text-sm font-semibold hover:underline break-all"
+                            >
+                              {r.display_name}
+                              {isMe ? "（あなた）" : ""}
+                            </Link>
+
+                            <TitleBadge
+                              label={title?.title_label ?? null}
+                              rank={title?.badge_rank ?? null}
+                              compact
+                            />
+
+                            <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                              継続中
+                            </span>
                           </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap">
-                            継続中
+
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            開始：{formatJstStartLabel(r.started_at)}
+                          </div>
+
+                          <div className="mt-1 text-base font-bold tabular-nums">
+                            {formatTime(Number(r.current_seconds))}
                           </div>
                         </div>
                       </div>

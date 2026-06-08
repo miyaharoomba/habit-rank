@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import TitleBadge from "@/app/components/TitleBadge";
 
 type Participant = {
   user_id: string;
@@ -10,6 +11,8 @@ type Participant = {
   is_active: boolean;
   current_seconds: number;
   avatar_path?: string | null;
+  title_label?: string | null;
+  title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
 };
 
 function formatTime(sec: number) {
@@ -30,14 +33,16 @@ function avatarUrl(path: string | null | undefined) {
   return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
 }
 
-function profileHref(userId: string) {
-  return `/users/${encodeURIComponent(userId)}`;
+function profileHref(userId: string, myUserId: string) {
+  return userId === myUserId ? "/profile" : `/users/${encodeURIComponent(userId)}`;
 }
 
 export default function ParticipantsClient({
   participants,
+  myUserId,
 }: {
   participants: Participant[];
+  myUserId: string;
 }) {
   const [q, setQ] = useState("");
 
@@ -51,93 +56,102 @@ export default function ParticipantsClient({
   }, [q, participants]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-muted-foreground">検索（名前）</div>
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium text-foreground">検索（名前）</label>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="例：haruto"
-          className="w-full sm:w-64 rounded-lg bg-background border border-input px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          className="mt-1 w-full sm:w-64 rounded-lg bg-background border border-input px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
         />
       </div>
 
-      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {filtered.map((p) => {
-          const avatar = avatarUrl(p.avatar_path);
-          const href = profileHref(p.user_id);
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
+          条件に一致する参加者はいません。
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {filtered.map((p) => {
+            const avatar = avatarUrl(p.avatar_path);
+            const href = profileHref(p.user_id, myUserId);
 
-          return (
-            <li
-              key={p.user_id}
-              className="rounded-lg border border-border bg-secondary/40 px-4 py-3"
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1 flex gap-3">
+            return (
+              <li
+                key={p.user_id}
+                className="rounded-xl border border-border bg-background/60 px-4 py-4"
+              >
+                <div className="flex items-start gap-3">
                   <Link href={href} className="shrink-0">
                     {avatar ? (
                       <img
                         src={avatar}
-                        alt="avatar"
+                        alt={p.display_name || "avatar"}
                         className="h-12 w-12 rounded-full object-cover border border-border"
                       />
                     ) : (
-                      <div className="h-12 w-12 rounded-full border border-border bg-background/60 flex items-center justify-center text-sm font-bold text-muted-foreground">
+                      <div className="h-12 w-12 rounded-full border border-border bg-secondary/40 flex items-center justify-center text-base font-bold text-muted-foreground">
                         {(p.display_name ?? "?").trim().slice(0, 1) || "?"}
                       </div>
                     )}
                   </Link>
 
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={href}
-                      className="block font-semibold text-lg leading-tight break-words sm:truncate hover:underline"
-                    >
-                      {p.display_name || "NoName"}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={href}
+                        className="text-sm font-semibold hover:underline break-all"
+                      >
+                        {p.display_name || "NoName"}
+                      </Link>
 
-                    {p.is_active && (
-                      <div className="mt-2 sm:hidden">
-                        <span className="inline-flex rounded-full bg-primary/15 px-2 py-1 text-xs font-semibold text-primary break-words">
-                          継続中（{formatTime(p.current_seconds)}）
+                      <TitleBadge
+                        label={p.title_label}
+                        rank={p.title_rank}
+                        compact
+                      />
+
+                      {p.is_active ? (
+                        <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                          継続中
                         </span>
-                      </div>
-                    )}
+                      ) : null}
+                    </div>
 
                     <div className="mt-2 text-xs text-muted-foreground">
                       参加: {new Date(p.created_at).toLocaleDateString()}
                     </div>
+
+                    {p.is_active ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        継続中（{formatTime(p.current_seconds)}）
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Link
+                        href={href}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        プロフィールを見る
+                      </Link>
+
+                      <Link
+                        href={`/dm?userId=${encodeURIComponent(p.user_id)}`}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        メッセージ
+                      </Link>
+                    </div>
                   </div>
                 </div>
-
-                {p.is_active && (
-                  <div className="hidden sm:block shrink-0">
-                    <span className="inline-flex rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary whitespace-nowrap tabular-nums">
-                      継続中（{formatTime(p.current_seconds)}）
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                <Link
-                  href={href}
-                  className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold border border-border bg-background hover:bg-secondary/40"
-                >
-                  プロフィールを見る
-                </Link>
-
-                <Link
-                  href={`/dm/new?u=${encodeURIComponent(p.user_id)}`}
-                  className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  メッセージ
-                </Link>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
+``
