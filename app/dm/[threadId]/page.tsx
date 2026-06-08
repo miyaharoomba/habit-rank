@@ -26,6 +26,12 @@ type ProfileRow = {
   current_title_badge_id: string | null;
 };
 
+type BadgeLiteRow = {
+  id: string;
+  title_label: string | null;
+  badge_rank: "platinum" | "gold" | "silver" | "bronze";
+};
+
 type MessageForClient = {
   id: string;
   sender_id: string;
@@ -81,6 +87,7 @@ export default async function DmThreadPage({
 
     const reason = String(formData.get("reason") ?? "").trim();
     const supabase = await createClient();
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -138,49 +145,61 @@ export default async function DmThreadPage({
     );
   }
 
+  // 参加者チェック（安全のため）
+  const isMember = thread.user_low === user.id || thread.user_high === user.id;
+  if (!isMember) {
+    redirect("/dm");
+  }
+
   const otherUserId =
     thread.user_low === user.id ? thread.user_high : thread.user_low;
 
   // 2) 参加ユーザーのプロフィールをまとめて取得
   const userIds = [user.id, otherUserId];
-  const { data: profiles } = await supabase
-  .from("profiles")
-  .select("id, display_name, avatar_path, current_title_badge_id")
-  .in("id", userIds);
+  const { data: profiles, error: profilesErr } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_path, current_title_badge_id")
+    .in("id", userIds);
+
+  if (profilesErr) {
+    throw new Error(profilesErr.message);
+  }
 
   const profileMap = new Map<string, ProfileRow>();
-  (profiles ?? []).forEach((p: ProfileRow) => {
-    profileMap.set(p.id, p);
+  (profiles ?? []).forEach((p: any) => {
+    profileMap.set(p.id, p as ProfileRow);
   });
 
   const otherName =
     (profileMap.get(otherUserId)?.display_name ?? "").trim() || "NoName";
 
+  // 3) 称号用の badge 情報を取得
   const titleBadgeIds = Array.from(
-  new Set(
-    (profiles ?? [])
-      .map((p: any) => p.current_title_badge_id)
-      .filter(Boolean)
-  )
-) as string[];
+    new Set(
+      (profiles ?? [])
+        .map((p: any) => p.current_title_badge_id)
+        .filter(Boolean)
+    )
+  ) as string[];
 
-const badgeMap = new Map<
-  string,
-  { id: string; title_label: string | null; badge_rank: "platinum" | "gold" | "silver" | "bronze" }
->();
+  const badgeMap = new Map<string, BadgeLiteRow>();
 
-if (titleBadgeIds.length > 0) {
-  const { data: titleBadges } = await supabase
-    .from("badges")
-    .select("id, title_label, badge_rank")
-    .in("id", titleBadgeIds);
+  if (titleBadgeIds.length > 0) {
+    const { data: titleBadges, error: titleBadgesErr } = await supabase
+      .from("badges")
+      .select("id, title_label, badge_rank")
+      .in("id", titleBadgeIds);
 
-  (titleBadges ?? []).forEach((b: any) => {
-    badgeMap.set(b.id, b);
-  });
-}
+    if (titleBadgesErr) {
+      throw new Error(titleBadgesErr.message);
+    }
 
-  // 3) メッセージ取得（送信取り消し含む）
+    (titleBadges ?? []).forEach((b: any) => {
+      badgeMap.set(b.id, b as BadgeLiteRow);
+    });
+  }
+
+  // 4) メッセージ取得（送信取り消し含む）
   const { data: msgs, error: msgErr } = await supabase
     .from("dm_messages")
     .select(
@@ -211,25 +230,26 @@ if (titleBadgeIds.length > 0) {
 
   const rows = (msgs ?? []) as MessageRow[];
 
-  // 4) fixed proxy URL + 送信者プロフィール情報を返す
+  // 5) fixed proxy URL + 送信者プロフィール情報 + 称号を返す
   const messages: MessageForClient[] = rows.map((m) => {
     const senderProfile = profileMap.get(m.sender_id);
+
+    const currentBadge =
+      senderProfile?.current_title_badge_id
+        ? badgeMap.get(senderProfile.current_title_badge_id)
+        : null;
 
     const base: MessageForClient = {
       id: m.id,
       sender_id: m.sender_id,
-      sender_name:
-        senderProfile?.display_name?.trim() || "NoName",
+      sender_name: senderProfile?.display_name?.trim() || "NoName",
       sender_avatar_url: avatarProxyUrl(senderProfile?.avatar_path ?? null),
-      sender_profile_href: `/profile/${m.sender_id}`,
-      sender_title_label:
-        senderProfile?.current_title_badge_id
-          ? badgeMap.get(senderProfile.current_title_badge_id)?.title_label ?? null
-          : null,
-      sender_title_rank:
-        senderProfile?.current_title_badge_id
-          ? badgeMap.get(senderProfile.current_title_badge_id)?.badge_rank ?? null
-          : null,
+      sender_profile_href:
+        m.sender_id === user.id
+          ? "/profile"
+          : `/users/${encodeURIComponent(m.sender_id)}`,
+      sender_title_label: currentBadge?.title_label?.trim() || null,
+      sender_title_rank: currentBadge?.badge_rank ?? null,
       body: m.body,
       created_at: m.created_at,
       message_type: m.message_type,
@@ -336,3 +356,4 @@ if (titleBadgeIds.length > 0) {
     </Container>
   );
 }
+``

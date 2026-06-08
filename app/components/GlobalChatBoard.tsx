@@ -359,26 +359,31 @@ function VideoBubble({
       }
     >
       <div
-        className={[
-          "overflow-hidden rounded-2xl border border-border",
-          mine ? "bg-primary/10" : "bg-secondary/30",
-        ].join(" ")}
-      >
-        {item.file_url}
-        <button
-          type="button"
-          onClick={() => onOpen("video", item.file_url!)}
-          className="w-full px-4 py-2 text-left text-xs text-primary hover:underline"
-        >
-          大きく表示
-        </button>
+  className={[
+    "overflow-hidden rounded-2xl border border-border",
+    mine ? "bg-primary/10" : "bg-secondary/30",
+  ].join(" ")}
+>
+  <video
+    src={item.file_url}
+    controls
+    className="block max-h-[360px] w-full bg-black"
+  />
 
-        {item.body?.trim() ? (
-          <div className="px-4 py-3 pt-0">
-            <LinkifiedText text={item.body} />
-          </div>
-        ) : null}
-      </div>
+  <button
+    type="button"
+    onClick={() => onOpen("video", item.file_url!)}
+    className="w-full px-4 py-2 text-left text-xs text-primary hover:underline"
+  >
+    大きく表示
+  </button>
+
+  {item.body?.trim() ? (
+    <div className="px-4 py-3 pt-0">
+      <LinkifiedText text={item.body} />
+    </div>
+  ) : null}
+</div>
     </BubbleFrame>
   );
 }
