@@ -1,5 +1,6 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import LinkifiedText from "@/app/components/LinkifiedText";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +19,17 @@ type SessionRow = {
   started_at: string;
   ended_at: string | null;
   end_reason: string | null;
+};
+
+type UserBadgeRow = {
+  badge_id: string;
+  unlocked_at: string;
+};
+
+type BadgeRow = {
+  id: string;
+  title: string;
+  badge_rank: "platinum" | "gold" | "silver" | "bronze";
 };
 
 function avatarUrl(path: string | null) {
@@ -44,6 +56,19 @@ function formatDuration(totalSec: number) {
   return `${seconds}秒`;
 }
 
+function rankLabel(rank: BadgeRow["badge_rank"]) {
+  switch (rank) {
+    case "platinum":
+      return "プラチナ";
+    case "gold":
+      return "ゴールド";
+    case "silver":
+      return "シルバー";
+    default:
+      return "ブロンズ";
+  }
+}
+
 export default async function ProfilePage() {
   const supabase = await createClient();
 
@@ -56,45 +81,54 @@ export default async function ProfilePage() {
     redirect("/auth/sign-in");
   }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_path, status_message, updated_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [
+    profileRes,
+    recentRes,
+    allRes,
+    badgeMasterRes,
+    userBadgeRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, display_name, avatar_path, status_message, updated_at")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("streak_sessions")
+      .select("id, started_at, ended_at, end_reason")
+      .eq("user_id", user.id)
+      .not("ended_at", "is", null)
+      .order("ended_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("streak_sessions")
+      .select("id, started_at, ended_at")
+      .eq("user_id", user.id)
+      .not("ended_at", "is", null)
+      .order("ended_at", { ascending: false }),
+    supabase
+      .from("badges")
+      .select("id, title, badge_rank"),
+    supabase
+      .from("user_badges")
+      .select("badge_id, unlocked_at")
+      .eq("user_id", user.id)
+      .order("unlocked_at", { ascending: false }),
+  ]);
 
-  if (error || !profile) {
-    throw new Error(error?.message ?? "profile not found");
+  const profile = profileRes.data;
+  if (profileRes.error || !profile) {
+    throw new Error(profileRes.error?.message ?? "profile not found");
   }
-
-  // 履歴表示用（直近20件）
-  const { data: recentSessions, error: recentErr } = await supabase
-    .from("streak_sessions")
-    .select("id, started_at, ended_at, end_reason")
-    .eq("user_id", user.id)
-    .not("ended_at", "is", null)
-    .order("ended_at", { ascending: false })
-    .limit(20);
-
-  if (recentErr) {
-    throw new Error(recentErr.message);
-  }
-
-  // 集計用（全終了履歴）
-  const { data: allSessions, error: allErr } = await supabase
-    .from("streak_sessions")
-    .select("id, started_at, ended_at")
-    .eq("user_id", user.id)
-    .not("ended_at", "is", null)
-    .order("ended_at", { ascending: false });
-
-  if (allErr) {
-    throw new Error(allErr.message);
-  }
+  if (recentRes.error) throw new Error(recentRes.error.message);
+  if (allRes.error) throw new Error(allRes.error.message);
+  if (badgeMasterRes.error) throw new Error(badgeMasterRes.error.message);
+  if (userBadgeRes.error) throw new Error(userBadgeRes.error.message);
 
   const row = profile as ProfileRow;
   const avatar = avatarUrl(row.avatar_path);
-  const history = (recentSessions ?? []) as SessionRow[];
-  const allHistory = (allSessions ?? []) as Array<
+  const history = (recentRes.data ?? []) as SessionRow[];
+  const allHistory = (allRes.data ?? []) as Array<
     Pick<SessionRow, "id" | "started_at" | "ended_at">
   >;
 
@@ -104,6 +138,34 @@ export default async function ProfilePage() {
   );
   const bestSeconds = durations.length > 0 ? Math.max(...durations) : 0;
   const totalSeconds = durations.reduce((sum, sec) => sum + sec, 0);
+
+  const badgeMaster = (badgeMasterRes.data ?? []) as BadgeRow[];
+  const userBadges = (userBadgeRes.data ?? []) as UserBadgeRow[];
+  const badgeMap = new Map<string, BadgeRow>();
+  badgeMaster.forEach((b) => badgeMap.set(b.id, b));
+
+  const latestBadges = userBadges
+    .map((ub) => {
+      const badge = badgeMap.get(ub.badge_id);
+      if (!badge) return null;
+      return {
+        ...badge,
+        unlocked_at: ub.unlocked_at,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 3) as Array<BadgeRow & { unlocked_at: string }>;
+
+  const badgeCounts = {
+    platinum: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "platinum").length,
+    gold: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "gold").length,
+    silver: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "silver").length,
+    bronze: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "bronze").length,
+  };
+
+  const statusText =
+    (row.status_message ?? "").trim() ||
+    "ステータスメッセージはまだ設定されていません。";
 
   return (
     <Container>
@@ -135,7 +197,7 @@ export default async function ProfilePage() {
                 {avatar ? (
                   <img
                     src={avatar}
-                    alt="avatar"
+                    alt={(row.display_name ?? "avatar").trim() || "avatar"}
                     className="h-24 w-24 rounded-full object-cover border border-border"
                   />
                 ) : (
@@ -150,18 +212,23 @@ export default async function ProfilePage() {
                   {(row.display_name ?? "").trim() || "NoName"}
                 </div>
 
-                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm whitespace-pre-wrap break-words">
-                  {(row.status_message ?? "").trim() ||
-                    "ステータスメッセージはまだ設定されていません。"}
+                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm break-words">
+                  <LinkifiedText text={statusText} showPreview />
                 </div>
 
-                {/* カレンダー導線（履歴欄には干渉しない位置） */}
+                {/* 導線 */}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     href="/calendar"
                     className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
                   >
                     カレンダーを見る
+                  </Link>
+                  <Link
+                    href="/badges"
+                    className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+                  >
+                    トロフィーを見る
                   </Link>
                 </div>
 
@@ -186,6 +253,52 @@ export default async function ProfilePage() {
                     <div className="mt-1 text-sm font-bold tabular-nums break-words">
                       {sessionCount > 0 ? formatDuration(totalSeconds) : "記録なし"}
                     </div>
+                  </div>
+                </div>
+
+                {/* トロフィー概要 */}
+                <div className="mt-4 rounded-xl border border-border bg-background/60 px-4 py-3">
+                  <div className="text-sm font-semibold">トロフィー概要</div>
+
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full border border-border bg-background px-3 py-1">
+                      🏆 プラチナ {badgeCounts.platinum}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-3 py-1">
+                      🥇 ゴールド {badgeCounts.gold}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-3 py-1">
+                      🥈 シルバー {badgeCounts.silver}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-3 py-1">
+                      🥉 ブロンズ {badgeCounts.bronze}
+                    </span>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-xs text-muted-foreground">最新獲得トロフィー</div>
+
+                    {latestBadges.length === 0 ? (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        まだ獲得したトロフィーがありません。
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-2">
+                        {latestBadges.map((badge) => (
+                          <li
+                            key={`${badge.id}-${badge.unlocked_at}`}
+                            className="rounded-lg border border-border bg-background px-3 py-2"
+                          >
+                            <div className="text-sm font-semibold break-words">
+                              {badge.title}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {rankLabel(badge.badge_rank)} / 獲得日: {formatJst(badge.unlocked_at)}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
 
@@ -218,10 +331,7 @@ export default async function ProfilePage() {
               <ul className="space-y-3">
                 {history.map((s) => (
                   <li key={String(s.id)}>
-                    <Link
-                      href={`/results/${s.id}`}
-                      className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 hover:bg-secondary/40 transition"
-                    >
+                    <Link href={`/results/${s.id}`} className="block rounded-xl border border-border bg-background/40 px-4 py-3 hover:bg-secondary/30">
                       <div className="min-w-0">
                         <div className="text-sm font-semibold tabular-nums">
                           継続時間:{" "}
@@ -255,3 +365,4 @@ export default async function ProfilePage() {
     </Container>
   );
 }
+``
