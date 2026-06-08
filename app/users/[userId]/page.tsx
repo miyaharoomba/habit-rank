@@ -12,6 +12,7 @@ type ProfileRow = {
   avatar_path: string | null;
   status_message: string | null;
   updated_at?: string | null;
+  current_title_badge_id: string | null;
 };
 
 type SessionRow = {
@@ -29,6 +30,7 @@ type UserBadgeRow = {
 type BadgeRow = {
   id: string;
   title: string;
+  title_label: string | null;
   badge_rank: "platinum" | "gold" | "silver" | "bronze";
 };
 
@@ -99,9 +101,12 @@ export default async function UserProfilePage({
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, display_name, avatar_path, status_message, updated_at")
+      .select(
+        "id, display_name, avatar_path, status_message, updated_at, current_title_badge_id"
+      )
       .eq("id", userId)
       .maybeSingle(),
+
     supabase
       .from("streak_sessions")
       .select("id, started_at, ended_at, end_reason")
@@ -109,15 +114,18 @@ export default async function UserProfilePage({
       .not("ended_at", "is", null)
       .order("ended_at", { ascending: false })
       .limit(20),
+
     supabase
       .from("streak_sessions")
       .select("id, started_at, ended_at")
       .eq("user_id", userId)
       .not("ended_at", "is", null)
       .order("ended_at", { ascending: false }),
+
     supabase
       .from("badges")
-      .select("id, title, badge_rank"),
+      .select("id, title, title_label, badge_rank"),
+
     supabase
       .from("user_badges")
       .select("badge_id, unlocked_at")
@@ -125,7 +133,9 @@ export default async function UserProfilePage({
       .order("unlocked_at", { ascending: false }),
   ]);
 
-  if (profileRes.error) throw new Error(profileRes.error.message);
+  if (profileRes.error) {
+    throw new Error(profileRes.error.message);
+  }
 
   const profile = profileRes.data;
   if (!profile) {
@@ -133,7 +143,9 @@ export default async function UserProfilePage({
       <Container>
         <Card>
           <CardHeader>
-            <h1 className="text-xl font-bold tracking-tight">ユーザープロフィール</h1>
+            <h1 className="text-xl font-bold tracking-tight">
+              ユーザープロフィール
+            </h1>
           </CardHeader>
           <CardBody>
             <p className="text-sm text-muted-foreground">
@@ -177,6 +189,11 @@ export default async function UserProfilePage({
   const badgeMap = new Map<string, BadgeRow>();
   badgeMaster.forEach((b) => badgeMap.set(b.id, b));
 
+  const currentTitle =
+    row.current_title_badge_id && badgeMap.has(row.current_title_badge_id)
+      ? badgeMap.get(row.current_title_badge_id) ?? null
+      : null;
+
   const latestBadges = userBadges
     .map((ub) => {
       const badge = badgeMap.get(ub.badge_id);
@@ -190,10 +207,18 @@ export default async function UserProfilePage({
     .slice(0, 3) as Array<BadgeRow & { unlocked_at: string }>;
 
   const badgeCounts = {
-    platinum: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "platinum").length,
-    gold: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "gold").length,
-    silver: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "silver").length,
-    bronze: userBadges.filter((ub) => badgeMap.get(ub.badge_id)?.badge_rank === "bronze").length,
+    platinum: userBadges.filter(
+      (ub) => badgeMap.get(ub.badge_id)?.badge_rank === "platinum"
+    ).length,
+    gold: userBadges.filter(
+      (ub) => badgeMap.get(ub.badge_id)?.badge_rank === "gold"
+    ).length,
+    silver: userBadges.filter(
+      (ub) => badgeMap.get(ub.badge_id)?.badge_rank === "silver"
+    ).length,
+    bronze: userBadges.filter(
+      (ub) => badgeMap.get(ub.badge_id)?.badge_rank === "bronze"
+    ).length,
   };
 
   const statusText =
@@ -204,7 +229,9 @@ export default async function UserProfilePage({
     <Container>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">ユーザープロフィール</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            ユーザープロフィール
+          </h1>
           <p className="text-sm text-muted-foreground">
             他の参加者のプロフィール情報です。
           </p>
@@ -239,7 +266,7 @@ export default async function UserProfilePage({
                 {avatar ? (
                   <img
                     src={avatar}
-                    alt={(row.display_name ?? "avatar").trim() || "avatar"}
+                    alt={(row.display_name ?? "").trim() || "avatar"}
                     className="h-24 w-24 rounded-full object-cover border border-border"
                   />
                 ) : (
@@ -254,7 +281,20 @@ export default async function UserProfilePage({
                   {(row.display_name ?? "").trim() || "NoName"}
                 </div>
 
-                <div className="mt-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm break-words">
+                {/* 現在の称号 */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">現在の称号</span>
+                  <span className="rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold">
+                    {currentTitle?.title_label?.trim() || "未設定"}
+                  </span>
+                  {currentTitle ? (
+                    <span className="text-xs text-muted-foreground">
+                      （{currentTitle.title} / {rankLabel(currentTitle.badge_rank)}）
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm break-words">
                   <LinkifiedText text={statusText} showPreview />
                 </div>
 
@@ -270,7 +310,7 @@ export default async function UserProfilePage({
                     href={`/users/${encodeURIComponent(userId)}/badges`}
                     className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
                   >
-                    トロフィーを見る
+                    トロフィー・称号を見る
                   </Link>
                 </div>
 
@@ -318,7 +358,9 @@ export default async function UserProfilePage({
                   </div>
 
                   <div className="mt-3">
-                    <div className="text-xs text-muted-foreground">最新獲得トロフィー</div>
+                    <div className="text-xs text-muted-foreground">
+                      最新獲得トロフィー
+                    </div>
 
                     {latestBadges.length === 0 ? (
                       <p className="mt-2 text-sm text-muted-foreground">
@@ -334,8 +376,10 @@ export default async function UserProfilePage({
                             <div className="text-sm font-semibold break-words">
                               {badge.title}
                             </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {rankLabel(badge.badge_rank)} / 獲得日: {formatJst(badge.unlocked_at)}
+                            <div className="mt-1 text-xs text-muted-foreground break-words">
+                              称号: {badge.title_label?.trim() || "なし"} /{" "}
+                              {rankLabel(badge.badge_rank)} / 獲得日:{" "}
+                              {formatJst(badge.unlocked_at)}
                             </div>
                           </li>
                         ))}
@@ -373,7 +417,10 @@ export default async function UserProfilePage({
               <ul className="space-y-3">
                 {history.map((s) => (
                   <li key={String(s.id)}>
-                    <Link href={`/results/${s.id}`} className="block rounded-xl border border-border bg-background/40 px-4 py-3 hover:bg-secondary/30">
+                    <Link
+                      href={`/results/${s.id}`}
+                      className="block rounded-xl border border-border bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition"
+                    >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold tabular-nums">
                           継続時間:{" "}
@@ -407,3 +454,4 @@ export default async function UserProfilePage({
     </Container>
   );
 }
+``
