@@ -107,7 +107,6 @@ function iconFor(n: NotifItem) {
     if (text.includes("ブロンズ")) return "🥉";
     return "🏆";
   }
-
   if (n.type === "streak_end") return "⏱️";
   if (n.type === "admin_broadcast") return "📢";
   return "🔔";
@@ -328,3 +327,4 @@ export default function NotificationToaster({
     </div>
   );
 }
+``
