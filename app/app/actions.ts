@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { checkAndAwardBadges } from "@/app/services/badgeService";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -59,6 +60,7 @@ export async function startSession() {
  * - mode=restart: 終了して次を自動開始
  * - mode=stop:    完全に終了
  * - 一般ユーザーでも確実に通知が入るよう、notifications への insert は service role で実行
+ * - 継続終了後、バッジ付与判定も走らせる
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -93,7 +95,6 @@ export async function finishSession(formData: FormData) {
     throw new Error("finished session id not found");
   }
 
-  // ここが重要:
   // 一般ユーザーでも絶対に通知が入るよう、service role で全体通知を insert
   try {
     const admin = getAdminClient();
@@ -116,8 +117,17 @@ export async function finishSession(formData: FormData) {
     console.error("finishSession notification service-role insert failed:", e);
   }
 
+  // バッジ付与判定
+  try {
+    await checkAndAwardBadges(user.id);
+  } catch (e) {
+    console.error("checkAndAwardBadges failed:", e);
+  }
+
   revalidatePath("/app");
   revalidatePath("/history");
+  revalidatePath("/badges");
+  revalidatePath(`/users/${user.id}/badges`);
   revalidatePath(`/results/${finishedSessionId}`);
   redirect(`/results/${finishedSessionId}`);
 }

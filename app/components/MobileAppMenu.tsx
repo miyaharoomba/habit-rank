@@ -49,12 +49,14 @@ export default function MobileAppMenu({
   const status = (statusMessage ?? "").trim();
 
   const quickLinks = [
-    { href: "/calendar", label: "カレンダー" },
-    { href: "/participants", label: "参加者" },
-    { href: "/dm", label: "DM" },
-    { href: "/support", label: "問い合わせ" },
-    { href: "/ranking", label: "ランキング" },
-    { href: "/settings", label: "設定" },
+    { href: "/calendar", label: "カレンダー", desc: "継続終了日を可視化" },
+    { href: "/badges", label: "トロフィー", desc: "獲得したバッジ一覧" },
+    { href: "/history", label: "履歴", desc: "終了済み記録" },
+    { href: "/participants", label: "参加者", desc: "他ユーザーを見る" },
+    { href: "/dm", label: "DM", desc: "ダイレクトメッセージ" },
+    { href: "/support", label: "問い合わせ", desc: "管理者へ連絡" },
+    { href: "/ranking", label: "ランキング", desc: "継続記録の比較" },
+    { href: "/settings", label: "設定", desc: "各種設定" },
   ];
 
   return (
@@ -83,7 +85,7 @@ export default function MobileAppMenu({
                   {avatar ? (
                     <img
                       src={avatar}
-                      alt="avatar"
+                      alt={displayName || "avatar"}
                       className="h-12 w-12 rounded-full object-cover border border-border"
                     />
                   ) : (
@@ -133,44 +135,23 @@ export default function MobileAppMenu({
               >
                 <div>編集</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  名前 / アイコン
+                  名前 / アイコン / 一言
                 </div>
               </Link>
 
-              <Link
-                href="/calendar"
-                onClick={() => setOpen(false)}
-                className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium hover:bg-secondary/40 transition"
-              >
-                <div>カレンダー</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  継続終了日を可視化
-                </div>
-              </Link>
-
-              <Link
-                href="/history"
-                onClick={() => setOpen(false)}
-                className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium hover:bg-secondary/40 transition"
-              >
-                <div>履歴</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  終了済み記録
-                </div>
-              </Link>
-
-              {quickLinks
-                .filter((item) => item.href !== "/calendar")
-                .map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium hover:bg-secondary/40 transition"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+              {quickLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium hover:bg-secondary/40 transition"
+                >
+                  <div>{item.label}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {item.desc}
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         </div>
