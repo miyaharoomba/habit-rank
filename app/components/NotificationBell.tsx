@@ -184,6 +184,15 @@ export default function NotificationBell({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   const unreadIds = useMemo(
     () => items.filter((x) => !x.read).map((x) => x.id),
     [items]
@@ -240,97 +249,122 @@ export default function NotificationBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[360px] rounded-xl border border-border bg-card text-card-foreground shadow-glow z-50">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="font-semibold">通知</div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fetchNotifs({ background: true })}
-                className="text-xs text-primary hover:underline"
-              >
-                更新
-              </button>
-              <button
-                type="button"
-                onClick={() => markRead(unreadIds)}
-                disabled={unreadIds.length === 0}
-                className="text-xs text-primary hover:underline disabled:opacity-40"
-              >
-                全部既読
-              </button>
-              <span className="text-xs text-muted-foreground">
-                {initialLoading
-                  ? "読み込み中…"
-                  : error
-                  ? "!"
-                  : refreshing
-                  ? "更新中…"
-                  : unreadIds.length > 0
-                  ? `未読${unreadIds.length}`
-                  : ""}
-              </span>
-            </div>
-          </div>
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 sm:hidden"
+            onClick={() => setOpen(false)}
+          />
 
-          {initialLoading && items.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>
-          ) : error && items.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>
-          ) : items.length === 0 ? (
-            <div className="px-4 py-8 text-sm text-muted-foreground">
-              通知はまだありません。
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {items.map((n) => (
-                <li
-                  key={n.id}
-                  className={[
-                    n.read ? "" : "bg-primary/5",
-                    n.type === "trophy_unlock" ? "border-l-2 border-amber-300/70" : "",
-                  ].join(" ")}
+          <div className="fixed inset-x-3 top-[88px] bottom-3 z-50 rounded-2xl border border-border bg-card text-card-foreground shadow-glow sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[380px] sm:max-w-[calc(100vw-24px)] sm:max-h-[70vh] overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
+              <div className="font-semibold">通知</div>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => fetchNotifs({ background: true })}
+                  className="text-[11px] sm:text-xs text-primary hover:underline"
                 >
-                  <Link
-                    href={routeFor(n)}
-                    onClick={() => {
-                      if (!n.read) markRead([n.id]);
-                      setOpen(false);
-                    }}
-                    className="block px-4 py-3 hover:bg-secondary/40 transition"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="shrink-0 text-sm">{iconFor(n)}</span>
-                          <div className="text-sm font-semibold truncate">
-                            {titleFor(n)}
+                  更新
+                </button>
+                <button
+                  type="button"
+                  onClick={() => markRead(unreadIds)}
+                  disabled={unreadIds.length === 0}
+                  className="text-[11px] sm:text-xs text-primary hover:underline disabled:opacity-40"
+                >
+                  全部既読
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="inline-flex sm:hidden items-center justify-center rounded-md border border-border px-2 py-1 text-[11px]"
+                  aria-label="閉じる"
+                >
+                  閉じる
+                </button>
+                <span className="hidden sm:inline text-xs text-muted-foreground">
+                  {initialLoading
+                    ? "読み込み中…"
+                    : error
+                    ? "!"
+                    : refreshing
+                    ? "更新中…"
+                    : unreadIds.length > 0
+                    ? `未読${unreadIds.length}`
+                    : ""}
+                </span>
+              </div>
+            </div>
+
+            <div className="sm:hidden px-4 py-2 border-b border-border text-[11px] text-muted-foreground">
+              {initialLoading
+                ? "読み込み中…"
+                : error
+                ? `エラー: ${error}`
+                : refreshing
+                ? "更新中…"
+                : unreadIds.length > 0
+                ? `未読 ${unreadIds.length} 件`
+                : "既読のみ"}
+            </div>
+
+            <div className="max-h-full overflow-y-auto sm:max-h-[calc(70vh-56px)]">
+              {initialLoading && items.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-muted-foreground">読み込み中...</div>
+              ) : error && items.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-destructive">エラー: {error}</div>
+              ) : items.length === 0 ? (
+                <div className="px-4 py-8 text-sm text-muted-foreground">通知はまだありません。</div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {items.map((n) => (
+                    <li
+                      key={n.id}
+                      className={[
+                        n.read ? "" : "bg-primary/5",
+                        n.type === "trophy_unlock" ? "border-l-2 border-amber-300/70" : "",
+                      ].join(" ")}
+                    >
+                      <Link
+                        href={routeFor(n)}
+                        onClick={() => {
+                          if (!n.read) markRead([n.id]);
+                          setOpen(false);
+                        }}
+                        className="block px-4 py-3 hover:bg-secondary/40 transition"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="shrink-0 text-sm">{iconFor(n)}</span>
+                              <div className="min-w-0 text-sm font-semibold break-words sm:truncate">
+                                {titleFor(n)}
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground break-words">
+                              {bodyFor(n)}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-[11px] sm:text-xs text-muted-foreground whitespace-nowrap tabular-nums pt-0.5">
+                            {formatJstStartLabel(n.created_at)}
                           </div>
                         </div>
-                        <div className="mt-1 text-xs text-muted-foreground break-words">
-                          {bodyFor(n)}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
-                        {formatJstStartLabel(n.created_at)}
-                      </div>
-                    </div>
 
-                    {!n.read && (
-                      <div className="mt-2 text-[11px] text-primary font-semibold">
-                        未読
-                      </div>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+                        {!n.read && (
+                          <div className="mt-2 text-[11px] text-primary font-semibold">未読</div>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
-          <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
-            継続終了・トロフィー獲得・DM・お知らせ・問い合わせ返信がここに表示されます。
+            <div className="px-4 py-3 border-t border-border text-[11px] sm:text-xs text-muted-foreground">
+              継続終了・トロフィー獲得・DM・お知らせ・問い合わせ返信がここに表示されます。
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
