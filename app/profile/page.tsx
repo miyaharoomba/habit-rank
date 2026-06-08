@@ -1,6 +1,7 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import LinkifiedText from "@/app/components/LinkifiedText";
+import TitleBadge from "@/app/components/TitleBadge";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -83,46 +84,39 @@ export default async function ProfilePage() {
     redirect("/auth/sign-in");
   }
 
-  const [
-    profileRes,
-    recentRes,
-    allRes,
-    badgeMasterRes,
-    userBadgeRes,
-  ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "id, display_name, avatar_path, status_message, updated_at, current_title_badge_id"
-      )
-      .eq("id", user.id)
-      .maybeSingle(),
+  const [profileRes, recentRes, allRes, badgeMasterRes, userBadgeRes] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "id, display_name, avatar_path, status_message, updated_at, current_title_badge_id"
+        )
+        .eq("id", user.id)
+        .maybeSingle(),
 
-    supabase
-      .from("streak_sessions")
-      .select("id, started_at, ended_at, end_reason")
-      .eq("user_id", user.id)
-      .not("ended_at", "is", null)
-      .order("ended_at", { ascending: false })
-      .limit(20),
+      supabase
+        .from("streak_sessions")
+        .select("id, started_at, ended_at, end_reason")
+        .eq("user_id", user.id)
+        .not("ended_at", "is", null)
+        .order("ended_at", { ascending: false })
+        .limit(20),
 
-    supabase
-      .from("streak_sessions")
-      .select("id, started_at, ended_at")
-      .eq("user_id", user.id)
-      .not("ended_at", "is", null)
-      .order("ended_at", { ascending: false }),
+      supabase
+        .from("streak_sessions")
+        .select("id, started_at, ended_at")
+        .eq("user_id", user.id)
+        .not("ended_at", "is", null)
+        .order("ended_at", { ascending: false }),
 
-    supabase
-      .from("badges")
-      .select("id, title, title_label, badge_rank"),
+      supabase.from("badges").select("id, title, title_label, badge_rank"),
 
-    supabase
-      .from("user_badges")
-      .select("badge_id, unlocked_at")
-      .eq("user_id", user.id)
-      .order("unlocked_at", { ascending: false }),
-  ]);
+      supabase
+        .from("user_badges")
+        .select("badge_id, unlocked_at")
+        .eq("user_id", user.id)
+        .order("unlocked_at", { ascending: false }),
+    ]);
 
   const profile = profileRes.data;
   if (profileRes.error || !profile) {
@@ -200,14 +194,22 @@ export default async function ProfilePage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">
+          <Link
+            href="/app"
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+          >
             /app
+          </Link>
+          <Link
+            href="/profile/edit"
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+          >
+            編集
           </Link>
         </div>
       </header>
 
       <div className="mt-6 grid gap-4">
-        {/* プロフィール情報 */}
         <Card>
           <CardHeader>
             <h2 className="font-semibold">プロフィール情報</h2>
@@ -235,23 +237,34 @@ export default async function ProfilePage() {
                 </div>
 
                 {/* 現在の称号 */}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">現在の称号</span>
-                  <span className="rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold">
-                    {currentTitle?.title_label?.trim() || "未設定"}
-                  </span>
+                <div className="mt-3 rounded-xl border border-border bg-background/60 px-4 py-3">
+                  <div className="text-xs text-muted-foreground">現在の称号</div>
+
                   {currentTitle ? (
-                    <span className="text-xs text-muted-foreground">
-                      （{currentTitle.title} / {rankLabel(currentTitle.badge_rank)}）
-                    </span>
-                  ) : null}
+                    <div className="mt-2 flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <TitleBadge
+                          label={currentTitle.title_label}
+                          rank={currentTitle.badge_rank}
+                        />
+                      </div>
+
+                      <div className="text-xs text-muted-foreground break-words">
+                        元トロフィー: {currentTitle.title} /{" "}
+                        {rankLabel(currentTitle.badge_rank)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      未設定
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm break-words">
                   <LinkifiedText text={statusText} showPreview />
                 </div>
 
-                {/* 導線 */}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     href="/calendar"
@@ -267,7 +280,6 @@ export default async function ProfilePage() {
                   </Link>
                 </div>
 
-                {/* サマリー */}
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
                     <div className="text-xs text-muted-foreground">継続回数</div>
@@ -291,7 +303,6 @@ export default async function ProfilePage() {
                   </div>
                 </div>
 
-                {/* トロフィー概要 */}
                 <div className="mt-4 rounded-xl border border-border bg-background/60 px-4 py-3">
                   <div className="text-sm font-semibold">トロフィー概要</div>
 
@@ -343,14 +354,15 @@ export default async function ProfilePage() {
 
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground tabular-nums">
                   <div>ユーザーID: {row.id}</div>
-                  <div>更新日時: {row.updated_at ? formatJst(row.updated_at) : "-"}</div>
+                  <div>
+                    更新日時: {row.updated_at ? formatJst(row.updated_at) : "-"}
+                  </div>
                 </div>
               </div>
             </div>
           </CardBody>
         </Card>
 
-        {/* 継続履歴 */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
@@ -372,7 +384,7 @@ export default async function ProfilePage() {
                   <li key={String(s.id)}>
                     <Link
                       href={`/results/${s.id}`}
-                      className="block rounded-xl border border-border bg-secondary/20 px-4 py-3 hover:bg-secondary/30 transition"
+                      className="block rounded-xl border border-border bg-background/60 px-4 py-3 hover:bg-secondary/20 transition"
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold tabular-nums">
