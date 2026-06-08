@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-/**
- * GET /api/notifications?limit=20
- * - 自分宛て通知 + 全体通知(recipient_id is null) を新しい順で返す
- * - notification_reads を見て未読数を返す
- *
- * POST /api/notifications
- * - 指定IDを既読化
- */
+type NotificationRow = {
+  id: string;
+  type: string;
+  actor_id: string | null;
+  recipient_id: string | null;
+  thread_id: string | null;
+  session_id: string | null;
+  announcement_id: string | null;
+  support_thread_id: string | null;
+  message_preview: string | null;
+  created_at: string;
+};
+
 export async function GET(request: Request) {
   const supabase = await createClient();
 
@@ -27,7 +32,8 @@ export async function GET(request: Request) {
     ? Math.max(1, Math.min(rawLimit, 50))
     : 20;
 
-  // 自分宛て + 全体通知
+  const fetchLimit = Math.max(limit * 5, 100);
+
   const { data: notifs, error: nErr } = await supabase
     .from("notifications")
     .select(
@@ -35,23 +41,64 @@ export async function GET(request: Request) {
     )
     .or(`recipient_id.eq.${user.id},recipient_id.is.null`)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
 
   if (nErr) {
     return NextResponse.json({ error: nErr.message }, { status: 500 });
   }
 
-  const notifications = notifs ?? [];
-  const ids = notifications.map((n: any) => n.id);
+  const notifications = (notifs ?? []) as NotificationRow[];
 
-  const targetIds =
+  // streak_end の重複整理
+  const deduped: NotificationRow[] = [];
+  const streakMap = new Map<string, NotificationRow>();
+
+  for (const n of notifications) {
+    if (n.type !== "streak_end" || !n.session_id) {
+      deduped.push(n);
+      continue;
+    }
+
+    const key = `${n.actor_id ?? "no-actor"}:${n.session_id}`;
+    const prev = streakMap.get(key);
+
+    if (!prev) {
+      streakMap.set(key, n);
+      continue;
+    }
+
+    const prevIsGlobal = prev.recipient_id === null;
+    const nextIsGlobal = n.recipient_id === null;
+
+    if (!prevIsGlobal && nextIsGlobal) {
+      streakMap.set(key, n);
+      continue;
+    }
+
+    if (
+      prevIsGlobal === nextIsGlobal &&
+      new Date(n.created_at).getTime() > new Date(prev.created_at).getTime()
+    ) {
+      streakMap.set(key, n);
+    }
+  }
+
+  const merged = [...deduped, ...Array.from(streakMap.values())].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const selected = merged.slice(0, limit);
+  const ids = selected.map((n) => n.id);
+
+  const readIdsTarget =
     ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"];
 
   const { data: reads, error: rErr } = await supabase
     .from("notification_reads")
     .select("notification_id")
     .eq("user_id", user.id)
-    .in("notification_id", targetIds);
+    .in("notification_id", readIdsTarget);
 
   if (rErr) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
@@ -60,11 +107,7 @@ export async function GET(request: Request) {
   const readSet = new Set((reads ?? []).map((r: any) => r.notification_id));
 
   const actorIds = Array.from(
-    new Set(
-      notifications
-        .map((n: any) => n.actor_id)
-        .filter(Boolean)
-    )
+    new Set(selected.map((n) => n.actor_id).filter(Boolean))
   ) as string[];
 
   const actorMap = new Map<string, string>();
@@ -84,7 +127,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const items = notifications.map((n: any) => {
+  const items = selected.map((n) => {
     const notificationUrl =
       n.type === "streak_end" && n.session_id
         ? `/results/${n.session_id}`
@@ -94,6 +137,8 @@ export async function GET(request: Request) {
         ? `/announcements/${n.announcement_id}`
         : n.type === "support_reply" && n.support_thread_id
         ? `/support/${n.support_thread_id}`
+        : n.type === "trophy_unlock"
+        ? "/badges"
         : "/app";
 
     return {
@@ -154,3 +199,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, inserted: ids.length });
 }
+``

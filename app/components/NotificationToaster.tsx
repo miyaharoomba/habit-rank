@@ -29,6 +29,7 @@ type Toast = {
   body: string;
   href: string;
   sticky: boolean;
+  icon: string;
 };
 
 function isAdminBroadcast(n: NotifItem) {
@@ -36,7 +37,11 @@ function isAdminBroadcast(n: NotifItem) {
 }
 
 function isToastTarget(n: NotifItem) {
-  return n.type === "admin_broadcast" || n.type === "streak_end";
+  return (
+    n.type === "admin_broadcast" ||
+    n.type === "streak_end" ||
+    n.type === "trophy_unlock"
+  );
 }
 
 function routeFor(n: NotifItem) {
@@ -49,6 +54,9 @@ function routeFor(n: NotifItem) {
   if (n.type === "support_reply" && n.support_thread_id) {
     return `/support/${n.support_thread_id}`;
   }
+  if (n.type === "trophy_unlock") {
+    return "/badges";
+  }
   return "/app";
 }
 
@@ -60,6 +68,9 @@ function titleFor(n: NotifItem) {
   }
   if (n.type === "support_reply") {
     return "管理者から返信";
+  }
+  if (n.type === "trophy_unlock") {
+    return "トロフィー獲得！";
   }
   return "通知";
 }
@@ -79,7 +90,26 @@ function bodyFor(n: NotifItem) {
     return txt || "問い合わせに返信がありました。";
   }
 
+  if (n.type === "trophy_unlock") {
+    return txt || "新しいトロフィーを獲得しました。";
+  }
+
   return txt || "通知が届きました";
+}
+
+function iconFor(n: NotifItem) {
+  if (n.type === "trophy_unlock") {
+    const text = (n.message_preview ?? "").toLowerCase();
+    if (text.includes("プラチナ")) return "🏆";
+    if (text.includes("ゴールド")) return "🥇";
+    if (text.includes("シルバー")) return "🥈";
+    if (text.includes("ブロンズ")) return "🥉";
+    return "🏆";
+  }
+
+  if (n.type === "streak_end") return "⏱️";
+  if (n.type === "admin_broadcast") return "📢";
+  return "🔔";
 }
 
 export default function NotificationToaster({
@@ -157,7 +187,6 @@ export default function NotificationToaster({
       const items = json.items ?? [];
 
       if (!initializedRef.current) {
-        // 初回でも未読の継続終了通知・管理者通知は出す
         for (const n of items) {
           seenRef.current.add(n.id);
 
@@ -168,6 +197,7 @@ export default function NotificationToaster({
               body: bodyFor(n),
               href: routeFor(n),
               sticky: isAdminBroadcast(n),
+              icon: iconFor(n),
             });
           }
         }
@@ -189,6 +219,7 @@ export default function NotificationToaster({
           body: bodyFor(n),
           href: routeFor(n),
           sticky: isAdminBroadcast(n),
+          icon: iconFor(n),
         });
       }
     } catch (e: any) {
@@ -244,8 +275,11 @@ export default function NotificationToaster({
               className="min-w-0 text-left flex-1"
               aria-label="通知を開く"
             >
-              <div className="text-sm font-semibold truncate">{t.title}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground break-words">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{t.icon}</span>
+                <div className="text-sm font-semibold truncate">{t.title}</div>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground break-words">
                 {t.body}
               </div>
             </button>
@@ -267,4 +301,3 @@ export default function NotificationToaster({
     </div>
   );
 }
-``
