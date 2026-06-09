@@ -1,4 +1,3 @@
-// app/history/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
@@ -12,6 +11,7 @@ function formatDuration(ms: number) {
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+
   return { days, hours, minutes, seconds };
 }
 
@@ -67,13 +67,22 @@ export default async function HistoryPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">
+          <Link
+            href="/app"
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+          >
             /app
           </Link>
-          <Link className="text-sm text-primary hover:underline" href="/ranking">
+          <Link
+            href="/ranking"
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+          >
             /ranking
           </Link>
-          <Link className="text-sm text-primary hover:underline" href="/participants">
+          <Link
+            href="/participants"
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+          >
             /participants
           </Link>
         </div>
@@ -82,19 +91,19 @@ export default async function HistoryPage() {
       <div className="mt-6">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
               <h2 className="font-semibold">終了済みセッション一覧</h2>
-              <span className="text-xs text-muted-foreground">
-                結果を押すと詳細を開けます
-              </span>
+              <p className="text-xs text-muted-foreground">
+                結果を見ると詳細を確認できます。補正するを押すとその記録を修正できます。
+              </p>
             </div>
           </CardHeader>
 
           <CardBody>
             {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
                 まだ履歴がありません。開始→終了してみて！
-              </p>
+              </div>
             ) : (
               <ul className="space-y-3">
                 {rows.map((row) => {
@@ -102,37 +111,47 @@ export default async function HistoryPage() {
                   const e = row.ended_at ? new Date(row.ended_at) : null;
                   const diff = e ? e.getTime() - s.getTime() : 0;
                   const { days, hours, minutes, seconds } = formatDuration(diff);
+                  const reason =
+                    row.end_reason && row.end_reason.trim()
+                      ? `理由: ${row.end_reason}`
+                      : "理由: finished";
 
                   return (
                     <li
                       key={row.id}
-                      className="rounded-lg border border-border bg-secondary/30 px-4 py-3"
+                      className="rounded-xl border border-border bg-background/60 px-4 py-4"
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="font-semibold tabular-nums break-words">
-                            {days}日 {hours}時間 {minutes}分 {seconds}秒
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-base font-bold tabular-nums break-words">
+                              {days}日 {hours}時間 {minutes}分 {seconds}秒
+                            </div>
+
+                            <div className="mt-1 text-xs text-muted-foreground break-words tabular-nums">
+                              開始: {formatJst(row.started_at)} / 終了:{" "}
+                              {row.ended_at ? formatJst(row.ended_at) : "-"}
+                            </div>
+
+                            <div className="mt-2 rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                              {reason}
+                            </div>
                           </div>
 
-                          <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-                            開始: {formatJst(row.started_at)} / 終了:{" "}
-                            {row.ended_at ? formatJst(row.ended_at) : "-"}
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <Link
+                              href={`/results/${row.id}`}
+                              className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
+                            >
+                              結果を見る
+                            </Link>
+                            <Link
+                              href={`/results/${row.id}?openCorrection=1`}
+                              className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                            >
+                              補正する
+                            </Link>
                           </div>
-
-                          <div className="mt-1 text-xs text-muted-foreground break-words">
-                            {row.end_reason && row.end_reason.trim()
-                              ? `理由: ${row.end_reason}`
-                              : "理由: finished"}
-                          </div>
-                        </div>
-
-                        <div className="text-sm whitespace-nowrap">
-                          <Link
-                            href={`/results/${row.id}`}
-                            className="text-primary hover:underline"
-                          >
-                            結果を見る →
-                          </Link>
                         </div>
                       </div>
                     </li>
@@ -146,4 +165,3 @@ export default async function HistoryPage() {
     </Container>
   );
 }
-``
