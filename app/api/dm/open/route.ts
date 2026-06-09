@@ -21,6 +21,10 @@ function getAdminClient() {
   );
 }
 
+function sortPair(a: string, b: string) {
+  return a < b ? { user_low: a, user_high: b } : { user_low: b, user_high: a };
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -46,79 +50,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "自分自身とはDMできません" }, { status: 400 });
     }
 
-    // 既存1対1スレッド探索
-    const { data: myMemberships, error: myErr } = await admin
-      .from("dm_thread_members")
-      .select("thread_id")
-      .eq("user_id", user.id);
+    const pair = sortPair(user.id, targetUserId);
 
-    if (myErr) {
-      return NextResponse.json({ error: myErr.message }, { status: 500 });
+    // 既存スレッド確認
+    const { data: existing, error: existingErr } = await admin
+      .from("dm_threads")
+      .select("id")
+      .eq("user_low", pair.user_low)
+      .eq("user_high", pair.user_high)
+      .maybeSingle();
+
+    if (existingErr) {
+      return NextResponse.json({ error: existingErr.message }, { status: 500 });
     }
 
-    const threadIds = (myMemberships ?? []).map((x: any) => x.thread_id);
-    let existingThreadId: string | null = null;
-
-    if (threadIds.length > 0) {
-      const { data: members, error: memberErr } = await admin
-        .from("dm_thread_members")
-        .select("thread_id, user_id")
-        .in("thread_id", threadIds);
-
-      if (memberErr) {
-        return NextResponse.json({ error: memberErr.message }, { status: 500 });
-      }
-
-      const grouped = new Map<string, string[]>();
-      for (const row of members ?? []) {
-        const arr = grouped.get(row.thread_id) ?? [];
-        arr.push(row.user_id);
-        grouped.set(row.thread_id, arr);
-      }
-
-      for (const [threadId, userIds] of grouped.entries()) {
-        const uniqueIds = Array.from(new Set(userIds));
-        if (
-          uniqueIds.length === 2 &&
-          uniqueIds.includes(user.id) &&
-          uniqueIds.includes(targetUserId)
-        ) {
-          existingThreadId = threadId;
-          break;
-        }
-      }
-    }
-
-    if (existingThreadId) {
-      return NextResponse.json({ ok: true, threadId: existingThreadId });
+    if (existing?.id) {
+      return NextResponse.json({ ok: true, threadId: existing.id });
     }
 
     // 無ければ新規作成
-    const { data: thread, error: threadErr } = await admin
+    const { data: created, error: createErr } = await admin
       .from("dm_threads")
-      .insert({})
+      .insert({
+        user_low: pair.user_low,
+        user_high: pair.user_high,
+      })
       .select("id")
       .single();
 
-    if (threadErr || !thread) {
+    if (createErr || !created) {
       return NextResponse.json(
-        { error: threadErr?.message ?? "スレッド作成に失敗しました" },
+        { error: createErr?.message ?? "スレッド作成に失敗しました" },
         { status: 500 }
       );
     }
 
-    const threadId = thread.id as string;
-
-    const { error: memberInsertErr } = await admin.from("dm_thread_members").insert([
-      { thread_id: threadId, user_id: user.id },
-      { thread_id: threadId, user_id: targetUserId },
-    ]);
-
-    if (memberInsertErr) {
-      return NextResponse.json({ error: memberInsertErr.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, threadId });
+    return NextResponse.json({ ok: true, threadId: created.id });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "Unexpected error" },
@@ -126,4 +93,3 @@ export async function POST(req: Request) {
     );
   }
 }
-``
