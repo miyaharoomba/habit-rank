@@ -75,8 +75,13 @@ export default async function ResultPage({
   const isOwner = sess.user_id === user.id;
 
   const corrected = typeof sp.corrected === "string" ? sp.corrected : "";
-  const correctionError = typeof sp.correction_error === "string" ? decodeURIComponent(sp.correction_error) : "";
+  const correctionError =
+    typeof sp.correction_error === "string"
+      ? decodeURIComponent(sp.correction_error)
+      : "";
   const createdId = typeof sp.created === "string" ? sp.created : "";
+  const initialOpen =
+    sp.openCorrection === "1" || sp.openCorrection === "true";
 
   return (
     <Container>
@@ -87,13 +92,22 @@ export default async function ResultPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40" href="/app">
+          <Link
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+            href="/app"
+          >
             /app
           </Link>
-          <Link className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40" href="/ranking">
+          <Link
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+            href="/ranking"
+          >
             /ranking
           </Link>
-          <Link className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40" href="/dm">
+          <Link
+            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+            href="/dm"
+          >
             /dm
           </Link>
         </div>
@@ -105,7 +119,8 @@ export default async function ResultPage({
             <CardBody>
               <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
                 {corrected === "adjust" && "記録を修正しました。"}
-                {corrected === "merge" && "誤って終了した記録を次の継続へ結合しました。"}
+                {corrected === "merge" &&
+                  "誤って終了した記録を次の継続へ結合しました。"}
                 {corrected === "split" && (
                   <>
                     記録を分割して補正しました。
@@ -162,6 +177,7 @@ export default async function ResultPage({
               ended_at: sess.ended_at,
               end_reason: sess.end_reason,
             }}
+            initialOpen={initialOpen}
           />
         ) : null}
       </div>

@@ -34,14 +34,22 @@ function helperText(mode: "adjust" | "merge" | "split") {
 
 export default function CorrectionSheet({
   session,
+  initialOpen = false,
 }: {
   session: SessionLite;
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [mode, setMode] = useState<"adjust" | "merge" | "split">("adjust");
 
-  const defaultEndedAt = useMemo(() => toLocalInputValue(session.ended_at), [session.ended_at]);
-  const defaultStartedAt = useMemo(() => toLocalInputValue(session.started_at), [session.started_at]);
+  const defaultEndedAt = useMemo(
+    () => toLocalInputValue(session.ended_at),
+    [session.ended_at]
+  );
+  const defaultStartedAt = useMemo(
+    () => toLocalInputValue(session.started_at),
+    [session.started_at]
+  );
 
   return (
     <div className="rounded-2xl border border-border bg-background/60 px-4 py-4">
