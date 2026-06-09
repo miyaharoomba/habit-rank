@@ -11,11 +11,6 @@ import Link from "next/link";
 import { formatJstStartLabel } from "@/lib/time";
 import FinishSessionButtons from "./FinishSessionButtons";
 
-function avatarUrl(path: string | null) {
-  if (!path) return null;
-  return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
-}
-
 export default async function AppPage() {
   const supabase = await createClient();
 
@@ -51,14 +46,16 @@ export default async function AppPage() {
 
   const startedAt = active?.started_at ?? null;
   const isRunning = Boolean(startedAt);
-  const avatar = avatarUrl(avatarPath);
 
   return (
     <>
-      <MobileAppMenu />
+      <MobileAppMenu
+        displayName={displayName}
+        avatarPath={avatarPath}
+        statusMessage={statusMessage}
+      />
 
       <Container>
-        {/* ヘッダー */}
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
@@ -72,20 +69,8 @@ export default async function AppPage() {
           </div>
         </header>
 
-        {/* PCサブ導線 */}
         <div className="mt-4 hidden flex-wrap items-center gap-2 sm:flex">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2">
-            {avatar ? (
-              <img
-                src={avatar}
-                alt={displayName || "avatar"}
-                className="h-7 w-7 rounded-full object-cover border border-border"
-              />
-            ) : (
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-secondary/40 text-xs font-bold text-muted-foreground">
-                {(displayName || "?").slice(0, 1)}
-              </div>
-            )}
             <span className="text-sm font-semibold">👤 {displayName}</span>
           </div>
 
@@ -133,7 +118,6 @@ export default async function AppPage() {
           </Link>
         </div>
 
-        {/* 現在の継続 */}
         <div className="mt-6 grid gap-4">
           <Card>
             <CardHeader>
@@ -191,7 +175,6 @@ export default async function AppPage() {
             </CardBody>
           </Card>
 
-          {/* 掲示板見出しは GlobalChatBoard 側で出る */}
           <GlobalChatBoard myUserId={user.id} />
         </div>
       </Container>
