@@ -221,6 +221,9 @@ function BubbleFrame({
       {!mine ? avatar : null}
 
       <div className="min-w-0 max-w-[min(100%,42rem)] flex-1 sm:flex-none">
+        {/* ここでヘッダーを吹き出しの外に出す */}
+        <div className={mine ? "mb-2 flex justify-end" : "mb-2"}>{header}</div>
+
         <div
           className={[
             "min-w-0 rounded-2xl border px-4 py-3 shadow-sm overflow-hidden",
@@ -229,8 +232,7 @@ function BubbleFrame({
               : "border-border bg-background/80",
           ].join(" ")}
         >
-          {header}
-          <div className="mt-2 min-w-0">{children}</div>
+          <div className="min-w-0">{children}</div>
         </div>
       </div>
 
