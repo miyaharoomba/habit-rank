@@ -56,19 +56,21 @@ export default async function AppPage() {
       />
 
       <Container>
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        {/* ヘッダー */}
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground break-words">
               今の継続状態を見ながら、そのまま開始・終了・再開できます。
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-start pr-1">
+          <div className="shrink-0 pt-1">
             <NotificationBell />
           </div>
         </header>
 
+        {/* PCサブ導線 */}
         <div className="mt-4 hidden flex-wrap items-center gap-2 sm:flex">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2">
             <span className="text-sm font-semibold">👤 {displayName}</span>
@@ -118,6 +120,7 @@ export default async function AppPage() {
           </Link>
         </div>
 
+        {/* 現在の継続 */}
         <div className="mt-6 grid gap-4">
           <Card>
             <CardHeader>
@@ -175,6 +178,7 @@ export default async function AppPage() {
             </CardBody>
           </Card>
 
+          {/* 掲示板見出しは GlobalChatBoard 側で出る */}
           <GlobalChatBoard myUserId={user.id} />
         </div>
       </Container>
