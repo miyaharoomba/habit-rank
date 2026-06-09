@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import TitleBadge from "@/app/components/TitleBadge";
 
 type Participant = {
@@ -37,6 +38,49 @@ function profileHref(userId: string, myUserId: string) {
   return userId === myUserId ? "/profile" : `/users/${encodeURIComponent(userId)}`;
 }
 
+function MessageButton({ targetUserId }: { targetUserId: string }) {
+  const router = useRouter();
+  const [opening, setOpening] = useState(false);
+
+  const openDm = async () => {
+    if (opening) return;
+    setOpening(true);
+
+    try {
+      const res = await fetch("/api/dm/open", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ targetUserId }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.threadId) {
+        throw new Error(json?.error ?? "DMスレッドを開けませんでした");
+      }
+
+      router.push(`/dm/${json.threadId}`);
+    } catch (e: any) {
+      alert(e?.message ?? "DMを開けませんでした");
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openDm}
+      disabled={opening}
+      className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40 disabled:opacity-50"
+    >
+      {opening ? "開いています…" : "メッセージ"}
+    </button>
+  );
+}
+
 export default function ParticipantsClient({
   participants,
   myUserId,
@@ -49,7 +93,6 @@ export default function ParticipantsClient({
   const filtered = useMemo(() => {
     const key = q.trim().toLowerCase();
     if (!key) return participants;
-
     return participants.filter((p) =>
       (p.display_name ?? "NoName").toLowerCase().includes(key)
     );
@@ -58,12 +101,12 @@ export default function ParticipantsClient({
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-sm font-medium text-foreground">検索（名前）</label>
+        <label className="text-sm font-medium">検索（名前）</label>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="例：haruto"
-          className="mt-1 w-full sm:w-64 rounded-lg bg-background border border-input px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background sm:w-64"
         />
       </div>
 
@@ -80,10 +123,13 @@ export default function ParticipantsClient({
             return (
               <li
                 key={p.user_id}
-                className="rounded-xl border border-border bg-background/60 px-4 py-4"
+                className="rounded-xl border border-border bg-background/60 p-4"
               >
                 <div className="flex items-start gap-3">
-                  <Link href={href} className="shrink-0">
+                  <Link
+                    href={href}
+                    className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                  >
                     {avatar ? (
                       <img
                         src={avatar}
@@ -91,7 +137,7 @@ export default function ParticipantsClient({
                         className="h-12 w-12 rounded-full object-cover border border-border"
                       />
                     ) : (
-                      <div className="h-12 w-12 rounded-full border border-border bg-secondary/40 flex items-center justify-center text-base font-bold text-muted-foreground">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary/40 text-base font-bold text-muted-foreground">
                         {(p.display_name ?? "?").trim().slice(0, 1) || "?"}
                       </div>
                     )}
@@ -99,50 +145,42 @@ export default function ParticipantsClient({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={href}
-                        className="text-sm font-semibold hover:underline break-all"
-                      >
+                      <div className="font-semibold break-words">
                         {p.display_name || "NoName"}
-                      </Link>
+                      </div>
 
-                      <TitleBadge
-                        label={p.title_label}
-                        rank={p.title_rank}
-                        compact
-                      />
+                      {p.title_label?.trim() ? (
+                        <TitleBadge
+                          label={p.title_label}
+                          rank={p.title_rank ?? "bronze"}
+                        />
+                      ) : null}
 
                       {p.is_active ? (
-                        <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                        <span className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
                           継続中
                         </span>
                       ) : null}
                     </div>
 
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      参加: {new Date(p.created_at).toLocaleDateString()}
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      <div>参加: {new Date(p.created_at).toLocaleDateString()}</div>
+                      {p.is_active ? (
+                        <div>継続中（{formatTime(p.current_seconds)}）</div>
+                      ) : null}
                     </div>
 
-                    {p.is_active ? (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        継続中（{formatTime(p.current_seconds)}）
-                      </div>
-                    ) : null}
-
-                    <div className="mt-3 flex flex-wrap gap-3">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <Link
                         href={href}
-                        className="text-xs font-semibold text-primary hover:underline"
+                        className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
                       >
                         プロフィールを見る
                       </Link>
 
-                      <Link
-                        href={`/dm?userId=${encodeURIComponent(p.user_id)}`}
-                        className="text-xs font-semibold text-primary hover:underline"
-                      >
-                        メッセージ
-                      </Link>
+                      {p.user_id !== myUserId ? (
+                        <MessageButton targetUserId={p.user_id} />
+                      ) : null}
                     </div>
                   </div>
                 </div>
