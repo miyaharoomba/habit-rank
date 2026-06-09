@@ -1,7 +1,6 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 type BadgeRank = "platinum" | "gold" | "silver" | "bronze";
-
 type ModernConditionType =
   | "finish_count"
   | "total_minutes"
@@ -12,14 +11,12 @@ type ModernConditionType =
   | "consecutive_days_finish_count"
   | "short_session_finish_count"
   | "dense_finish_count";
-
 type LegacyConditionType =
   | "total_sessions"
   | "total_hours"
   | "max_streak_days"
   | "early_bird_sessions"
   | "complete_all";
-
 type ConditionType = ModernConditionType | LegacyConditionType;
 
 type BadgeRow = {
@@ -38,6 +35,11 @@ type SessionRow = {
   id: number | string;
   started_at: string;
   ended_at: string | null;
+};
+
+type AdminControlRow = {
+  badge_id: string;
+  ignore_before: string;
 };
 
 type DerivedStats = {
@@ -108,7 +110,6 @@ function getDurationMinutes(startedAt: string, endedAt: string | null) {
 
 async function getFinishedSessions(userId: string): Promise<SessionRow[]> {
   const admin = getAdminClient();
-
   const { data: sessions, error } = await admin
     .from("streak_sessions")
     .select("id, started_at, ended_at")
@@ -118,6 +119,23 @@ async function getFinishedSessions(userId: string): Promise<SessionRow[]> {
 
   if (error) throw new Error(error.message);
   return (sessions ?? []) as SessionRow[];
+}
+
+async function getActiveBadgeControls(userId: string): Promise<Map<string, string>> {
+  const admin = getAdminClient();
+  const { data, error } = await admin
+    .from("user_badge_admin_controls")
+    .select("badge_id, ignore_before")
+    .eq("user_id", userId)
+    .is("released_at", null);
+
+  if (error) throw new Error(error.message);
+
+  const map = new Map<string, string>();
+  for (const row of (data ?? []) as AdminControlRow[]) {
+    map.set(row.badge_id, row.ignore_before);
+  }
+  return map;
 }
 
 function deriveStatsFromSessions(rows: SessionRow[]): DerivedStats {
@@ -167,13 +185,8 @@ function deriveStatsFromSessions(rows: SessionRow[]): DerivedStats {
       currentStreak = 1;
     } else {
       const gap = daysBetweenDateKeys(previousDay, day);
-      if (gap === 1) {
-        currentStreak += 1;
-      } else if (gap === 0) {
-        // no-op
-      } else {
-        currentStreak = 1;
-      }
+      if (gap === 1) currentStreak += 1;
+      else if (gap > 1) currentStreak = 1;
     }
     previousDay = day;
     max_streak_days = Math.max(max_streak_days, currentStreak);
@@ -190,20 +203,15 @@ function deriveStatsFromSessions(rows: SessionRow[]): DerivedStats {
   };
 }
 
-function qualifyTimeWindowFinishCount(
-  stats: DerivedStats,
-  badge: BadgeRow
-) {
+function qualifyTimeWindowFinishCount(stats: DerivedStats, badge: BadgeRow) {
   const startHour = getNumberMeta(badge.condition_meta, "startHour", 0);
   const endHour = getNumberMeta(badge.condition_meta, "endHour", 24);
-
   const count = stats.sessions.filter((s) => {
     if (endHour >= 24) {
       return s.endedHourJst >= startHour && s.endedHourJst <= 23;
     }
     return s.endedHourJst >= startHour && s.endedHourJst < endHour;
   }).length;
-
   return count >= badge.condition_value;
 }
 
@@ -215,16 +223,12 @@ function qualifyRollingWindowFinishCount(stats: DerivedStats, badge: BadgeRow) {
   const days = getNumberMeta(badge.condition_meta, "days", 7);
   const windowMs = days * 24 * 60 * 60 * 1000;
   const endedMs = stats.sessions.map((s) => s.endedAtMs).sort((a, b) => a - b);
-
   let left = 0;
   let best = 0;
   for (let right = 0; right < endedMs.length; right += 1) {
-    while (endedMs[right] - endedMs[left] > windowMs) {
-      left += 1;
-    }
+    while (endedMs[right] - endedMs[left] > windowMs) left += 1;
     best = Math.max(best, right - left + 1);
   }
-
   return best >= badge.condition_value;
 }
 
@@ -243,22 +247,16 @@ function qualifyDenseFinishCount(stats: DerivedStats, badge: BadgeRow) {
   const windowMs = withinMinutes * 60 * 1000;
   const endedMs = stats.sessions.map((s) => s.endedAtMs).sort((a, b) => a - b);
   const needed = badge.condition_value;
-
   let left = 0;
   for (let right = 0; right < endedMs.length; right += 1) {
-    while (endedMs[right] - endedMs[left] > windowMs) {
-      left += 1;
-    }
-    if (right - left + 1 >= needed) {
-      return true;
-    }
+    while (endedMs[right] - endedMs[left] > windowMs) left += 1;
+    if (right - left + 1 >= needed) return true;
   }
   return false;
 }
 
 function qualifies(badge: BadgeRow, stats: DerivedStats) {
   switch (badge.condition_type) {
-    // modern condition types
     case "finish_count":
       return stats.finish_count >= badge.condition_value;
     case "total_minutes":
@@ -277,8 +275,6 @@ function qualifies(badge: BadgeRow, stats: DerivedStats) {
       return qualifyShortSessionCount(stats, badge);
     case "dense_finish_count":
       return qualifyDenseFinishCount(stats, badge);
-
-    // legacy condition types (backward compatibility)
     case "total_sessions":
       return stats.finish_count >= badge.condition_value;
     case "total_hours":
@@ -305,7 +301,7 @@ function unlockMessage(badge: BadgeRow) {
 export async function checkAndAwardBadges(userId: string) {
   const admin = getAdminClient();
   const sessions = await getFinishedSessions(userId);
-  const stats = deriveStatsFromSessions(sessions);
+  const activeControls = await getActiveBadgeControls(userId);
 
   const { data: badges, error: badgeErr } = await admin
     .from("badges")
@@ -313,14 +309,12 @@ export async function checkAndAwardBadges(userId: string) {
       "id, title, title_label, description, badge_rank, condition_type, condition_value, condition_meta, icon_path"
     )
     .order("created_at", { ascending: true });
-
   if (badgeErr) throw new Error(badgeErr.message);
 
   const { data: userBadges, error: ubErr } = await admin
     .from("user_badges")
     .select("badge_id")
     .eq("user_id", userId);
-
   if (ubErr) throw new Error(ubErr.message);
 
   const badgeRows = (badges ?? []) as BadgeRow[];
@@ -330,7 +324,16 @@ export async function checkAndAwardBadges(userId: string) {
   for (const badge of badgeRows) {
     if (owned.has(badge.id)) continue;
     if (badge.condition_type === "complete_all") continue;
-    if (!qualifies(badge, stats)) continue;
+
+    const ignoreBefore = activeControls.get(badge.id);
+    const scopedSessions = ignoreBefore
+      ? sessions.filter(
+          (s) => s.ended_at && new Date(s.ended_at).getTime() > new Date(ignoreBefore).getTime()
+        )
+      : sessions;
+
+    const scopedStats = deriveStatsFromSessions(scopedSessions);
+    if (!qualifies(badge, scopedStats)) continue;
 
     const { error: insertErr } = await admin.from("user_badges").insert({
       user_id: userId,
@@ -362,31 +365,18 @@ export async function checkAndAwardBadges(userId: string) {
     }
   }
 
-  // legacy / optional special badge support
   const platinum = badgeRows.find((b) => b.condition_type === "complete_all");
   if (platinum && !owned.has(platinum.id)) {
-    const nonPlatinumIds = badgeRows
-      .filter((b) => b.id !== platinum.id)
-      .map((b) => b.id);
-
-    const hasAll = nonPlatinumIds.every(
-      (id) => owned.has(id) || unlocked.some((u) => u.id === id)
-    );
-
+    const nonPlatinumIds = badgeRows.filter((b) => b.id !== platinum.id).map((b) => b.id);
+    const hasAll = nonPlatinumIds.every((id) => owned.has(id) || unlocked.some((u) => u.id === id));
     if (hasAll) {
       const { error: insertErr } = await admin.from("user_badges").insert({
         user_id: userId,
         badge_id: platinum.id,
       });
-
-      if (!insertErr) {
-        unlocked.push(platinum);
-      }
+      if (!insertErr) unlocked.push(platinum);
     }
   }
 
-  return {
-    unlocked,
-    stats,
-  };
+  return { unlocked };
 }
