@@ -57,15 +57,15 @@ export default async function AppPage() {
 
       <Container>
         {/* ヘッダー */}
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
-            <p className="mt-1 text-sm text-muted-foreground break-words">
+            <p className="text-sm text-muted-foreground">
               今の継続状態を見ながら、そのまま開始・終了・再開できます。
             </p>
           </div>
 
-          <div className="shrink-0 pt-1">
+          <div className="self-end sm:self-start">
             <NotificationBell />
           </div>
         </header>
