@@ -22,6 +22,32 @@ function maskId(id: string | null) {
   return `${id.slice(0, 8)}…`;
 }
 
+function AdminNavCard({
+  href,
+  title,
+  desc,
+}: {
+  href: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <Link href={href} className="block h-full">
+      <div className="h-full transition hover:-translate-y-0.5 hover:bg-secondary/20">
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold">{title}</h2>
+          </CardHeader>
+          <CardBody>
+            <p className="text-sm text-muted-foreground">{desc}</p>
+            <div className="mt-3 text-sm text-primary">開く →</div>
+          </CardBody>
+        </Card>
+      </div>
+    </Link>
+  );
+}
+
 export default async function AdminPage() {
   const supabase = await createClient();
   const {
@@ -114,71 +140,41 @@ export default async function AdminPage() {
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">ユーザー管理</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">一覧 / BAN / 解除 / リセット発行</p>
-          </CardBody>
-        </Card>
+        <AdminNavCard
+          href="/admin/users"
+          title="ユーザー管理"
+          desc="一覧 / BAN / 解除 / リセット発行"
+        />
 
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">通報</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">通報一覧 / 審査 / 対応</p>
-          </CardBody>
-        </Card>
+        <AdminNavCard
+          href="/admin/reports"
+          title="通報"
+          desc="通報一覧 / 審査 / 対応"
+        />
 
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">監査ログ</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">管理操作の履歴</p>
-          </CardBody>
-        </Card>
+        <AdminNavCard
+          href="/admin/audit"
+          title="監査ログ"
+          desc="管理操作の履歴"
+        />
 
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">お知らせ配信</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">全員への通知 / 端末通知 / 詳細画面</p>
-            <div className="mt-3">
-              <Link href="/admin/announcements" className="text-sm text-primary hover:underline">
-                お知らせ配信へ →
-              </Link>
-            </div>
-          </CardBody>
-        </Card>
+        <AdminNavCard
+          href="/admin/announcements"
+          title="お知らせ配信"
+          desc="全員への通知 / 端末通知 / 詳細画面"
+        />
 
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">トロフィー管理</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">
-              不正・誤取得したトロフィーの剥奪、判定起点のリセット、復元。
-            </p>
-            <div className="mt-3">
-              <Link href="/admin/badges" className="text-sm text-primary hover:underline">
-                トロフィー管理へ →
-              </Link>
-            </div>
-          </CardBody>
-        </Card>
+        <AdminNavCard
+          href="/admin/badges"
+          title="トロフィー管理"
+          desc="不正・誤取得したトロフィーの剥奪、判定起点のリセット、復元。"
+        />
 
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">問い合わせ管理</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">問い合わせ一覧 / 返信 / 完了管理</p>
-          </CardBody>
-        </Card>
+        <AdminNavCard
+          href="/admin/support"
+          title="問い合わせ管理"
+          desc="問い合わせ一覧 / 返信 / 完了管理"
+        />
       </div>
 
       <div className="mt-6">
@@ -191,29 +187,29 @@ export default async function AdminPage() {
               </Link>
             </div>
           </CardHeader>
-        <CardBody>
-          {auditRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">まだ監査ログがありません。</p>
-          ) : (
-            <ul className="space-y-3">
-              {auditRows.map((a) => (
-                <li key={a.id} className="rounded-xl border border-border bg-secondary/30 p-4">
-                  <div className="text-sm font-semibold break-words">
-                    {a.action} #{a.id}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground break-words">
-                    actor: {(a.actor_id && (nameMap.get(a.actor_id) ?? "NoName")) || "-"}（{maskId(a.actor_id)}）
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground break-words">
-                    target_user: {maskId(a.target_user_id)} / target_thread: {maskId(a.target_thread_id)}
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground tabular-nums">{formatJst(a.created_at)}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardBody>
-      </Card>
+          <CardBody>
+            {auditRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">まだ監査ログがありません。</p>
+            ) : (
+              <ul className="space-y-3">
+                {auditRows.map((a) => (
+                  <li key={a.id} className="rounded-xl border border-border bg-secondary/30 p-4">
+                    <div className="text-sm font-semibold break-words">
+                      {a.action} #{a.id}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground break-words">
+                      actor: {(a.actor_id && (nameMap.get(a.actor_id) ?? "NoName")) || "-"}（{maskId(a.actor_id)}）
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground break-words">
+                      target_user: {maskId(a.target_user_id)} / target_thread: {maskId(a.target_thread_id)}
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground tabular-nums">{formatJst(a.created_at)}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
       </div>
     </Container>
   );
