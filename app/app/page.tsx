@@ -129,15 +129,14 @@ export default async function AppPage() {
             <CardBody>
               <div className="space-y-4">
                 <div className="rounded-2xl border border-border bg-background/60 px-4 py-4">
-                  <LiveTimer startedAt={startedAt} />
+                  <div className="overflow-hidden whitespace-nowrap">
+                    <div className="origin-left scale-[0.9] sm:scale-100">
+                      <LiveTimer startedAt={startedAt} />
+                    </div>
+                  </div>
                   <div className="mt-2 text-sm text-muted-foreground break-words">
                     開始：{startedAt ? formatJstStartLabel(startedAt) : "未開始"}
                   </div>
-                  {statusMessage ? (
-                    <div className="mt-2 text-xs text-muted-foreground break-words">
-                      一言：{statusMessage}
-                    </div>
-                  ) : null}
                 </div>
 
                 {!isRunning ? (
