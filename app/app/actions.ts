@@ -1,8 +1,29 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { checkAndAwardBadges } from "@/app/services/badgeService";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+function mustEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+function getAdminClient() {
+  return createAdminClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+}
 
 /**
  * 継続開始
@@ -41,7 +62,8 @@ export async function startSession() {
  * - mode=restart: 終了して次を開始
  * - mode=stop: 完全に終了
  *
- * まずは安定復旧を優先した最小版
+ * 通知 insert と称号判定も戻した本来版
+ * ただし通知 / 称号判定が失敗しても結果画面遷移は止めない
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -83,8 +105,39 @@ export async function finishSession(formData: FormData) {
     throw new Error("finished session id not found");
   }
 
+  // 全体通知
+  try {
+    const admin = getAdminClient();
+
+    const { error: notifErr } = await admin.from("notifications").insert({
+      type: "streak_end",
+      actor_id: user.id,
+      recipient_id: null,
+      thread_id: null,
+      session_id: finishedSessionId,
+      announcement_id: null,
+      support_thread_id: null,
+      message_preview: reason,
+    });
+
+    if (notifErr) {
+      console.error("finishSession notifications insert failed:", notifErr.message);
+    }
+  } catch (e) {
+    console.error("finishSession notification service-role insert failed:", e);
+  }
+
+  // 称号判定
+  try {
+    await checkAndAwardBadges(user.id);
+  } catch (e) {
+    console.error("checkAndAwardBadges failed:", e);
+  }
+
   revalidatePath("/app");
   revalidatePath("/history");
+  revalidatePath("/badges");
+  revalidatePath(`/users/${user.id}/badges`);
   revalidatePath(`/results/${finishedSessionId}`);
 
   redirect(`/results/${finishedSessionId}`);
