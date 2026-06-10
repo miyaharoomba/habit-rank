@@ -1,29 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { checkAndAwardBadges } from "@/app/services/badgeService";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-function mustEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function getAdminClient() {
-  return createAdminClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
-}
 
 /**
  * 継続開始
@@ -36,13 +15,15 @@ export async function startSession() {
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError || !user) throw new Error("ログイン情報が取れません");
+  if (userError || !user) {
+    throw new Error("ログイン情報が取れません");
+  }
 
-  const { error } = await supabase
-    .from("streak_sessions")
-    .insert({ user_id: user.id });
+  const { error } = await supabase.from("streak_sessions").insert({
+    user_id: user.id,
+  });
 
-  // 継続中1個制限に引っかかったら開始済み扱いでOK
+  // 継続中1個制限に引っかかったら開始済み扱い
   if (error) {
     const anyErr = error as any;
     if (anyErr?.code === "23505") {
@@ -57,10 +38,10 @@ export async function startSession() {
 
 /**
  * 継続終了
- * - mode=restart: 終了して次を自動開始
- * - mode=stop:    完全に終了
- * - 一般ユーザーでも確実に通知が入るよう、notifications への insert は service role で実行
- * - 継続終了後、バッジ付与判定も走らせる
+ * - mode=restart: 終了して次を開始
+ * - mode=stop: 完全に終了
+ *
+ * まずは安定復旧を優先した最小版
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -70,7 +51,9 @@ export async function finishSession(formData: FormData) {
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError || !user) throw new Error("ログイン情報が取れません");
+  if (userError || !user) {
+    throw new Error("ログイン情報が取れません");
+  }
 
   const allReasons = formData
     .getAll("end_reason")
@@ -88,52 +71,27 @@ export async function finishSession(formData: FormData) {
     auto_restart: autoRestart,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("finish_and_maybe_restart_session error:", error);
+    throw new Error(error.message);
+  }
 
   const finishedSessionId = data?.[0]?.finished_session_id as string | undefined;
+
   if (!finishedSessionId) {
+    console.error("finishSession RPC data:", data);
     throw new Error("finished session id not found");
-  }
-
-  // 一般ユーザーでも絶対に通知が入るよう、service role で全体通知を insert
-  try {
-    const admin = getAdminClient();
-
-    const { error: notifErr } = await admin.from("notifications").insert({
-      type: "streak_end",
-      actor_id: user.id,
-      recipient_id: null, // 全体通知
-      thread_id: null,
-      session_id: finishedSessionId,
-      announcement_id: null,
-      support_thread_id: null,
-      message_preview: reason,
-    });
-
-    if (notifErr) {
-      console.error("finishSession notifications insert failed:", notifErr.message);
-    }
-  } catch (e) {
-    console.error("finishSession notification service-role insert failed:", e);
-  }
-
-  // バッジ付与判定
-  try {
-    await checkAndAwardBadges(user.id);
-  } catch (e) {
-    console.error("checkAndAwardBadges failed:", e);
   }
 
   revalidatePath("/app");
   revalidatePath("/history");
-  revalidatePath("/badges");
-  revalidatePath(`/users/${user.id}/badges`);
   revalidatePath(`/results/${finishedSessionId}`);
+
   redirect(`/results/${finishedSessionId}`);
 }
 
 /**
- * 表示名を保存（profiles.display_name）
+ * 表示名保存
  */
 export async function setDisplayName(formData: FormData) {
   const supabase = await createClient();
@@ -143,15 +101,15 @@ export async function setDisplayName(formData: FormData) {
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError || !user) throw new Error("ログイン情報が取れません");
+  if (userError || !user) {
+    throw new Error("ログイン情報が取れません");
+  }
 
   const raw = String(formData.get("displayName") ?? "");
   const name = raw.trim();
 
   if (!name) throw new Error("名前が空です");
-  if (name.length > 20) {
-    throw new Error("名前が長すぎます（20文字以内）");
-  }
+  if (name.length > 20) throw new Error("名前が長すぎます（20文字以内）");
 
   const { error } = await supabase
     .from("profiles")
