@@ -44,7 +44,6 @@ export async function startSession() {
     user_id: user.id,
   });
 
-  // 継続中1個制限に引っかかったら開始済み扱い
   if (error) {
     const anyErr = error as any;
     if (anyErr?.code === "23505") {
@@ -62,8 +61,8 @@ export async function startSession() {
  * - mode=restart: 終了して次を開始
  * - mode=stop: 完全に終了
  *
- * 管理者は profiles.suppress_global_streak_end_notification = true の時だけ
- * 全体通知を飛ばさない
+ * 管理者が profiles.suppress_global_streak_end_notification = true のときは
+ * デバッグ扱いとして通知も称号判定も走らせない
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -105,8 +104,8 @@ export async function finishSession(formData: FormData) {
     throw new Error("finished session id not found");
   }
 
-  // 管理者の通知抑制フラグ確認
-  let shouldBroadcast = true;
+  // 管理者デバッグ設定確認
+  let suppressAllNotificationsForDebug = false;
 
   try {
     const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
@@ -119,7 +118,7 @@ export async function finishSession(formData: FormData) {
         .maybeSingle();
 
       if (!profileErr && profile?.suppress_global_streak_end_notification) {
-        shouldBroadcast = false;
+        suppressAllNotificationsForDebug = true;
       }
     }
   } catch (e) {
@@ -127,7 +126,7 @@ export async function finishSession(formData: FormData) {
   }
 
   // 全体通知
-  if (shouldBroadcast) {
+  if (!suppressAllNotificationsForDebug) {
     try {
       const admin = getAdminClient();
 
@@ -150,11 +149,13 @@ export async function finishSession(formData: FormData) {
     }
   }
 
-  // 称号判定
-  try {
-    await checkAndAwardBadges(user.id);
-  } catch (e) {
-    console.error("checkAndAwardBadges failed:", e);
+  // 称号判定（管理者デバッグ時はスキップ）
+  if (!suppressAllNotificationsForDebug) {
+    try {
+      await checkAndAwardBadges(user.id);
+    } catch (e) {
+      console.error("checkAndAwardBadges failed:", e);
+    }
   }
 
   revalidatePath("/app");
