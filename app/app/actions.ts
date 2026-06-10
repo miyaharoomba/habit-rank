@@ -44,7 +44,6 @@ export async function startSession() {
     user_id: user.id,
   });
 
-  // 継続中1個制限に引っかかったら開始済み扱い
   if (error) {
     const anyErr = error as any;
     if (anyErr?.code === "23505") {
@@ -62,8 +61,8 @@ export async function startSession() {
  * - mode=restart: 終了して次を開始
  * - mode=stop: 完全に終了
  *
- * 通知 insert と称号判定も戻した本来版
- * ただし通知 / 称号判定が失敗しても結果画面遷移は止めない
+ * 管理者は profiles.suppress_global_streak_end_notification=true のとき
+ * 全体通知を出さない。
  */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
@@ -105,26 +104,49 @@ export async function finishSession(formData: FormData) {
     throw new Error("finished session id not found");
   }
 
-  // 全体通知
+  // 管理者かどうか確認
+  let shouldBroadcast = true;
+
   try {
-    const admin = getAdminClient();
+    const { data: isAdmin } = await supabase.rpc("is_admin");
 
-    const { error: notifErr } = await admin.from("notifications").insert({
-      type: "streak_end",
-      actor_id: user.id,
-      recipient_id: null,
-      thread_id: null,
-      session_id: finishedSessionId,
-      announcement_id: null,
-      support_thread_id: null,
-      message_preview: reason,
-    });
+    if (isAdmin) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("suppress_global_streak_end_notification")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (notifErr) {
-      console.error("finishSession notifications insert failed:", notifErr.message);
+      if (profile?.suppress_global_streak_end_notification) {
+        shouldBroadcast = false;
+      }
     }
   } catch (e) {
-    console.error("finishSession notification service-role insert failed:", e);
+    console.error("admin suppress flag check failed:", e);
+  }
+
+  // 全体通知
+  if (shouldBroadcast) {
+    try {
+      const admin = getAdminClient();
+
+      const { error: notifErr } = await admin.from("notifications").insert({
+        type: "streak_end",
+        actor_id: user.id,
+        recipient_id: null,
+        thread_id: null,
+        session_id: finishedSessionId,
+        announcement_id: null,
+        support_thread_id: null,
+        message_preview: reason,
+      });
+
+      if (notifErr) {
+        console.error("finishSession notifications insert failed:", notifErr.message);
+      }
+    } catch (e) {
+      console.error("finishSession notification service-role insert failed:", e);
+    }
   }
 
   // 称号判定
@@ -172,3 +194,4 @@ export async function setDisplayName(formData: FormData) {
 
   revalidatePath("/app");
 }
+``
