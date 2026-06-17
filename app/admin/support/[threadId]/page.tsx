@@ -94,7 +94,7 @@ export default async function AdminSupportThreadPage({
       throw new Error(msgErr.message);
     }
 
-    // 2) notifications / push_outbox は service role で作る
+    // 2) 通知を作成する。push_outbox は DB trigger 側で作られる。
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
@@ -127,23 +127,6 @@ export default async function AdminSupportThreadPage({
       throw new Error(
         notifErr?.message ?? "support_reply notification insert failed"
       );
-    }
-
-    const { error: outboxErr } = await adminClient
-      .from("push_outbox")
-      .insert({
-        notification_id: notif.id,
-        recipient_id: targetThread.user_id,
-        payload: {
-          title: "管理者から返信",
-          body: notifPreview || "問い合わせに返信がありました",
-          url: `/support/${threadId}`,
-        },
-        attempts: 0,
-      });
-
-    if (outboxErr) {
-      throw new Error(outboxErr.message);
     }
 
     // 3) 監査ログ

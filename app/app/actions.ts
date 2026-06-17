@@ -1,29 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { checkAndAwardBadges } from "@/app/services/badgeService";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-function mustEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function getAdminClient() {
-  return createAdminClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
-}
 
 /**
  * 継続開始
@@ -123,30 +103,6 @@ export async function finishSession(formData: FormData) {
     }
   } catch (e) {
     console.error("admin suppress flag check failed:", e);
-  }
-
-  // 全体通知
-  if (!suppressAllNotificationsForDebug) {
-    try {
-      const admin = getAdminClient();
-
-      const { error: notifErr } = await admin.from("notifications").insert({
-        type: "streak_end",
-        actor_id: user.id,
-        recipient_id: null,
-        thread_id: null,
-        session_id: finishedSessionId,
-        announcement_id: null,
-        support_thread_id: null,
-        message_preview: reason,
-      });
-
-      if (notifErr) {
-        console.error("finishSession notifications insert failed:", notifErr.message);
-      }
-    } catch (e) {
-      console.error("finishSession notification service-role insert failed:", e);
-    }
   }
 
   // 称号判定（管理者デバッグ時はスキップ）
