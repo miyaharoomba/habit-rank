@@ -52,7 +52,6 @@ export async function POST(req: Request) {
 
     const pair = sortPair(user.id, targetUserId);
 
-    // 既存スレッド確認
     const { data: existing, error: existingErr } = await admin
       .from("dm_threads")
       .select("id")
@@ -68,7 +67,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, threadId: existing.id });
     }
 
-    // 無ければ新規作成
     const { data: created, error: createErr } = await admin
       .from("dm_threads")
       .insert({
