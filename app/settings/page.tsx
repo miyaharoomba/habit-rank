@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 import PushEnableCard from "@/app/components/PushEnableCard";
+import SettingsSessionControls from "./SettingsSessionControls";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -167,30 +168,7 @@ export default async function SettingsPage() {
           </>
         )}
 
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">セッション</h2>
-          </CardHeader>
-          <CardBody>
-            <p className="text-sm text-muted-foreground">
-              ログアウトは認証ページ側の導線を使ってください。
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                href="/auth/sign-in"
-                className="text-sm text-primary hover:underline whitespace-nowrap"
-              >
-                サインイン画面へ
-              </Link>
-              <Link
-                href="/app"
-                className="text-sm text-primary hover:underline whitespace-nowrap"
-              >
-                /appへ戻る
-              </Link>
-            </div>
-          </CardBody>
-        </Card>
+        <SettingsSessionControls />
       </div>
     </Container>
   );
