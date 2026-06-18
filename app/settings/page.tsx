@@ -2,7 +2,6 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 import PushEnableCard from "@/app/components/PushEnableCard";
@@ -18,45 +17,13 @@ export default async function SettingsPage() {
 
   if (userErr || !user) redirect("/auth/sign-in");
 
-  async function setSuppressGlobalStreakEndNotification(formData: FormData) {
-    "use server";
-
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser();
-
-    if (userErr || !user) redirect("/auth/sign-in");
-
-    const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
-    if (adminErr || !isAdmin) {
-      throw new Error("管理者のみ変更できます");
-    }
-
-    const enabled = String(formData.get("enabled") ?? "false") === "true";
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ suppress_global_streak_end_notification: enabled })
-      .eq("id", user.id);
-
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/settings");
-    redirect("/settings");
-  }
-
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, suppress_global_streak_end_notification")
+    .select("display_name")
     .eq("id", user.id)
     .maybeSingle();
 
   const displayName = profile?.display_name?.trim() || "NoName";
-  const suppressGlobalStreakEndNotification =
-    profile?.suppress_global_streak_end_notification ?? false;
 
   const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
   const admin = !adminErr && Boolean(isAdmin);
@@ -114,7 +81,7 @@ export default async function SettingsPage() {
               </CardHeader>
               <CardBody>
                 <p className="text-sm text-muted-foreground">
-                  管理者コンソールへ移動できます。
+                  管理者コンソールへ移動できます。デバッグ設定も管理者コンソール内にあります。
                 </p>
                 <div className="mt-3">
                   <Link
@@ -130,41 +97,6 @@ export default async function SettingsPage() {
               </CardBody>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <h2 className="font-semibold">管理者用デバッグ設定</h2>
-              </CardHeader>
-              <CardBody>
-                <p className="text-sm text-muted-foreground">
-                  継続終了時の全体通知を、この管理者アカウントだけ抑制できます。
-                  デバッグで終了操作する時に、全ユーザーへ通知を飛ばさないための設定です。
-                </p>
-
-                <form action={setSuppressGlobalStreakEndNotification} className="mt-4">
-                  <input
-                    type="hidden"
-                    name="enabled"
-                    value={suppressGlobalStreakEndNotification ? "false" : "true"}
-                  />
-
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
-                    <div className="text-sm font-semibold">継続終了の全体通知</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      現在: {suppressGlobalStreakEndNotification ? "通知しない" : "通知する"}
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="mt-3 inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-                    >
-                      {suppressGlobalStreakEndNotification
-                        ? "通知する に切り替える"
-                        : "通知しない に切り替える"}
-                    </button>
-                  </div>
-                </form>
-              </CardBody>
-            </Card>
           </>
         )}
 

@@ -2,6 +2,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
 
@@ -11,11 +12,12 @@ type AuditRow = {
   action: string;
   target_user_id: string | null;
   target_thread_id: string | null;
-  details: any;
+  details: Record<string, unknown> | null;
   created_at: string;
 };
 
 type ProfileRow = { id: string; display_name: string | null };
+type DebugProfileRow = { suppress_global_streak_end_notification: boolean | null };
 
 function maskId(id: string | null) {
   if (!id) return "-";
@@ -63,27 +65,71 @@ export default async function AdminPage() {
     redirect("/settings");
   }
 
-  const [usersRes, bannedRes, reportsRes, auditRes] = await Promise.all([
-    supabase.from("profiles").select("id", { count: "exact", head: true } as any),
+  async function setSuppressGlobalStreakEndNotification(formData: FormData) {
+    "use server";
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) redirect("/auth/sign-in");
+
+    const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
+    if (adminErr || !isAdmin) redirect("/settings");
+
+    const enabled = String(formData.get("enabled") ?? "false") === "true";
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ suppress_global_streak_end_notification: enabled })
+      .eq("id", user.id);
+
+    if (error) throw new Error(error.message);
+
+    await supabase.from("admin_audit_logs").insert({
+      actor_id: user.id,
+      action: "UPDATE_ADMIN_DEBUG_SETTINGS",
+      target_user_id: user.id,
+      details: { suppress_global_streak_end_notification: enabled },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/settings");
+    redirect("/admin");
+  }
+
+  const [usersRes, bannedRes, reportsRes, auditRes, debugProfileRes] = await Promise.all([
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase
       .from("user_flags")
-      .select("user_id", { count: "exact", head: true } as any)
+      .select("user_id", { count: "exact", head: true })
       .eq("is_banned", true),
     supabase
       .from("dm_reports")
-      .select("id", { count: "exact", head: true } as any)
+      .select("id", { count: "exact", head: true })
       .eq("status", "open"),
     supabase
       .from("admin_audit_logs")
       .select("id, actor_id, action, target_user_id, target_thread_id, details, created_at")
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("profiles")
+      .select("suppress_global_streak_end_notification")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
 
   const userCount = usersRes.count ?? 0;
   const bannedCount = bannedRes.count ?? 0;
   const openReportsCount = reportsRes.count ?? 0;
   const auditRows = ((auditRes.data ?? []) as AuditRow[]) || [];
+  const debugProfile = debugProfileRes.data as DebugProfileRow | null;
+  const suppressGlobalStreakEndNotification =
+    debugProfile?.suppress_global_streak_end_notification ?? false;
 
   const ids = Array.from(new Set(auditRows.map((a) => a.actor_id).filter(Boolean))) as string[];
   const nameMap = new Map<string, string>();
@@ -135,6 +181,44 @@ export default async function AdminPage() {
           <CardBody>
             <div className="text-xs text-muted-foreground">未対応通報</div>
             <div className="mt-1 text-2xl font-bold tabular-nums">{openReportsCount}</div>
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold">管理者デバッグ設定</h2>
+          </CardHeader>
+          <CardBody>
+            <p className="text-sm text-muted-foreground">
+              この管理者アカウントで継続終了をテストする時だけ、全体通知を抑制します。
+              他ユーザーの通知欄や端末通知へ送らないための安全スイッチです。
+            </p>
+
+            <form action={setSuppressGlobalStreakEndNotification} className="mt-4">
+              <input
+                type="hidden"
+                name="enabled"
+                value={suppressGlobalStreakEndNotification ? "false" : "true"}
+              />
+
+              <div className="rounded-lg border border-border bg-background/60 p-4">
+                <div className="text-sm font-semibold">継続終了の全体通知</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  現在: {suppressGlobalStreakEndNotification ? "通知しない" : "通知する"}
+                </div>
+
+                <button
+                  type="submit"
+                  className="mt-3 inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+                >
+                  {suppressGlobalStreakEndNotification
+                    ? "通知する に切り替える"
+                    : "通知しない に切り替える"}
+                </button>
+              </div>
+            </form>
           </CardBody>
         </Card>
       </div>
