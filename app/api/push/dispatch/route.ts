@@ -5,7 +5,7 @@ import webpush from "web-push";
 type OutboxRow = {
   id: number;
   recipient_id: string | null;
-  payload: any;
+  payload: unknown;
   attempts: number;
 };
 
@@ -21,6 +21,54 @@ function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
+}
+
+function bearerToken(request: Request) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] ?? null;
+}
+
+function isDispatchAuthorized(request: Request) {
+  const pushSecret = process.env.PUSH_DISPATCH_SECRET;
+  const cronSecret = process.env.CRON_SECRET;
+  const headerSecret = request.headers.get("x-push-secret");
+  const token = bearerToken(request);
+
+  return Boolean(
+    (pushSecret && headerSecret === pushSecret) ||
+      (cronSecret && token === cronSecret)
+  );
+}
+
+function forbidden() {
+  return NextResponse.json(
+    { ok: false, version: DISPATCH_VERSION, error: "forbidden" },
+    { status: 403 }
+  );
+}
+
+function errorMessage(e: unknown) {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  return String(e);
+}
+
+function pushErrorDetails(e: unknown) {
+  if (!e || typeof e !== "object") {
+    return { message: errorMessage(e), statusCode: null };
+  }
+
+  const maybe = e as { body?: unknown; message?: unknown; statusCode?: unknown };
+  const body = typeof maybe.body === "string" ? maybe.body : null;
+  const message = typeof maybe.message === "string" ? maybe.message : null;
+  const statusCode =
+    typeof maybe.statusCode === "number" ? maybe.statusCode : null;
+
+  return {
+    message: body ?? message ?? errorMessage(e),
+    statusCode,
+  };
 }
 
 async function runDispatch() {
@@ -132,13 +180,14 @@ async function runDispatch() {
               p256dh: sub.p256dh,
               auth: sub.auth,
             },
-          } as any,
+          } as Parameters<typeof webpush.sendNotification>[0],
           payload
         );
         anySent = true;
-      } catch (e: any) {
-        lastErr = e?.body || e?.message || String(e);
-        const statusCode = e?.statusCode;
+      } catch (e: unknown) {
+        const details = pushErrorDetails(e);
+        lastErr = details.message;
+        const statusCode = details.statusCode;
 
         if (statusCode === 404 || statusCode === 410) {
           await supabase
@@ -190,27 +239,14 @@ async function runDispatch() {
  */
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!authHeader) {
-      return NextResponse.json(
-        { ok: false, version: DISPATCH_VERSION, error: "missing authorization" },
-        { status: 401 }
-      );
-    }
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { ok: false, version: DISPATCH_VERSION, error: "unauthorized" },
-        { status: 401 }
-      );
+    if (!isDispatchAuthorized(request)) {
+      return forbidden();
     }
 
     return await runDispatch();
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, version: DISPATCH_VERSION, error: e?.message ?? String(e) },
+      { ok: false, version: DISPATCH_VERSION, error: errorMessage(e) },
       { status: 500 }
     );
   }
@@ -221,19 +257,14 @@ export async function GET(request: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const secret = mustEnv("PUSH_DISPATCH_SECRET");
-    const got = req.headers.get("x-push-secret");
-    if (got !== secret) {
-      return NextResponse.json(
-        { ok: false, version: DISPATCH_VERSION, error: "forbidden" },
-        { status: 403 }
-      );
+    if (!isDispatchAuthorized(req)) {
+      return forbidden();
     }
 
     return await runDispatch();
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, version: DISPATCH_VERSION, error: e?.message ?? String(e) },
+      { ok: false, version: DISPATCH_VERSION, error: errorMessage(e) },
       { status: 500 }
     );
   }
