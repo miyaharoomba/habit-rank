@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import AdminUserSubmitButton from "./AdminUserSubmitButton";
 
 type ProfileRow = {
   id: string;
@@ -19,6 +20,30 @@ type FlagRow = {
   updated_at: string;
   updated_by: string | null;
 };
+
+type UserFlagPayload = {
+  user_id: string;
+  is_banned: boolean;
+  ban_reason: string | null;
+  banned_until: string | null;
+  updated_by: string;
+};
+
+function mustEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is missing`);
+  return value;
+}
+
+function getAdminClient() {
+  return createAdminClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
+}
 
 function maskId(id: string) {
   return id ? `${id.slice(0, 8)}…` : "";
@@ -56,8 +81,10 @@ export default async function AdminUsersPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) redirect("/auth/sign-in");
+    if (!targetId) throw new Error("target user is missing");
+    if (targetId === user.id) throw new Error("自分自身はBANできません。");
 
-    const payload: any = {
+    const payload: UserFlagPayload = {
       user_id: targetId,
       is_banned: true,
       ban_reason: reason || "admin_ban",
@@ -65,7 +92,9 @@ export default async function AdminUsersPage() {
       updated_by: user.id,
     };
 
-    const { error } = await supabase.from("user_flags").upsert(payload);
+    const { error } = await supabase
+      .from("user_flags")
+      .upsert(payload, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
 
     await supabase.from("admin_audit_logs").insert({
@@ -90,8 +119,10 @@ export default async function AdminUsersPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) redirect("/auth/sign-in");
+    if (!targetId) throw new Error("target user is missing");
+    if (targetId === user.id) throw new Error("自分自身はBAN解除できません。");
 
-    const payload: any = {
+    const payload: UserFlagPayload = {
       user_id: targetId,
       is_banned: false,
       ban_reason: null,
@@ -99,7 +130,9 @@ export default async function AdminUsersPage() {
       updated_by: user.id,
     };
 
-    const { error } = await supabase.from("user_flags").upsert(payload);
+    const { error } = await supabase
+      .from("user_flags")
+      .upsert(payload, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
 
     await supabase.from("admin_audit_logs").insert({
@@ -124,21 +157,14 @@ export default async function AdminUsersPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) redirect("/auth/sign-in");
+    if (!targetId) throw new Error("target user is missing");
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    if (!serviceKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing");
+    const adminClient = getAdminClient();
 
-    const adminClient = createAdminClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // 対象ユーザーのメール取得（Admin APIはサーバー専用）[3](https://github.com/NozawaDaishi/attend-app)[4](https://attendance-manager-sigma.vercel.app/)
     const { data: udata, error: getErr } = await adminClient.auth.admin.getUserById(targetId);
     if (getErr || !udata?.user?.email) throw new Error(getErr?.message ?? "user not found or no email");
     const email = udata.user.email;
 
-    // リセットメール送信（公式の resetPasswordForEmail）[1](https://github.com/vipulmesh/AttendEase)[2](https://pinggy.io/blog/how_to_share_a_nextjs_app_from_localhost/)
     const site =
       process.env.NEXT_PUBLIC_SITE_URL ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
@@ -153,6 +179,67 @@ export default async function AdminUsersPage() {
       target_user_id: targetId,
       details: { email, redirectTo },
     });
+
+    redirect("/admin/users");
+  }
+
+  async function deleteUserAction(formData: FormData) {
+    "use server";
+    const targetId = String(formData.get("user_id") ?? "");
+
+    const supabase = await createClient();
+    const { data: admin } = await supabase.rpc("is_admin");
+    if (!admin) redirect("/settings");
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) redirect("/auth/sign-in");
+    if (!targetId) throw new Error("target user is missing");
+    if (targetId === user.id) throw new Error("自分自身は削除できません。");
+
+    const adminClient = getAdminClient();
+
+    const { data: targetProfile } = await adminClient
+      .from("profiles")
+      .select("id, display_name")
+      .eq("id", targetId)
+      .maybeSingle();
+
+    const { error: flagErr } = await adminClient.from("user_flags").upsert(
+      {
+        user_id: targetId,
+        is_banned: true,
+        ban_reason: "admin_deleted",
+        banned_until: null,
+        updated_by: user.id,
+      } satisfies UserFlagPayload,
+      { onConflict: "user_id" }
+    );
+    if (flagErr) throw new Error(flagErr.message);
+
+    const { error: deleteErr } = await adminClient.auth.admin.deleteUser(targetId);
+    if (deleteErr) throw new Error(deleteErr.message);
+
+    const { error: cleanupErr } = await adminClient
+      .from("profiles")
+      .delete()
+      .eq("id", targetId);
+    if (cleanupErr) throw new Error(cleanupErr.message);
+
+    const { error: auditErr } = await supabase.from("admin_audit_logs").insert({
+      actor_id: user.id,
+      action: "DELETE_USER",
+      target_user_id: null,
+      details: {
+        target_user_id: targetId,
+        display_name: targetProfile?.display_name ?? null,
+      },
+    });
+
+    if (auditErr) {
+      console.error("Failed to write DELETE_USER audit log", auditErr);
+    }
 
     redirect("/admin/users");
   }
@@ -188,13 +275,16 @@ export default async function AdminUsersPage() {
 
   const rows = (profiles ?? []) as ProfileRow[];
 
-  const { data: flags } = await supabase
-    .from("user_flags")
-    .select("user_id, is_banned, ban_reason, banned_until, updated_at, updated_by")
-    .in("user_id", rows.map((r) => r.id));
+  const { data: flags } =
+    rows.length > 0
+      ? await supabase
+          .from("user_flags")
+          .select("user_id, is_banned, ban_reason, banned_until, updated_at, updated_by")
+          .in("user_id", rows.map((r) => r.id))
+      : { data: [] };
 
   const flagMap = new Map<string, FlagRow>();
-  (flags ?? []).forEach((f: any) => flagMap.set(f.user_id, f as FlagRow));
+  ((flags ?? []) as FlagRow[]).forEach((f) => flagMap.set(f.user_id, f));
 
   return (
     <Container>
@@ -202,7 +292,7 @@ export default async function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">ユーザー管理</h1>
           <p className="text-sm text-muted-foreground">
-            一覧 / BAN / 解除 / パスワードリセット（メール送信）
+            一覧 / BAN / 解除 / アカウント削除 / パスワードリセット（メール送信）
           </p>
         </div>
 
@@ -225,7 +315,7 @@ export default async function AdminUsersPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">ユーザー一覧（最大300）</h2>
               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                BANは user_flags / リセットはメール送信
+                BANはランキング非表示 / 削除はAuthアカウント削除
               </span>
             </div>
           </CardHeader>
@@ -236,6 +326,7 @@ export default async function AdminUsersPage() {
                 const f = flagMap.get(p.id);
                 const name = (p.display_name ?? "").trim() || "NoName";
                 const banned = Boolean(f?.is_banned);
+                const isSelf = p.id === user.id;
 
                 return (
                   <div key={p.id} className="rounded-xl border border-border bg-secondary/30 p-4">
@@ -281,37 +372,51 @@ export default async function AdminUsersPage() {
                                 className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
                               />
                             </div>
-                            <button
-                              type="submit"
-                              className="w-full rounded-lg bg-destructive text-destructive-foreground px-3 py-2 text-sm font-semibold hover:opacity-90"
-                            >
-                              BANする
-                            </button>
+                            <AdminUserSubmitButton
+                              idleLabel={isSelf ? "自分はBAN不可" : "BANする"}
+                              pendingLabel="BAN中..."
+                              variant="danger"
+                              icon="ban"
+                              disabled={isSelf}
+                              confirmMessage={`${name} をBANします。ランキングから非表示になります。`}
+                            />
                           </form>
                         ) : (
                           <form action={unbanAction}>
                             <input type="hidden" name="user_id" value={p.id} />
-                            <button
-                              type="submit"
-                              className="w-full rounded-lg bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold hover:opacity-90"
-                            >
-                              BAN解除
-                            </button>
+                            <AdminUserSubmitButton
+                              idleLabel={isSelf ? "自分は解除不可" : "BAN解除"}
+                              pendingLabel="解除中..."
+                              variant="primary"
+                              icon="unban"
+                              disabled={isSelf}
+                            />
                           </form>
                         )}
 
                         <form action={resetPasswordAction}>
                           <input type="hidden" name="user_id" value={p.id} />
-                          <button
-                            type="submit"
-                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-                          >
-                            パスワードリセットメール送信
-                          </button>
+                          <AdminUserSubmitButton
+                            idleLabel="パスワードリセットメール送信"
+                            pendingLabel="送信中..."
+                            icon="reset"
+                          />
+                        </form>
+
+                        <form action={deleteUserAction}>
+                          <input type="hidden" name="user_id" value={p.id} />
+                          <AdminUserSubmitButton
+                            idleLabel={isSelf ? "自分は削除不可" : "アカウント削除"}
+                            pendingLabel="削除中..."
+                            variant="outline"
+                            icon="delete"
+                            disabled={isSelf}
+                            confirmMessage={`${name} のアカウントを削除します。この操作は元に戻せません。`}
+                          />
                         </form>
 
                         <div className="text-[11px] text-muted-foreground">
-                          ※ パスワードは表示しません。メールで再設定させます。[1](https://github.com/vipulmesh/AttendEase)[2](https://pinggy.io/blog/how_to_share_a_nextjs_app_from_localhost/)
+                          ※ 削除はAuthアカウントとプロフィールの削除を試みます。パスワードは表示しません。
                         </div>
                       </div>
                     </div>
@@ -329,4 +434,3 @@ export default async function AdminUsersPage() {
     </Container>
   );
 }
-``
