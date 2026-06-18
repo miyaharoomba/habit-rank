@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Suspense } from "react";
 import "./globals.css";
 
 import NotificationToaster from "@/app/components/NotificationToaster";
@@ -40,7 +41,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <NotificationToaster />
+          <Suspense fallback={null}>
+            <NotificationToaster />
+          </Suspense>
           {children}
         </ThemeProvider>
       </body>
