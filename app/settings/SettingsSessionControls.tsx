@@ -4,7 +4,6 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/client";
 import { Laptop, LogOut, Moon, Sun, Trash2 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
@@ -50,8 +49,7 @@ function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            disabled={busy}
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold hover:bg-secondary/40 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold hover:bg-secondary/40"
           >
             キャンセル
           </button>
@@ -101,7 +99,6 @@ function ThemeButton({
 }
 
 export default function SettingsSessionControls() {
-  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -111,20 +108,35 @@ export default function SettingsSessionControls() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const resetTransientState = () => {
+      setLogoutOpen(false);
+      setDeleteOpen(false);
+      setLoggingOut(false);
+      setDeleting(false);
+    };
+
     setMounted(true);
+    resetTransientState();
+
+    window.addEventListener("pageshow", resetTransientState);
+
+    return () => {
+      window.removeEventListener("pageshow", resetTransientState);
+    };
   }, []);
 
   const logout = async () => {
+    setLogoutOpen(false);
     setLoggingOut(true);
     setError(null);
 
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.replace("/auth/login");
-    router.refresh();
+    window.location.replace("/auth/login");
   };
 
   const deleteAccount = async () => {
+    setDeleteOpen(false);
     setDeleting(true);
     setError(null);
 
@@ -141,12 +153,10 @@ export default function SettingsSessionControls() {
 
       const supabase = createClient();
       await supabase.auth.signOut();
-      router.replace("/auth/login");
-      router.refresh();
+      window.location.replace("/auth/login");
     } catch (e) {
       setError(e instanceof Error ? e.message : "アカウント削除に失敗しました。");
       setDeleting(false);
-      setDeleteOpen(false);
     }
   };
 
@@ -189,18 +199,20 @@ export default function SettingsSessionControls() {
             <button
               type="button"
               onClick={() => setLogoutOpen(true)}
+              disabled={loggingOut}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-semibold hover:bg-secondary/40"
             >
               <LogOut size={16} />
-              ログアウト
+              {loggingOut ? "ログアウト中..." : "ログアウト"}
             </button>
             <button
               type="button"
               onClick={() => setDeleteOpen(true)}
+              disabled={deleting}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 text-sm font-semibold text-red-600 hover:bg-red-500/15 dark:text-red-300"
             >
               <Trash2 size={16} />
-              アカウントを削除
+              {deleting ? "削除中..." : "アカウントを削除"}
             </button>
           </div>
 
