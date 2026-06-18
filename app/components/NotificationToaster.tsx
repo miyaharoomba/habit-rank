@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 type NotifItem = {
   id: string;
@@ -129,12 +129,18 @@ export default function NotificationToaster({
   maxToasts?: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const timersRef = useRef<Map<string, number>>(new Map());
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const fetchNotifsRef = useRef<() => Promise<void>>(async () => {});
+  const toasterDisabled =
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/profile/edit");
 
   const dismiss = (id: string) => {
     const t = timersRef.current.get(id);
@@ -143,6 +149,7 @@ export default function NotificationToaster({
       timersRef.current.delete(id);
     }
     setToasts((prev) => prev.filter((x) => x.id !== id));
+    void markRead(id);
   };
 
   const enqueue = (t: Toast) => {
@@ -153,6 +160,8 @@ export default function NotificationToaster({
       const normal = next.filter((x) => !x.sticky).slice(0, maxToasts);
       return [...sticky, ...normal];
     });
+
+    void markRead(t.id);
 
     if (!t.sticky) {
       const timer = window.setTimeout(() => dismiss(t.id), showMs);
@@ -194,18 +203,6 @@ export default function NotificationToaster({
       if (!initializedRef.current) {
         for (const n of items) {
           seenRef.current.add(n.id);
-
-          if (!n.read && isToastTarget(n)) {
-            enqueue({
-              id: n.id,
-              title: titleFor(n),
-              body: bodyFor(n),
-              href: routeFor(n),
-              sticky: isAdminBroadcast(n),
-              icon: iconFor(n),
-              tone: toneFor(n),
-            });
-          }
         }
 
         initializedRef.current = true;
@@ -229,19 +226,33 @@ export default function NotificationToaster({
           tone: toneFor(n),
         });
       }
-    } catch (e: any) {
-      if (e?.name === "AbortError") return;
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return;
     } finally {
       inFlightRef.current = false;
     }
   };
 
   useEffect(() => {
+    fetchNotifsRef.current = fetchNotifs;
+  });
+
+  useEffect(() => {
+    if (toasterDisabled) {
+      abortRef.current?.abort();
+      const timers = timersRef.current;
+      timers.forEach((t) => window.clearTimeout(t));
+      timers.clear();
+      setToasts([]);
+      return;
+    }
+
+    const timers = timersRef.current;
     let alive = true;
 
     const tick = async () => {
       if (!alive) return;
-      await fetchNotifs();
+      await fetchNotifsRef.current();
     };
 
     tick();
@@ -251,10 +262,10 @@ export default function NotificationToaster({
       alive = false;
       window.clearInterval(id);
       abortRef.current?.abort();
-      timersRef.current.forEach((t) => window.clearTimeout(t));
-      timersRef.current.clear();
+      timers.forEach((t) => window.clearTimeout(t));
+      timers.clear();
     };
-  }, [pollMs, limit]);
+  }, [pollMs, limit, toasterDisabled]);
 
   const onClickToast = async (t: Toast) => {
     dismiss(t.id);
@@ -327,4 +338,3 @@ export default function NotificationToaster({
     </div>
   );
 }
-``

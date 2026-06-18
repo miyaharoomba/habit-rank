@@ -14,6 +14,15 @@ type NotificationRow = {
   created_at: string;
 };
 
+type NotificationReadRow = {
+  notification_id: string;
+};
+
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+};
+
 export async function GET(request: Request) {
   const supabase = await createClient();
 
@@ -34,14 +43,19 @@ export async function GET(request: Request) {
 
   const fetchLimit = Math.max(limit * 5, 100);
 
-  const { data: notifs, error: nErr } = await supabase
+  let notificationQuery = supabase
     .from("notifications")
     .select(
       "id, type, actor_id, recipient_id, thread_id, session_id, announcement_id, support_thread_id, message_preview, created_at"
     )
     .or(`recipient_id.eq.${user.id},recipient_id.is.null`)
-    .order("created_at", { ascending: false })
-    .limit(fetchLimit);
+    .order("created_at", { ascending: false });
+
+  if (user.created_at) {
+    notificationQuery = notificationQuery.gte("created_at", user.created_at);
+  }
+
+  const { data: notifs, error: nErr } = await notificationQuery.limit(fetchLimit);
 
   if (nErr) {
     return NextResponse.json({ error: nErr.message }, { status: 500 });
@@ -104,7 +118,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: rErr.message }, { status: 500 });
   }
 
-  const readSet = new Set((reads ?? []).map((r: any) => r.notification_id));
+  const readSet = new Set(
+    ((reads ?? []) as NotificationReadRow[]).map((r) => r.notification_id)
+  );
 
   const actorIds = Array.from(
     new Set(selected.map((n) => n.actor_id).filter(Boolean))
@@ -122,7 +138,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: aErr.message }, { status: 500 });
     }
 
-    (actors ?? []).forEach((a: any) => {
+    ((actors ?? []) as ProfileRow[]).forEach((a) => {
       actorMap.set(a.id, (a.display_name ?? "").trim() || "NoName");
     });
   }
@@ -157,10 +173,7 @@ export async function GET(request: Request) {
     };
   });
 
-  const unreadCount = items.reduce(
-    (acc: number, it: any) => acc + (it.read ? 0 : 1),
-    0
-  );
+  const unreadCount = items.reduce((acc, it) => acc + (it.read ? 0 : 1), 0);
 
   return NextResponse.json({ unreadCount, items });
 }
@@ -177,8 +190,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => null);
-  const ids = (body?.ids ?? []) as string[];
+  const body = (await request.json().catch(() => null)) as {
+    ids?: unknown;
+  } | null;
+  const rawIds = Array.isArray(body?.ids) ? body.ids : [];
+  const ids = rawIds.filter(
+    (id): id is string => typeof id === "string" && id.length > 0
+  );
 
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ ok: true, inserted: 0 });
@@ -199,4 +217,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, inserted: ids.length });
 }
-``
