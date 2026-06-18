@@ -2,6 +2,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import AdminUserSubmitButton from "./AdminUserSubmitButton";
@@ -51,6 +52,13 @@ function maskId(id: string) {
 
 function formatJst(iso: string) {
   return new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+}
+
+function revalidateUserAdminViews() {
+  revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  revalidatePath("/participants");
+  revalidatePath("/ranking");
 }
 
 export default async function AdminUsersPage() {
@@ -104,6 +112,7 @@ export default async function AdminUsersPage() {
       details: { reason: payload.ban_reason, banned_until: payload.banned_until },
     });
 
+    revalidateUserAdminViews();
     redirect("/admin/users");
   }
 
@@ -142,6 +151,7 @@ export default async function AdminUsersPage() {
       details: {},
     });
 
+    revalidateUserAdminViews();
     redirect("/admin/users");
   }
 
@@ -241,6 +251,7 @@ export default async function AdminUsersPage() {
       console.error("Failed to write DELETE_USER audit log", auditErr);
     }
 
+    revalidateUserAdminViews();
     redirect("/admin/users");
   }
   // -------------------------

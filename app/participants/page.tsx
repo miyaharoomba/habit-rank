@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ParticipantsClient from "../ranking/ParticipantsClient";
+import { getActiveBannedUserIds } from "@/lib/bannedUsers";
 
 type Participant = {
   user_id: string;
@@ -64,7 +65,12 @@ export default async function ParticipantsPage() {
     );
   }
 
-  const baseParticipants = (data ?? []) as Participant[];
+  const rawParticipants = (data ?? []) as Participant[];
+  const rawUserIds = Array.from(new Set(rawParticipants.map((p) => p.user_id)));
+  const bannedUserIds = await getActiveBannedUserIds(rawUserIds);
+  const baseParticipants = rawParticipants.filter(
+    (p) => !bannedUserIds.has(p.user_id)
+  );
   const userIds = Array.from(new Set(baseParticipants.map((p) => p.user_id)));
 
   const avatarMap = new Map<string, string | null>();
@@ -80,8 +86,7 @@ export default async function ParticipantsPage() {
       throw new Error(profilesErr.message);
     }
 
-    (profiles ?? []).forEach((p: any) => {
-      const row = p as ProfileRow;
+    ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
     });
@@ -103,8 +108,7 @@ export default async function ParticipantsPage() {
       throw new Error(badgesErr.message);
     }
 
-    (badges ?? []).forEach((b: any) => {
-      const row = b as BadgeLiteRow;
+    ((badges ?? []) as BadgeLiteRow[]).forEach((row) => {
       badgeMap.set(row.id, row);
     });
   }

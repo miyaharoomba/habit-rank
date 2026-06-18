@@ -5,6 +5,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { formatJstStartLabel } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
+import { getActiveBannedUserIds } from "@/lib/bannedUsers";
 
 type BestRow = {
   rank_no: number;
@@ -55,6 +56,14 @@ function profileHref(userId: string, myUserId: string) {
   return userId === myUserId ? "/profile" : `/users/${encodeURIComponent(userId)}`;
 }
 
+function rerankBestRows(rows: BestRow[]) {
+  return rows.map((row, index) => ({ ...row, rank_no: index + 1 }));
+}
+
+function rerankCurrentRows(rows: CurrentRow[]) {
+  return rows.map((row, index) => ({ ...row, rank_no: index + 1 }));
+}
+
 function Avatar({
   href,
   avatar,
@@ -99,17 +108,18 @@ export default async function RankingPage({
 
   if (!user) redirect("/auth/sign-in");
 
-  const limit_count = 50;
+  const displayLimit = 50;
+  const limit_count = 200;
 
   const bestRes =
     activeTab === "best"
       ? await supabase.rpc("get_best_leaderboard", { limit_count })
-      : { data: null as any, error: null as any };
+      : { data: null, error: null };
 
   const currentRes =
     activeTab === "current"
       ? await supabase.rpc("get_current_leaderboard", { limit_count })
-      : { data: null as any, error: null as any };
+      : { data: null, error: null };
 
   const error = bestRes.error ?? currentRes.error;
 
@@ -136,8 +146,27 @@ export default async function RankingPage({
     );
   }
 
-  const bestRows = (bestRes.data ?? []) as BestRow[];
-  const currentRows = (currentRes.data ?? []) as CurrentRow[];
+  const rawBestRows = (bestRes.data ?? []) as BestRow[];
+  const rawCurrentRows = (currentRes.data ?? []) as CurrentRow[];
+
+  const rawRows = activeTab === "best" ? rawBestRows : rawCurrentRows;
+  const rawUserIds = Array.from(new Set(rawRows.map((r) => r.user_id)));
+  const bannedUserIds = await getActiveBannedUserIds(rawUserIds);
+
+  const bestRows =
+    activeTab === "best"
+      ? rerankBestRows(rawBestRows.filter((r) => !bannedUserIds.has(r.user_id))).slice(
+          0,
+          displayLimit
+        )
+      : [];
+
+  const currentRows =
+    activeTab === "current"
+      ? rerankCurrentRows(
+          rawCurrentRows.filter((r) => !bannedUserIds.has(r.user_id))
+        ).slice(0, displayLimit)
+      : [];
 
   const targetRows = activeTab === "best" ? bestRows : currentRows;
   const targetUserIds = Array.from(new Set(targetRows.map((r) => r.user_id)));
@@ -155,8 +184,7 @@ export default async function RankingPage({
       throw new Error(profilesErr.message);
     }
 
-    (profiles ?? []).forEach((p: any) => {
-      const row = p as ProfileRow;
+    ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
     });
@@ -178,8 +206,7 @@ export default async function RankingPage({
       throw new Error(badgesErr.message);
     }
 
-    (badges ?? []).forEach((b: any) => {
-      const row = b as BadgeLiteRow;
+    ((badges ?? []) as BadgeLiteRow[]).forEach((row) => {
       badgeMap.set(row.id, row);
     });
   }
