@@ -58,19 +58,18 @@ export default function MobileAppMenu({
   return (
     <>
       <span className="inline-flex h-11 w-11 shrink-0 sm:hidden">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className={[
-            open ? "fixed right-6 top-6" : "relative",
-            "z-[100] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50",
-          ].join(" ")}
-          aria-controls="mobile-app-menu"
-          aria-expanded={open}
-          aria-label="メニューを開閉"
-        >
-          ☰
-        </button>
+        {open ? null : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="relative z-[70] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50"
+            aria-controls="mobile-app-menu"
+            aria-expanded={open}
+            aria-label="メニューを開く"
+          >
+            ☰
+          </button>
+        )}
       </span>
 
       {/* オーバーレイ */}
@@ -123,6 +122,16 @@ export default function MobileAppMenu({
               </div>
             </div>
 
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50"
+              aria-controls="mobile-app-menu"
+              aria-expanded={open}
+              aria-label="メニューを閉じる"
+            >
+              ☰
+            </button>
           </div>
 
           {/* 主要導線 */}
