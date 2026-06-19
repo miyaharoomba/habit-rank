@@ -12,6 +12,5 @@ jobs:
     steps:
       - name: Call push dispatch
         run: |
-          curl -sS -i --fail-with-body -X POST "https://habit-rank.vercel.app/api/push/dispatch" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json"
+          curl -sS -i --fail-with-body "https://habit-rank.vercel.app/api/corn/push-dispatch" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

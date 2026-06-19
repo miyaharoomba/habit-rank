@@ -15,7 +15,7 @@ type SubRow = {
   auth: string;
 };
 
-const DISPATCH_VERSION = "dispatch_v2026_05_29_step1";
+const DISPATCH_VERSION = "dispatch_v2026_06_19_auth";
 
 function mustEnv(name: string) {
   const v = process.env[name];
