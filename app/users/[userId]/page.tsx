@@ -7,6 +7,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
 import OpenProfileDmButton from "./OpenProfileDmButton";
+import {
+  HeaderLink,
+  MainLink,
+  PageHeader,
+  ParticipantsLink,
+} from "@/app/components/AppPageHeader";
+import { CalendarDays, Trophy } from "lucide-react";
 
 type ProfileRow = {
   id: string;
@@ -147,15 +154,8 @@ export default async function UserProfilePage({
               プロフィールが見つかりません。
             </p>
             <div className="mt-3 flex gap-3">
-              <Link
-                href="/participants"
-                className="text-sm text-primary hover:underline"
-              >
-                /participants へ戻る
-              </Link>
-              <Link href="/app" className="text-sm text-primary hover:underline">
-                /app
-              </Link>
+              <ParticipantsLink />
+              <MainLink />
             </div>
           </CardBody>
         </Card>
@@ -225,32 +225,17 @@ export default async function UserProfilePage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            ユーザープロフィール
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            他の参加者のプロフィール情報です。
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/participants"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            /participants
-          </Link>
-          <OpenProfileDmButton targetUserId={userId} />
-          <Link
-            href="/app"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            /app
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="ユーザープロフィール"
+        description="他の参加者のプロフィール、称号、継続履歴を確認できます。"
+        actions={
+          <>
+            <ParticipantsLink />
+            <OpenProfileDmButton targetUserId={userId} />
+            <MainLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>
@@ -309,18 +294,18 @@ export default async function UserProfilePage({
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link
+                  <HeaderLink
                     href={`/users/${encodeURIComponent(userId)}/calendar`}
-                    className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+                    icon={CalendarDays}
                   >
-                    カレンダーを見る
-                  </Link>
-                  <Link
+                    カレンダー
+                  </HeaderLink>
+                  <HeaderLink
                     href={`/users/${encodeURIComponent(userId)}/badges`}
-                    className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
+                    icon={Trophy}
                   >
-                    トロフィー・称号を見る
-                  </Link>
+                    トロフィー
+                  </HeaderLink>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">

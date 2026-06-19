@@ -13,6 +13,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import DmBackButton from "./DmBackButton";
 import DmChatClient from "./DmChatClient";
+import { DmLink, RankingLink } from "@/app/components/AppPageHeader";
 
 type MessageRow = {
   id: string;
@@ -141,12 +142,8 @@ export default async function DmThreadPage({
               スレッドが見つかりません（または権限がありません）。
             </p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/dm">
-                ← DM一覧へ
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/ranking">
-                ランキングへ
-              </Link>
+              <DmLink />
+              <RankingLink />
             </div>
           </CardBody>
         </Card>
@@ -228,9 +225,7 @@ export default async function DmThreadPage({
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {msgErr.message}</p>
             <div className="mt-3">
-              <Link className="text-sm text-primary hover:underline" href="/dm">
-                ← DM一覧へ
-              </Link>
+              <DmLink />
             </div>
           </CardBody>
         </Card>

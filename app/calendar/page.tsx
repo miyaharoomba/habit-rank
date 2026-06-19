@@ -141,8 +141,8 @@ export default async function CalendarPage({
         title="カレンダー"
         description="継続が終了した日付を確認できます。"
         topLinks={[
-          { href: "/app", label: "/app" },
-          { href: "/history", label: "/history" },
+          { href: "/app", label: "メイン" },
+          { href: "/history", label: "履歴" },
         ]}
         basePath="/calendar"
         year={monthDate.getFullYear()}
@@ -154,4 +154,3 @@ export default async function CalendarPage({
     </Container>
   );
 }
-``

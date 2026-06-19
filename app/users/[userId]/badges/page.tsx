@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import BadgeCollectionClient from "@/app/badges/BadgeCollectionClient";
+import { MainLink, ParticipantsLink } from "@/app/components/AppPageHeader";
 
 type BadgeRow = {
   id: string;
@@ -64,18 +64,8 @@ export default async function UserBadgesPage({
               ユーザーが見つかりません。
             </p>
             <div className="mt-3 flex gap-3">
-              <Link
-                href="/participants"
-                className="text-sm text-primary hover:underline"
-              >
-                /participants
-              </Link>
-              <Link
-                href="/app"
-                className="text-sm text-primary hover:underline"
-              >
-                /app
-              </Link>
+              <ParticipantsLink />
+              <MainLink />
             </div>
           </CardBody>
         </Card>
@@ -125,4 +115,3 @@ export default async function UserBadgesPage({
     </Container>
   );
 }
-``

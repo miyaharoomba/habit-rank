@@ -5,6 +5,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  AdminLink,
+  MainLink,
+  PageHeader,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
 
 type ThreadRow = {
   id: string;
@@ -67,26 +73,17 @@ export default async function AdminSupportPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">問い合わせ管理</h1>
-          <p className="text-sm text-muted-foreground">
-            ユーザーからの問い合わせ一覧と返信。
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/admin">
-            /admin
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="問い合わせ管理"
+        description="ユーザーからの問い合わせ一覧と返信を管理します。"
+        actions={
+          <>
+            <AdminLink />
+            <SettingsLink />
+            <MainLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>

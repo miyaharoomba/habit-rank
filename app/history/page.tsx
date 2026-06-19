@@ -4,6 +4,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  MainLink,
+  PageHeader,
+  ParticipantsLink,
+  RankingLink,
+} from "@/app/components/AppPageHeader";
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -58,35 +64,21 @@ export default async function HistoryPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">履歴</h1>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        title="履歴"
+        description={
+          <>
             {displayName} の継続履歴（最新50件）
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/app"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            /app
-          </Link>
-          <Link
-            href="/ranking"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            /ranking
-          </Link>
-          <Link
-            href="/participants"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            /participants
-          </Link>
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <>
+            <MainLink />
+            <RankingLink />
+            <ParticipantsLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>

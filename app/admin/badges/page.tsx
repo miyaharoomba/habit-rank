@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 import { formatJst } from "@/lib/time";
+import { AdminLink, MainLink, PageHeader } from "@/app/components/AppPageHeader";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -528,22 +529,16 @@ export default async function AdminBadgesPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">トロフィー管理</h1>
-          <p className="text-sm text-muted-foreground">
-            ユーザー一覧から選択し、手動付与・剥奪・判定起点リセットを管理します。
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/admin" className="text-sm text-primary hover:underline">
-            /admin
-          </Link>
-          <Link href="/app" className="text-sm text-primary hover:underline">
-            /app
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="トロフィー管理"
+        description="ユーザーを選択し、手動付与、剥奪、判定起点リセットを管理します。"
+        actions={
+          <>
+            <AdminLink />
+            <MainLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
         {/* 左: ユーザー一覧 */}

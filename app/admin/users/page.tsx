@@ -1,11 +1,16 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import AdminUserSubmitButton from "./AdminUserSubmitButton";
+import {
+  AdminLink,
+  MainLink,
+  PageHeader,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
 
 type ProfileRow = {
   id: string;
@@ -274,9 +279,7 @@ export default async function AdminUsersPage() {
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {pErr.message}</p>
             <div className="mt-3">
-              <Link className="text-sm text-primary hover:underline" href="/admin">
-                ← /admin
-              </Link>
+              <AdminLink />
             </div>
           </CardBody>
         </Card>
@@ -299,26 +302,17 @@ export default async function AdminUsersPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">ユーザー管理</h1>
-          <p className="text-sm text-muted-foreground">
-            一覧 / BAN / 解除 / アカウント削除 / パスワードリセット（メール送信）
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/admin">
-            /admin
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="ユーザー管理"
+        description="一覧、BAN、解除、アカウント削除、パスワードリセットを行います。"
+        actions={
+          <>
+            <AdminLink />
+            <SettingsLink />
+            <MainLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>

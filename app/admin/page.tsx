@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import { MainLink, PageHeader, SettingsLink } from "@/app/components/AppPageHeader";
 
 type AuditRow = {
   id: number;
@@ -147,22 +148,16 @@ export default async function AdminPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">管理者コンソール</h1>
-          <p className="text-sm text-muted-foreground">
-            ユーザー管理 / 通報対応 / 監査ログ / お知らせ配信 / 問い合わせ管理
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="管理者コンソール"
+        description="ユーザー管理、通報対応、監査ログ、お知らせ配信、問い合わせ管理を行います。"
+        actions={
+          <>
+            <MainLink />
+            <SettingsLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <Card>

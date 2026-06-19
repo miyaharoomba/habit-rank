@@ -5,6 +5,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import TitleSettingCard from "./TitleSettingCard";
+import {
+  BadgesLink,
+  MainLink,
+  PageHeader,
+  ProfileLink,
+} from "@/app/components/AppPageHeader";
 
 type ProfileRow = {
   id: string;
@@ -108,8 +114,8 @@ export default async function ProfileEditPage({
     }
 
     const badgeMap = new Map<string, BadgeRow>();
-    (badges ?? []).forEach((b: any) => {
-      badgeMap.set(b.id, b as BadgeRow);
+    ((badges ?? []) as BadgeRow[]).forEach((b) => {
+      badgeMap.set(b.id, b);
     });
 
     badgeOptions = earnedRows
@@ -223,19 +229,17 @@ export default async function ProfileEditPage({
 
   return (
     <Container>
-      <div role="banner" className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">プロフィール編集</h1>
-          <p className="text-sm text-muted-foreground">
-            名前・一言・アイコン・称号を編集できます。
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link href="/profile">プロフィール</Link>
-          <Link href="/badges">称号</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="プロフィール編集"
+        description="名前、一言、アイコン、称号を編集できます。"
+        actions={
+          <>
+            <MainLink />
+            <ProfileLink />
+            <BadgesLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         {error ? (

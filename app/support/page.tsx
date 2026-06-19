@@ -6,6 +6,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  MainLink,
+  PageHeader,
+  RankingLink,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
 
 type ThreadRow = {
   id: string;
@@ -91,26 +97,17 @@ export default async function SupportPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">管理者への問い合わせ</h1>
-          <p className="text-sm text-muted-foreground">
-            不具合報告・相談・要望などを管理者に送れます。
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/ranking">
-            /ranking
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="問い合わせ"
+        description="不具合報告、相談、要望などを管理者に送れます。"
+        actions={
+          <>
+            <MainLink />
+            <RankingLink />
+            <SettingsLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>
@@ -216,4 +213,3 @@ export default async function SupportPage() {
     </Container>
   );
 }
-``

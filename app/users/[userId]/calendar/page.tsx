@@ -1,11 +1,11 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import StreakCalendarView, {
   type CalendarSession,
 } from "@/app/components/StreakCalendarView";
+import { MainLink, ParticipantsLink } from "@/app/components/AppPageHeader";
 
 type ProfileRow = {
   id: string;
@@ -139,12 +139,8 @@ export default async function UserCalendarPage({
               ユーザーが見つかりません。
             </p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/participants">
-                /participants
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                /app
-              </Link>
+              <ParticipantsLink />
+              <MainLink />
             </div>
           </CardBody>
         </Card>
@@ -199,9 +195,9 @@ export default async function UserCalendarPage({
         topLinks={[
           {
             href: `/users/${encodeURIComponent(userId)}`,
-            label: "← プロフィールへ",
+            label: "プロフィール",
           },
-          { href: "/app", label: "/app" },
+          { href: "/app", label: "メイン" },
         ]}
         basePath={`/users/${encodeURIComponent(userId)}/calendar`}
         year={monthDate.getFullYear()}
@@ -213,4 +209,3 @@ export default async function UserCalendarPage({
     </Container>
   );
 }
-``

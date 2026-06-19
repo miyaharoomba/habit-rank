@@ -3,6 +3,14 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  AdminLink,
+  DmLink,
+  MainLink,
+  PageHeader,
+  ParticipantsLink,
+  RankingLink,
+} from "@/app/components/AppPageHeader";
 
 import PushEnableCard from "@/app/components/PushEnableCard";
 import SettingsSessionControls from "./SettingsSessionControls";
@@ -30,30 +38,19 @@ export default async function SettingsPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">設定</h1>
-          <p className="text-sm text-muted-foreground">アカウント / ナビゲーション</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link href="/app" className="text-sm text-primary hover:underline whitespace-nowrap">
-            /app
-          </Link>
-          <Link href="/dm" className="text-sm text-primary hover:underline whitespace-nowrap">
-            /dm
-          </Link>
-          <Link href="/ranking" className="text-sm text-primary hover:underline whitespace-nowrap">
-            /ranking
-          </Link>
-          <Link
-            href="/participants"
-            className="text-sm text-primary hover:underline whitespace-nowrap"
-          >
-            /participants
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="設定"
+        description="アカウント、通知、表示モード、セッション操作を管理します。"
+        actions={
+          <>
+            <MainLink />
+            <DmLink />
+            <RankingLink />
+            <ParticipantsLink />
+            {admin ? <AdminLink /> : null}
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>

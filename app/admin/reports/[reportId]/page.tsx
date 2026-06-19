@@ -1,9 +1,14 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  AdminLink,
+  HeaderLink,
+  PageHeader,
+} from "@/app/components/AppPageHeader";
+import { Flag, ScrollText } from "lucide-react";
 
 type Report = {
   id: number;
@@ -137,9 +142,9 @@ export default async function AdminReportDetailPage({
           <CardBody>
             <p className="text-sm text-destructive">通報が見つかりません。</p>
             <div className="mt-3">
-              <Link href="/admin/reports" className="text-sm text-primary hover:underline">
-                ← 通報一覧へ
-              </Link>
+              <HeaderLink href="/admin/reports" icon={Flag}>
+                通報一覧
+              </HeaderLink>
             </div>
           </CardBody>
         </Card>
@@ -205,26 +210,25 @@ export default async function AdminReportDetailPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">通報詳細 #{r.id}</h1>
-          <p className="text-sm text-muted-foreground">
-            status: <span className="font-semibold">{r.status}</span>
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link href="/admin/reports" className="text-sm text-primary hover:underline">
-            ← /admin/reports
-          </Link>
-          <Link href="/admin" className="text-sm text-primary hover:underline">
-            /admin
-          </Link>
-          <Link href="/admin/audit" className="text-sm text-primary hover:underline">
-            /admin/audit
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title={`通報詳細 #${r.id}`}
+        description={
+          <>
+            状態: <span className="font-semibold">{r.status}</span>
+          </>
+        }
+        actions={
+          <>
+            <HeaderLink href="/admin/reports" icon={Flag}>
+              通報一覧
+            </HeaderLink>
+            <AdminLink />
+            <HeaderLink href="/admin/audit" icon={ScrollText}>
+              監査ログ
+            </HeaderLink>
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>

@@ -3,6 +3,13 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  AdminLink,
+  HeaderLink,
+  PageHeader,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
+import { ScrollText, Users } from "lucide-react";
 
 type ReportRow = {
   id: number;
@@ -104,12 +111,8 @@ export default async function AdminReportsPage() {
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {rErr.message}</p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/admin">
-                /admin
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/settings">
-                /settings
-              </Link>
+              <AdminLink />
+              <SettingsLink />
             </div>
           </CardBody>
         </Card>
@@ -136,27 +139,22 @@ export default async function AdminReportsPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">通報</h1>
-          <p className="text-sm text-muted-foreground">最新200件（未対応: {openCount}）</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/admin">
-            /admin
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/admin/users">
-            /admin/users
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/admin/audit">
-            /admin/audit
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="通報"
+        description={`最新200件を確認できます。未対応: ${openCount}`}
+        actions={
+          <>
+            <AdminLink />
+            <HeaderLink href="/admin/users" icon={Users}>
+              ユーザー管理
+            </HeaderLink>
+            <HeaderLink href="/admin/audit" icon={ScrollText}>
+              監査ログ
+            </HeaderLink>
+            <SettingsLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>
@@ -268,4 +266,3 @@ export default async function AdminReportsPage() {
     </Container>
   );
 }
-``

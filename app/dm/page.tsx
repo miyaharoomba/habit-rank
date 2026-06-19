@@ -5,6 +5,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatJst } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
+import {
+  MainLink,
+  PageHeader,
+  ParticipantsLink,
+  RankingLink,
+} from "@/app/components/AppPageHeader";
 
 type ThreadRow = {
   thread_id: string;
@@ -80,8 +86,7 @@ export default async function DmListPage() {
       throw new Error(profilesErr.message);
     }
 
-    (profiles ?? []).forEach((p: any) => {
-      const row = p as ProfileRow;
+    ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
     });
@@ -103,8 +108,7 @@ export default async function DmListPage() {
       throw new Error(badgesErr.message);
     }
 
-    (badges ?? []).forEach((b: any) => {
-      const row = b as BadgeLiteRow;
+    ((badges ?? []) as BadgeLiteRow[]).forEach((row) => {
       badgeMap.set(row.id, row);
     });
   }
@@ -123,21 +127,17 @@ export default async function DmListPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">DM</h1>
-          <p className="text-sm text-muted-foreground">個別メッセージのやり取り</p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link href="/app" className="text-sm text-primary hover:underline">
-            /app
-          </Link>
-          <Link href="/ranking" className="text-sm text-primary hover:underline">
-            /ranking
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="DM"
+        description="個別メッセージのやり取りをまとめて確認できます。"
+        actions={
+          <>
+            <MainLink />
+            <ParticipantsLink />
+            <RankingLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>
@@ -228,4 +228,3 @@ export default async function DmListPage() {
     </Container>
   );
 }
-``

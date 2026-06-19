@@ -6,6 +6,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  BadgesLink,
+  CalendarLink,
+  HeaderLink,
+  MainLink,
+  PageHeader,
+} from "@/app/components/AppPageHeader";
+import { Pencil } from "lucide-react";
 
 type ProfileRow = {
   id: string;
@@ -185,29 +193,18 @@ export default async function ProfilePage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">プロフィール</h1>
-          <p className="text-sm text-muted-foreground">
-            自分のプロフィールと継続履歴です。
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/app"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            /app
-          </Link>
-          <Link
-            href="/profile/edit"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            編集
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="プロフィール"
+        description="自分のプロフィール、称号、継続履歴を確認できます。"
+        actions={
+          <>
+            <MainLink />
+            <HeaderLink href="/profile/edit" icon={Pencil} variant="primary">
+              編集
+            </HeaderLink>
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>
@@ -266,18 +263,8 @@ export default async function ProfilePage() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link
-                    href="/calendar"
-                    className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-                  >
-                    カレンダーを見る
-                  </Link>
-                  <Link
-                    href="/badges"
-                    className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-                  >
-                    トロフィー・称号を見る
-                  </Link>
+                  <CalendarLink />
+                  <BadgesLink />
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">

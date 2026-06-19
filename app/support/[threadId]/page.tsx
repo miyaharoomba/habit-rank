@@ -2,10 +2,15 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import PendingSubmitButton from "@/app/components/ui/PendingSubmitButton";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  HeaderLink,
+  MainLink,
+  PageHeader,
+} from "@/app/components/AppPageHeader";
+import { LifeBuoy } from "lucide-react";
 
 type ThreadRow = {
   id: string;
@@ -96,12 +101,10 @@ export default async function SupportThreadPage({
             <p className="text-sm text-destructive">問い合わせが見つかりません。</p>
 
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/support">
-                /support へ戻る
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                /app
-              </Link>
+              <HeaderLink href="/support" icon={LifeBuoy}>
+                問い合わせ一覧
+              </HeaderLink>
+              <MainLink />
             </div>
           </CardBody>
         </Card>
@@ -139,21 +142,18 @@ export default async function SupportThreadPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">問い合わせ詳細</h1>
-          <p className="text-sm text-muted-foreground break-words">{row.subject}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/support">
-            /support
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="問い合わせ詳細"
+        description={row.subject}
+        actions={
+          <>
+            <HeaderLink href="/support" icon={LifeBuoy}>
+              問い合わせ一覧
+            </HeaderLink>
+            <MainLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>

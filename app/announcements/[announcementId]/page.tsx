@@ -1,10 +1,15 @@
 // app/announcements/[announcementId]/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  DmLink,
+  MainLink,
+  PageHeader,
+  RankingLink,
+} from "@/app/components/AppPageHeader";
 
 type AnnouncementRow = {
   id: string;
@@ -48,12 +53,8 @@ export default async function AnnouncementDetailPage({
             <p className="text-sm text-destructive">お知らせが見つかりません。</p>
 
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                /app へ戻る
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/ranking">
-                /ranking
-              </Link>
+              <MainLink />
+              <RankingLink />
             </div>
           </CardBody>
         </Card>
@@ -73,26 +74,17 @@ export default async function AnnouncementDetailPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">お知らせ</h1>
-          <p className="text-sm text-muted-foreground">
-            {senderName} からのお知らせ
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/ranking">
-            /ranking
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/dm">
-            /dm
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="お知らせ"
+        description={`${senderName} からのお知らせ`}
+        actions={
+          <>
+            <MainLink />
+            <RankingLink />
+            <DmLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>

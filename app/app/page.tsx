@@ -4,10 +4,22 @@ import MobileAppMenu from "@/app/components/MobileAppMenu";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody } from "@/app/components/ui/Card";
 import NotificationBell from "@/app/components/NotificationBell";
+import {
+  BadgesLink,
+  DmLink,
+  HeaderLink,
+  HistoryLink,
+  ParticipantsLink,
+  PageHeader,
+  ProfileLink,
+  RankingLink,
+  SettingsLink,
+  SupportLink,
+} from "@/app/components/AppPageHeader";
 import { createClient } from "@/lib/supabase/server";
 import { startSession, finishSession } from "./actions";
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { CalendarDays } from "lucide-react";
 import { formatJstStartLabel } from "@/lib/time";
 import FinishSessionButtons from "./FinishSessionButtons";
 
@@ -50,71 +62,37 @@ export default async function AppPage() {
   return (
     <>
       <Container>
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 pt-2 sm:pt-0">
-            <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
-            <p className="text-sm text-muted-foreground">
-              今の継続状態を見ながら、そのまま開始・終了・再開できます。
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <NotificationBell />
-            <MobileAppMenu
-              displayName={displayName}
-              avatarPath={avatarPath}
-              statusMessage={statusMessage}
-            />
-          </div>
-        </header>
+        <PageHeader
+          title="継続チャレンジ"
+          description="今の継続状態を見ながら、そのまま開始・終了・再開できます。"
+          actions={
+            <>
+              <NotificationBell />
+              <MobileAppMenu
+                displayName={displayName}
+                avatarPath={avatarPath}
+                statusMessage={statusMessage}
+              />
+            </>
+          }
+        />
 
         <div className="mt-4 hidden flex-wrap items-center gap-2 sm:flex">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2">
-            <span className="text-sm font-semibold">👤 {displayName}</span>
+          <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 text-sm font-semibold">
+            {displayName}
           </div>
 
-          <Link
-            href="/profile"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            プロフィール
-          </Link>
-          <Link
-            href="/participants"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            参加者
-          </Link>
-          <Link
-            href="/dm"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            DM
-          </Link>
-          <Link
-            href="/support"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            問い合わせ
-          </Link>
-          <Link
-            href="/history"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            履歴
-          </Link>
-          <Link
-            href="/ranking"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            ランキング
-          </Link>
-          <Link
-            href="/settings"
-            className="inline-flex items-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            設定
-          </Link>
+          <ProfileLink />
+          <ParticipantsLink />
+          <DmLink />
+          <HeaderLink href="/calendar" icon={CalendarDays}>
+            カレンダー
+          </HeaderLink>
+          <HistoryLink />
+          <BadgesLink />
+          <SupportLink />
+          <RankingLink />
+          <SettingsLink />
         </div>
 
         <div className="mt-6 grid gap-4">

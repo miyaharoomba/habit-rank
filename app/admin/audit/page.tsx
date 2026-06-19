@@ -1,9 +1,15 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import {
+  AdminLink,
+  HeaderLink,
+  PageHeader,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
+import { Flag, Users } from "lucide-react";
 
 type AuditRow = {
   id: number;
@@ -11,7 +17,7 @@ type AuditRow = {
   action: string;
   target_user_id: string | null;
   target_thread_id: string | null;
-  details: any;
+  details: unknown;
   created_at: string;
 };
 
@@ -53,12 +59,8 @@ export default async function AdminAuditPage() {
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {error.message}</p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/admin">
-                /admin
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/settings">
-                /settings
-              </Link>
+              <AdminLink />
+              <SettingsLink />
             </div>
           </CardBody>
         </Card>
@@ -87,27 +89,22 @@ export default async function AdminAuditPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">監査ログ</h1>
-          <p className="text-sm text-muted-foreground">最新300件の管理操作履歴（JST）</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/admin">
-            /admin
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/admin/users">
-            /admin/users
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/admin/reports">
-            /admin/reports
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="監査ログ"
+        description="最新300件の管理操作履歴をJSTで表示します。"
+        actions={
+          <>
+            <AdminLink />
+            <HeaderLink href="/admin/users" icon={Users}>
+              ユーザー管理
+            </HeaderLink>
+            <HeaderLink href="/admin/reports" icon={Flag}>
+              通報
+            </HeaderLink>
+            <SettingsLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>
@@ -167,4 +164,3 @@ export default async function AdminAuditPage() {
     </Container>
   );
 }
-``

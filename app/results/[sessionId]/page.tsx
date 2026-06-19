@@ -1,10 +1,15 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
 import CorrectionSheet from "./CorrectionSheet";
+import {
+  DmLink,
+  MainLink,
+  PageHeader,
+  RankingLink,
+} from "@/app/components/AppPageHeader";
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -49,9 +54,7 @@ export default async function ResultPage({
           <CardBody>
             <p className="text-sm text-muted-foreground">結果が見つかりません。</p>
             <div className="mt-3">
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                /appへ戻る
-              </Link>
+              <MainLink />
             </div>
           </CardBody>
         </Card>
@@ -85,33 +88,17 @@ export default async function ResultPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">継続リザルト</h1>
-          <p className="text-sm text-muted-foreground">{name} の継続結果</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-            href="/app"
-          >
-            /app
-          </Link>
-          <Link
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-            href="/ranking"
-          >
-            /ranking
-          </Link>
-          <Link
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-            href="/dm"
-          >
-            /dm
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="継続リザルト"
+        description={`${name} の継続結果`}
+        actions={
+          <>
+            <MainLink />
+            <RankingLink />
+            <DmLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         {corrected ? (

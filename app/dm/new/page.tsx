@@ -2,7 +2,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { DmLink, RankingLink } from "@/app/components/AppPageHeader";
 
 export default async function DmNewPage({
   searchParams,
@@ -34,12 +34,8 @@ export default async function DmNewPage({
               DMスレッド作成に失敗: {error?.message ?? "unknown"}
             </p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/ranking">
-                ← ランキングへ戻る
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/dm">
-                DM一覧へ
-              </Link>
+              <RankingLink />
+              <DmLink />
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
               ※ Supabase側の関数(create_or_get_dm)や権限が原因のことが多い

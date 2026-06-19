@@ -2,6 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  Award,
+  CalendarDays,
+  History,
+  LifeBuoy,
+  Menu,
+  MessageCircle,
+  Pencil,
+  Settings,
+  Trophy,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 
 function avatarUrl(path: string | null) {
   if (!path) return null;
@@ -24,14 +38,14 @@ export default function MobileAppMenu({
   const status = (statusMessage ?? "").trim();
 
   const quickLinks = [
-    { href: "/calendar", label: "カレンダー", desc: "継続終了日を可視化" },
-    { href: "/badges", label: "トロフィー", desc: "獲得したバッジ一覧" },
-    { href: "/history", label: "履歴", desc: "終了済み記録" },
-    { href: "/participants", label: "参加者", desc: "他ユーザーを見る" },
-    { href: "/dm", label: "DM", desc: "ダイレクトメッセージ" },
-    { href: "/support", label: "問い合わせ", desc: "管理者へ連絡" },
-    { href: "/ranking", label: "ランキング", desc: "継続記録の比較" },
-    { href: "/settings", label: "設定", desc: "各種設定" },
+    { href: "/calendar", label: "カレンダー", desc: "継続終了日を可視化", icon: CalendarDays },
+    { href: "/badges", label: "トロフィー", desc: "獲得したバッジ一覧", icon: Award },
+    { href: "/history", label: "履歴", desc: "終了済み記録", icon: History },
+    { href: "/participants", label: "参加者", desc: "他ユーザーを見る", icon: Users },
+    { href: "/dm", label: "DM", desc: "ダイレクトメッセージ", icon: MessageCircle },
+    { href: "/support", label: "問い合わせ", desc: "管理者へ連絡", icon: LifeBuoy },
+    { href: "/ranking", label: "ランキング", desc: "継続記録の比較", icon: Trophy },
+    { href: "/settings", label: "設定", desc: "各種設定", icon: Settings },
   ];
 
   useEffect(() => {
@@ -62,12 +76,12 @@ export default function MobileAppMenu({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="relative z-[70] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50"
+            className="relative z-[70] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 shadow-md backdrop-blur transition hover:bg-secondary/50"
             aria-controls="mobile-app-menu"
             aria-expanded={open}
             aria-label="メニューを開く"
           >
-            ☰
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
         )}
       </span>
@@ -125,12 +139,12 @@ export default function MobileAppMenu({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/90 shadow-md backdrop-blur transition hover:bg-secondary/50"
               aria-controls="mobile-app-menu"
               aria-expanded={open}
               aria-label="メニューを閉じる"
             >
-              ☰
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
 
@@ -139,36 +153,51 @@ export default function MobileAppMenu({
             <Link
               href="/profile"
               onClick={() => setOpen(false)}
-              className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium transition hover:bg-secondary/40"
+              className="flex items-start gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium transition hover:bg-secondary/40"
             >
-              <div className="font-semibold">プロフィールを見る</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                自分のプロフィール情報
+              <UserRound className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="font-semibold">プロフィール</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  自分のプロフィール情報
+                </div>
               </div>
             </Link>
 
             <Link
               href="/profile/edit"
               onClick={() => setOpen(false)}
-              className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium transition hover:bg-secondary/40"
+              className="flex items-start gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium transition hover:bg-secondary/40"
             >
-              <div className="font-semibold">編集</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                名前 / アイコン / 一言
+              <Pencil className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="font-semibold">編集</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  名前 / アイコン / 一言
+                </div>
               </div>
             </Link>
 
-            {quickLinks.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className="block rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium transition hover:bg-secondary/40"
-              >
-                <div className="font-semibold">{item.label}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{item.desc}</div>
-              </Link>
-            ))}
+            {quickLinks.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="flex items-start gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm font-medium transition hover:bg-secondary/40"
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="font-semibold">{item.label}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.desc}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </aside>

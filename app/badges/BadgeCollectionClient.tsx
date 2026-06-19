@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import { HeaderLink, MainLink } from "@/app/components/AppPageHeader";
+import { UserRound } from "lucide-react";
 
 type BadgeRow = {
   id: string;
@@ -53,6 +54,10 @@ function formatDate(iso: string) {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(
     d.getDate()
   ).padStart(2, "0")}`;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function BadgeCollectionClient({
@@ -124,12 +129,16 @@ export default function BadgeCollectionClient({
         body: JSON.stringify({ badgeId }),
       });
 
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+      const json = (await res.json().catch(() => ({}))) as { error?: unknown };
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string" ? json.error : `HTTP ${res.status}`
+        );
+      }
 
       setActiveTitleBadgeId(badgeId);
-    } catch (e: any) {
-      setError(e?.message ?? "称号設定に失敗しました。");
+    } catch (e: unknown) {
+      setError(errorMessage(e, "称号設定に失敗しました。"));
     } finally {
       setSaving(null);
     }
@@ -145,12 +154,16 @@ export default function BadgeCollectionClient({
         method: "DELETE",
       });
 
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+      const json = (await res.json().catch(() => ({}))) as { error?: unknown };
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string" ? json.error : `HTTP ${res.status}`
+        );
+      }
 
       setActiveTitleBadgeId(null);
-    } catch (e: any) {
-      setError(e?.message ?? "称号解除に失敗しました。");
+    } catch (e: unknown) {
+      setError(errorMessage(e, "称号解除に失敗しました。"));
     } finally {
       setSaving(null);
     }
@@ -163,18 +176,10 @@ export default function BadgeCollectionClient({
         <p className="text-sm sm:text-base text-muted-foreground">{subtitle}</p>
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <Link
-            href={profileHref}
-            className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
-          >
-            ← プロフィールへ
-          </Link>
-          <Link
-            href="/app"
-            className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-secondary/40"
-          >
-            /app
-          </Link>
+          <HeaderLink href={profileHref} icon={UserRound}>
+            プロフィール
+          </HeaderLink>
+          <MainLink />
         </div>
       </header>
 
@@ -233,7 +238,12 @@ export default function BadgeCollectionClient({
           <div className="flex flex-wrap items-center gap-2 px-4 py-4">
             <select
               value={filter}
-              onChange={(e) => setFilter(e.target.value as any)}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "all" || value === "earned" || value === "unearned") {
+                  setFilter(value);
+                }
+              }}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="all">すべて</option>
@@ -243,7 +253,18 @@ export default function BadgeCollectionClient({
 
             <select
               value={rank}
-              onChange={(e) => setRank(e.target.value as any)}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (
+                  value === "all" ||
+                  value === "platinum" ||
+                  value === "gold" ||
+                  value === "silver" ||
+                  value === "bronze"
+                ) {
+                  setRank(value);
+                }
+              }}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="all">全ランク</option>

@@ -1,11 +1,16 @@
 // app/admin/announcements/page.tsx
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
 import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
+import {
+  AdminLink,
+  MainLink,
+  PageHeader,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
 
 type AnnouncementRow = {
   id: string;
@@ -171,26 +176,17 @@ export default async function AdminAnnouncementsPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">お知らせ配信</h1>
-          <p className="text-sm text-muted-foreground">
-            管理者が全員に通知を送信します。通知ベル / 端末通知 / 詳細画面に反映されます。
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/admin">
-            /admin
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="お知らせ配信"
+        description="全員への通知を送信します。通知ベル、端末通知、詳細画面に反映されます。"
+        actions={
+          <>
+            <AdminLink />
+            <SettingsLink />
+            <MainLink />
+          </>
+        }
+      />
 
       <div className="mt-6 grid gap-4">
         <Card>

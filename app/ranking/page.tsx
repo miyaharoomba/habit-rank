@@ -3,6 +3,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import {
+  DmLink,
+  MainLink,
+  PageHeader,
+  SettingsLink,
+} from "@/app/components/AppPageHeader";
 import { formatJstStartLabel } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
@@ -133,12 +139,8 @@ export default async function RankingPage({
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {error.message}</p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                ← /app
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/settings">
-                設定
-              </Link>
+              <MainLink />
+              <SettingsLink />
             </div>
           </CardBody>
         </Card>
@@ -213,26 +215,21 @@ export default async function RankingPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">ランキング</h1>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        title="ランキング"
+        description={
+          <>
             {activeTab === "best" ? "ベスト（過去最高）順" : "継続中（現在経過）順"}
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            ← /app
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/dm">
-            /dm
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            設定
-          </Link>
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <>
+            <MainLink />
+            <DmLink />
+            <SettingsLink />
+          </>
+        }
+      />
 
       <div className="mt-4 flex gap-2">
         <Link

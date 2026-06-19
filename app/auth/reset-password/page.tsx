@@ -3,6 +3,7 @@ import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { MainLink, PageHeader, SettingsLink } from "@/app/components/AppPageHeader";
 
 export default async function ResetPasswordPage({
   searchParams,
@@ -19,7 +20,6 @@ export default async function ResetPasswordPage({
   // PKCEの code があればセッションへ交換（失敗してもUIで案内）
   if (code) {
     try {
-      // @ts-ignore
       await supabase.auth.exchangeCodeForSession(code);
     } catch {
       // noop
@@ -46,7 +46,6 @@ export default async function ResetPasswordPage({
     const supabase = await createClient();
 
     // セッションが有効な状態でパスワード更新
-    // @ts-ignore
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) backWithError(error.message);
@@ -92,21 +91,16 @@ export default async function ResetPasswordPage({
 
   return (
     <Container>
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">パスワード再設定</h1>
-          <p className="text-sm text-muted-foreground">新しいパスワードを設定してください</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/settings">
-            /settings
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="パスワード再設定"
+        description="新しいパスワードを設定してください。"
+        actions={
+          <>
+            <MainLink />
+            <SettingsLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>
@@ -152,7 +146,9 @@ export default async function ResetPasswordPage({
                 パスワードを更新
               </button>
 
-              <p className="text-xs text-muted-foreground">更新後は /app に移動します。</p>
+              <p className="text-xs text-muted-foreground">
+                更新後はメイン画面に移動します。
+              </p>
             </form>
           </CardBody>
         </Card>

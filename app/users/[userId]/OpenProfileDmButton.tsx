@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { MessageCircle } from "lucide-react";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -55,8 +56,9 @@ export default function OpenProfileDmButton({
       type="button"
       onClick={openDm}
       disabled={opening}
-      className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold transition hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50"
     >
+      <MessageCircle className="h-4 w-4" aria-hidden="true" />
       {opening ? "開いています…" : "DMを送る"}
     </button>
   );

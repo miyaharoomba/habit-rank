@@ -1,10 +1,15 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import ParticipantsClient from "../ranking/ParticipantsClient";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
+import {
+  DmLink,
+  MainLink,
+  PageHeader,
+  RankingLink,
+} from "@/app/components/AppPageHeader";
 
 type Participant = {
   user_id: string;
@@ -52,12 +57,8 @@ export default async function ParticipantsPage() {
           <CardBody>
             <p className="text-sm text-destructive">取得エラー: {error.message}</p>
             <div className="mt-3 flex gap-3">
-              <Link className="text-sm text-primary hover:underline" href="/app">
-                ← /app
-              </Link>
-              <Link className="text-sm text-primary hover:underline" href="/ranking">
-                /ranking
-              </Link>
+              <MainLink />
+              <RankingLink />
             </div>
           </CardBody>
         </Card>
@@ -127,26 +128,17 @@ export default async function ParticipantsPage() {
 
   return (
     <Container>
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">参加者一覧</h1>
-          <p className="text-sm text-muted-foreground">
-            検索 / 継続中バッジ / DM開始 / プロフィール
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            ← /app
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/dm">
-            /dm
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/ranking">
-            /ranking
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        title="参加者"
+        description="検索、継続中バッジ、DM開始、プロフィール確認をまとめて行えます。"
+        actions={
+          <>
+            <MainLink />
+            <DmLink />
+            <RankingLink />
+          </>
+        }
+      />
 
       <div className="mt-6">
         <Card>
