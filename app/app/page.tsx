@@ -2,7 +2,7 @@ import LiveTimer from "@/app/components/LiveTimer";
 import GlobalChatBoard from "@/app/components/GlobalChatBoard";
 import MobileAppMenu from "@/app/components/MobileAppMenu";
 import Container from "@/app/components/ui/Container";
-import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import Card, { CardBody } from "@/app/components/ui/Card";
 import NotificationBell from "@/app/components/NotificationBell";
 import { createClient } from "@/lib/supabase/server";
 import { startSession, finishSession } from "./actions";
@@ -119,37 +119,51 @@ export default async function AppPage() {
 
         <div className="mt-6 grid gap-4">
           <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-1">
-                <h2 className="font-semibold">現在の継続</h2>
-                <p className="text-xs text-muted-foreground">リアルタイム</p>
-              </div>
-            </CardHeader>
             <CardBody>
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-border bg-background/60 px-4 py-4">
-                  <div className="overflow-hidden whitespace-nowrap">
-                    <div className="origin-left scale-[0.9] sm:scale-100">
-                      <LiveTimer startedAt={startedAt} />
-                    </div>
+              <div className="space-y-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      現在の継続
+                    </p>
+                    <h2 className="text-lg font-bold tracking-tight">
+                      {isRunning ? "進行中" : "待機中"}
+                    </h2>
                   </div>
-                  <div className="mt-2 text-sm text-muted-foreground break-words">
-                    開始：{startedAt ? formatJstStartLabel(startedAt) : "未開始"}
+
+                  <div
+                    className={[
+                      "shrink-0 rounded-full border px-3 py-1 text-xs font-semibold",
+                      isRunning
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-border bg-secondary/40 text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {isRunning ? "継続中" : "未開始"}
                   </div>
+                </div>
+
+                <LiveTimer startedAt={startedAt} />
+
+                <div className="flex flex-col gap-1 border-t border-border pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-medium text-muted-foreground">開始</span>
+                  <span className="break-words font-semibold">
+                    {startedAt ? formatJstStartLabel(startedAt) : "未開始"}
+                  </span>
                 </div>
 
                 {!isRunning ? (
                   <form action={startSession}>
                     <button
                       type="submit"
-                      className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 sm:w-auto sm:py-2"
                     >
                       継続を開始する
                     </button>
                   </form>
                 ) : (
                   <div className="space-y-3">
-                    <div className="rounded-xl border border-amber-300/30 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
+                    <div className="rounded-lg border border-amber-300/30 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
                       通常は「終了して次を開始」を使ってください。
                     </div>
 
