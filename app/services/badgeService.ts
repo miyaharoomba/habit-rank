@@ -18,6 +18,7 @@ type LegacyConditionType =
   | "early_bird_sessions"
   | "complete_all";
 type ConditionType = ModernConditionType | LegacyConditionType;
+type ConditionMeta = Record<string, unknown>;
 
 type BadgeRow = {
   id: string;
@@ -27,7 +28,7 @@ type BadgeRow = {
   badge_rank: BadgeRank;
   condition_type: ConditionType;
   condition_value: number;
-  condition_meta: Record<string, any> | null;
+  condition_meta: ConditionMeta | null;
   icon_path: string | null;
 };
 
@@ -40,6 +41,10 @@ type SessionRow = {
 type AdminControlRow = {
   badge_id: string;
   ignore_before: string;
+};
+
+type UserBadgeRow = {
+  badge_id: string;
 };
 
 type DerivedStats = {
@@ -96,7 +101,7 @@ function daysBetweenDateKeys(prevDateKey: string, nextDateKey: string) {
   return Math.round((next - prev) / (24 * 60 * 60 * 1000));
 }
 
-function getNumberMeta(meta: Record<string, any> | null | undefined, key: string, fallback: number) {
+function getNumberMeta(meta: ConditionMeta | null | undefined, key: string, fallback: number) {
   const raw = meta?.[key];
   const num = Number(raw);
   return Number.isFinite(num) ? num : fallback;
@@ -298,6 +303,27 @@ function unlockMessage(badge: BadgeRow) {
   return `「${badge.title}」を獲得しました。`;
 }
 
+async function createTrophyUnlockNotification(
+  admin: ReturnType<typeof getAdminClient>,
+  userId: string,
+  badge: BadgeRow
+) {
+  const { error } = await admin.from("notifications").insert({
+    recipient_id: userId,
+    actor_id: userId,
+    type: "trophy_unlock",
+    thread_id: null,
+    session_id: null,
+    announcement_id: null,
+    support_thread_id: null,
+    message_preview: unlockMessage(badge),
+  });
+
+  if (error) {
+    console.error("trophy_unlock notification insert failed:", error.message);
+  }
+}
+
 export async function checkAndAwardBadges(userId: string) {
   const admin = getAdminClient();
   const sessions = await getFinishedSessions(userId);
@@ -318,7 +344,7 @@ export async function checkAndAwardBadges(userId: string) {
   if (ubErr) throw new Error(ubErr.message);
 
   const badgeRows = (badges ?? []) as BadgeRow[];
-  const owned = new Set((userBadges ?? []).map((x: any) => x.badge_id));
+  const owned = new Set(((userBadges ?? []) as UserBadgeRow[]).map((x) => x.badge_id));
   const unlocked: BadgeRow[] = [];
 
   for (const badge of badgeRows) {
@@ -341,28 +367,14 @@ export async function checkAndAwardBadges(userId: string) {
     });
 
     if (insertErr) {
-      if ((insertErr as any).code !== "23505") {
+      if (insertErr.code !== "23505") {
         console.error("user_badges insert failed:", insertErr.message);
       }
       continue;
     }
 
     unlocked.push(badge);
-
-    const { error: notifErr } = await admin.from("notifications").insert({
-      recipient_id: userId,
-      actor_id: userId,
-      type: "trophy_unlock",
-      thread_id: null,
-      session_id: null,
-      announcement_id: null,
-      support_thread_id: null,
-      message_preview: unlockMessage(badge),
-    });
-
-    if (notifErr) {
-      console.error("trophy_unlock notification insert failed:", notifErr.message);
-    }
+    await createTrophyUnlockNotification(admin, userId, badge);
   }
 
   const platinum = badgeRows.find((b) => b.condition_type === "complete_all");
@@ -374,7 +386,10 @@ export async function checkAndAwardBadges(userId: string) {
         user_id: userId,
         badge_id: platinum.id,
       });
-      if (!insertErr) unlocked.push(platinum);
+      if (!insertErr) {
+        unlocked.push(platinum);
+        await createTrophyUnlockNotification(admin, userId, platinum);
+      }
     }
   }
 
