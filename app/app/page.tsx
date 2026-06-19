@@ -50,15 +50,15 @@ export default async function AppPage() {
   return (
     <>
       <Container>
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 pt-2 sm:pt-0">
             <h1 className="text-2xl font-bold tracking-tight">継続チャレンジ</h1>
             <p className="text-sm text-muted-foreground">
               今の継続状態を見ながら、そのまま開始・終了・再開できます。
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-start">
+          <div className="flex shrink-0 items-center gap-2">
             <NotificationBell />
             <MobileAppMenu
               displayName={displayName}
