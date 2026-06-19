@@ -60,9 +60,11 @@ export default function MobileAppMenu({
       {/* 右上固定ボタン：document幅に参加させない */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="fixed right-3 top-3 z-[70] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50 sm:hidden"
-        aria-label="メニューを開く"
+        onClick={() => setOpen((v) => !v)}
+        className="fixed right-3 top-3 z-[100] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50 sm:hidden"
+        aria-controls="mobile-app-menu"
+        aria-expanded={open}
+        aria-label="メニューを開閉"
       >
         ☰
       </button>
@@ -79,6 +81,7 @@ export default function MobileAppMenu({
 
       {/* サイドシート本体：完全 fixed で右から出す */}
       <aside
+        id="mobile-app-menu"
         className={[
           "fixed right-0 top-0 z-[90] h-[100dvh] w-[min(22rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)]",
           "border-l border-border bg-background shadow-2xl transition-transform duration-200 ease-out sm:hidden",
@@ -115,15 +118,6 @@ export default function MobileAppMenu({
                 </div>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="fixed right-3 top-3 z-[70] inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-background/90 shadow-md backdrop-blur transition hover:bg-secondary/50 sm:hidden"
-              aria-label="メニューを開く"
-            >
-              ☰
-            </button>
 
           </div>
 
