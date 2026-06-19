@@ -57,16 +57,21 @@ export default function MobileAppMenu({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="relative z-[100] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50 sm:hidden"
-        aria-controls="mobile-app-menu"
-        aria-expanded={open}
-        aria-label="メニューを開閉"
-      >
-        ☰
-      </button>
+      <span className="inline-flex h-11 w-11 shrink-0 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={[
+            open ? "fixed right-6 top-6" : "relative",
+            "z-[100] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50",
+          ].join(" ")}
+          aria-controls="mobile-app-menu"
+          aria-expanded={open}
+          aria-label="メニューを開閉"
+        >
+          ☰
+        </button>
+      </span>
 
       {/* オーバーレイ */}
       {open ? (
