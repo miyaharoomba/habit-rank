@@ -1,11 +1,36 @@
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import {
+  createClient as createAdminClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import webpush from "web-push";
 
 type OutboxRow = {
   id: number;
+  notification_id: string;
   recipient_id: string | null;
   payload: unknown;
   attempts: number;
+};
+
+type NotificationRow = {
+  id: string;
+  type: string;
+  actor_id: string | null;
+  thread_id: string | null;
+  session_id: number | string | null;
+  message_preview: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+};
+
+type PushPayload = {
+  title: string;
+  body: string;
+  url: string;
+  [key: string]: unknown;
 };
 
 type SubRow = {
@@ -54,6 +79,115 @@ function pushErrorDetails(e: unknown) {
   };
 }
 
+function textOr(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
+}
+
+function payloadObject(value: unknown): PushPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      title: "通知",
+      body: "新しい通知があります",
+      url: "/app",
+    };
+  }
+
+  const maybe = value as Record<string, unknown>;
+  return {
+    ...maybe,
+    title: textOr(maybe.title, "通知"),
+    body: textOr(maybe.body, "新しい通知があります"),
+    url: textOr(maybe.url, "/app"),
+  };
+}
+
+async function buildPayloadMap(
+  supabase: SupabaseClient,
+  rows: OutboxRow[]
+) {
+  const map = new Map<number, PushPayload>();
+  const notificationIds = Array.from(new Set(rows.map((row) => row.notification_id)));
+
+  if (notificationIds.length === 0) {
+    rows.forEach((row) => map.set(row.id, payloadObject(row.payload)));
+    return map;
+  }
+
+  const { data: notifications, error: nErr } = await supabase
+    .from("notifications")
+    .select("id, type, actor_id, thread_id, session_id, message_preview")
+    .in("id", notificationIds);
+
+  if (nErr) {
+    rows.forEach((row) => map.set(row.id, payloadObject(row.payload)));
+    return map;
+  }
+
+  const notificationMap = new Map(
+    ((notifications ?? []) as NotificationRow[]).map((n) => [n.id, n])
+  );
+  const actorIds = Array.from(
+    new Set(
+      ((notifications ?? []) as NotificationRow[])
+        .map((n) => n.actor_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const actorMap = new Map<string, string>();
+
+  if (actorIds.length > 0) {
+    const { data: actors } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", actorIds);
+
+    ((actors ?? []) as ProfileRow[]).forEach((actor) => {
+      actorMap.set(actor.id, textOr(actor.display_name, "NoName"));
+    });
+  }
+
+  for (const row of rows) {
+    const base = payloadObject(row.payload);
+    const notification = notificationMap.get(row.notification_id);
+
+    if (!notification) {
+      map.set(row.id, base);
+      continue;
+    }
+
+    const actorName = notification.actor_id
+      ? actorMap.get(notification.actor_id) ?? "NoName"
+      : "誰か";
+    const preview = (notification.message_preview ?? "").trim();
+
+    if (notification.type === "dm" && notification.thread_id) {
+      map.set(row.id, {
+        ...base,
+        title: `${actorName}からDM`,
+        body: preview || "新しいDMがあります",
+        url: `/dm/${notification.thread_id}`,
+      });
+      continue;
+    }
+
+    if (notification.type === "streak_end" && notification.session_id !== null) {
+      map.set(row.id, {
+        ...base,
+        title: `${actorName}が継続を終了`,
+        body: `理由: ${preview || "finished"}`,
+        url: `/results/${notification.session_id}`,
+      });
+      continue;
+    }
+
+    map.set(row.id, base);
+  }
+
+  return map;
+}
+
 export async function dispatchPendingPush({
   limit = 25,
 }: {
@@ -75,7 +209,7 @@ export async function dispatchPendingPush({
 
   const { data: outbox, error: oErr } = await supabase
     .from("push_outbox")
-    .select("id, recipient_id, payload, attempts")
+    .select("id, notification_id, recipient_id, payload, attempts")
     .is("sent_at", null)
     .lt("attempts", 8)
     .order("created_at", { ascending: true })
@@ -102,6 +236,8 @@ export async function dispatchPendingPush({
       failed: 0,
     };
   }
+
+  const payloadMap = await buildPayloadMap(supabase, rows);
 
   let processed = 0;
   let sent = 0;
@@ -153,13 +289,7 @@ export async function dispatchPendingPush({
       continue;
     }
 
-    const payload = JSON.stringify(
-      row.payload ?? {
-        title: "通知",
-        body: "新しい通知があります",
-        url: "/app",
-      }
-    );
+    const payload = JSON.stringify(payloadMap.get(row.id) ?? payloadObject(row.payload));
 
     let anySent = false;
     let lastErr: string | null = null;
