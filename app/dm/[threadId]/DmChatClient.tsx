@@ -66,6 +66,10 @@ function bytes(size: number) {
   return `${gb.toFixed(1)} GB`;
 }
 
+function getErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
+
 function AvatarLink({
   href,
   name,
@@ -132,16 +136,30 @@ function NameLine({
   );
 }
 
-function SubmitButton({ onSettled }: { onSettled: () => void }) {
+function SubmitButton({
+  busy,
+  disabled,
+  onSettled,
+}: {
+  busy: boolean;
+  disabled: boolean;
+  onSettled: () => void;
+}) {
   const { pending } = useFormStatus();
   const prev = useRef(false);
+  const submitting = pending || busy;
+  const isDisabled = disabled || submitting;
 
   useEffect(() => {
     if (prev.current && !pending) onSettled();
     prev.current = pending;
   }, [pending, onSettled]);
 
-  return <Button type="submit">{pending ? "送信中…" : "送信"}</Button>;
+  return (
+    <Button type="submit" disabled={isDisabled} aria-busy={submitting}>
+      {submitting ? "送信中…" : "送信"}
+    </Button>
+  );
 }
 
 function BubbleMeta({ createdAt }: { createdAt: string }) {
@@ -612,6 +630,7 @@ export default function DmChatClient({
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
+  const [textSubmitting, setTextSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [localUploads, setLocalUploads] = useState<LocalUpload[]>([]);
@@ -625,6 +644,7 @@ export default function DmChatClient({
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
   const lastUploadKeyRef = useRef<{ key: string; at: number } | null>(null);
+  const textSubmittingRef = useRef(false);
   const pinnedRef = useRef(true);
 
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
@@ -761,8 +781,8 @@ export default function DmChatClient({
       router.refresh();
       scrollToBottom(true);
       setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
-    } catch (err: any) {
-      setUploadError(err?.message ?? "送信に失敗しました。");
+    } catch (err: unknown) {
+      setUploadError(getErrorMessage(err, "送信に失敗しました。"));
     } finally {
       setUploading(false);
     }
@@ -788,8 +808,8 @@ export default function DmChatClient({
       }
 
       router.refresh();
-    } catch (err: any) {
-      setUploadError(err?.message ?? "送信取り消しに失敗しました。");
+    } catch (err: unknown) {
+      setUploadError(getErrorMessage(err, "送信取り消しに失敗しました。"));
     } finally {
       setUnsendingId(null);
     }
@@ -801,6 +821,34 @@ export default function DmChatClient({
     if (!file) return;
     await uploadFile(file);
   };
+
+  const submitText = async () => {
+    const body = draft.trim();
+    if (!body || uploading || textSubmittingRef.current) return;
+
+    textSubmittingRef.current = true;
+    setTextSubmitting(true);
+    setUploadError(null);
+
+    try {
+      const fd = new FormData();
+      fd.set("body", body);
+      await textAction(fd);
+      setDraft("");
+      pinnedRef.current = true;
+      router.refresh();
+      scrollToBottom(true);
+      setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
+    } catch (err: unknown) {
+      setUploadError(getErrorMessage(err, "送信に失敗しました。"));
+    } finally {
+      textSubmittingRef.current = false;
+      setTextSubmitting(false);
+    }
+  };
+
+  const textBusy = textSubmitting || uploading;
+  const canSendText = draft.trim().length > 0 && !textBusy;
 
   return (
     <>
@@ -1038,16 +1086,7 @@ export default function DmChatClient({
         ) : null}
 
         <form
-          action={async () => {
-            const fd = new FormData();
-            fd.set("body", draft);
-            await textAction(fd);
-            setDraft("");
-            pinnedRef.current = true;
-            router.refresh();
-            scrollToBottom(true);
-            setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
-          }}
+          action={submitText}
           className="flex gap-2"
         >
           <input
@@ -1067,7 +1106,7 @@ export default function DmChatClient({
           <button
             type="button"
             onClick={openFilePicker}
-            disabled={uploading}
+            disabled={textBusy}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border hover:bg-secondary/50 transition disabled:opacity-50"
             aria-label="ファイルを送る"
             title="ファイルを送る"
@@ -1078,7 +1117,7 @@ export default function DmChatClient({
           <button
             type="button"
             onClick={openMediaPicker}
-            disabled={uploading}
+            disabled={textBusy}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border hover:bg-secondary/50 transition disabled:opacity-50"
             aria-label="画像・動画を送る"
             title="画像・動画を送る"
@@ -1091,10 +1130,12 @@ export default function DmChatClient({
             value={draft}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
             placeholder="メッセージを入力…"
-            disabled={uploading}
+            disabled={textBusy}
           />
 
           <SubmitButton
+            busy={textSubmitting}
+            disabled={!canSendText}
             onSettled={() => {
               router.refresh();
             }}
