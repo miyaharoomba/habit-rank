@@ -6,6 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import OpenProfileDmButton from "./OpenProfileDmButton";
 
 type ProfileRow = {
   id: string;
@@ -241,12 +242,7 @@ export default async function UserProfilePage({
           >
             /participants
           </Link>
-          <Link
-            href={`/dm/${encodeURIComponent(userId)}`}
-            className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
-          >
-            DMを送る
-          </Link>
+          <OpenProfileDmButton targetUserId={userId} />
           <Link
             href="/app"
             className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-secondary/40"
