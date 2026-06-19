@@ -65,6 +65,7 @@ export default async function AppPage() {
         <PageHeader
           title="継続チャレンジ"
           description="今の継続状態を見ながら、そのまま開始・終了・再開できます。"
+          mobileActionsInline={true}
           actions={
             <>
               <NotificationBell />

@@ -21,6 +21,7 @@ type PageHeaderProps = {
   description?: ReactNode;
   eyebrow?: string;
   actions?: ReactNode;
+  mobileActionsInline?: boolean;
 };
 
 type HeaderLinkProps = {
@@ -35,9 +36,16 @@ export function PageHeader({
   description,
   eyebrow,
   actions,
+  mobileActionsInline = false,
 }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header
+      className={
+        mobileActionsInline
+          ? "flex items-start justify-between gap-3 sm:items-end"
+          : "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
+      }
+    >
       <div className="min-w-0">
         {eyebrow ? (
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -55,7 +63,15 @@ export function PageHeader({
       </div>
 
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        <div
+          className={
+            mobileActionsInline
+              ? "flex shrink-0 items-center gap-2"
+              : "flex shrink-0 flex-wrap items-center gap-2"
+          }
+        >
+          {actions}
+        </div>
       ) : null}
     </header>
   );
