@@ -115,8 +115,9 @@ async function createManualBadgeGrantNotification({
     .maybeSingle();
 
   if (badgeErr || !badge) {
-    console.error("manual badge grant notification badge lookup failed:", badgeErr?.message);
-    return false;
+    throw new Error(
+      badgeErr?.message ?? "manual badge grant notification badge lookup failed"
+    );
   }
 
   const { error: notifErr } = await admin.from("notifications").insert({
@@ -131,8 +132,7 @@ async function createManualBadgeGrantNotification({
   });
 
   if (notifErr) {
-    console.error("manual badge grant notification insert failed:", notifErr.message);
-    return false;
+    throw new Error(`manual badge grant notification insert failed: ${notifErr.message}`);
   }
 
   return true;
