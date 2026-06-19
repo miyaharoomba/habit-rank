@@ -165,9 +165,10 @@ export default async function DmThreadPage({
     throw new Error(profilesErr.message);
   }
 
+  const profileRows = (profiles ?? []) as ProfileRow[];
   const profileMap = new Map<string, ProfileRow>();
-  (profiles ?? []).forEach((p: any) => {
-    profileMap.set(p.id, p as ProfileRow);
+  profileRows.forEach((p) => {
+    profileMap.set(p.id, p);
   });
 
   const otherName =
@@ -176,8 +177,8 @@ export default async function DmThreadPage({
   // 3) 称号用の badge 情報を取得
   const titleBadgeIds = Array.from(
     new Set(
-      (profiles ?? [])
-        .map((p: any) => p.current_title_badge_id)
+      profileRows
+        .map((p) => p.current_title_badge_id)
         .filter(Boolean)
     )
   ) as string[];
@@ -194,8 +195,8 @@ export default async function DmThreadPage({
       throw new Error(titleBadgesErr.message);
     }
 
-    (titleBadges ?? []).forEach((b: any) => {
-      badgeMap.set(b.id, b as BadgeLiteRow);
+    ((titleBadges ?? []) as BadgeLiteRow[]).forEach((b) => {
+      badgeMap.set(b.id, b);
     });
   }
 
@@ -339,21 +340,13 @@ export default async function DmThreadPage({
         </div>
       </header>
 
-      <div className="mt-6">
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">チャット</h2>
-          </CardHeader>
-          <CardBody>
-            <DmChatClient
-              threadId={threadId}
-              myUserId={user.id}
-              messages={messages}
-            />
-          </CardBody>
-        </Card>
+      <div className="mt-4">
+        <DmChatClient
+          threadId={threadId}
+          myUserId={user.id}
+          messages={messages}
+        />
       </div>
     </Container>
   );
 }
-``

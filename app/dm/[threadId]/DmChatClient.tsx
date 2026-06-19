@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import Input from "@/app/components/ui/Input";
+import { ImagePlus, Paperclip } from "lucide-react";
 import Button from "@/app/components/ui/Button";
 import { sendDm } from "./actions";
 import { formatJst } from "@/lib/time";
@@ -156,7 +156,12 @@ function SubmitButton({
   }, [pending, onSettled]);
 
   return (
-    <Button type="submit" disabled={isDisabled} aria-busy={submitting}>
+    <Button
+      type="submit"
+      disabled={isDisabled}
+      aria-busy={submitting}
+      className="h-10 shrink-0 px-4"
+    >
       {submitting ? "送信中…" : "送信"}
     </Button>
   );
@@ -254,9 +259,14 @@ function BubbleFrame({
   children: ReactNode;
 }) {
   return (
-    <div className={["flex gap-3", mine ? "justify-end" : "justify-start"].join(" ")}>
+    <div
+      className={[
+        "flex min-w-0 gap-2 sm:gap-3",
+        mine ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
       {!mine && avatar}
-      <div className="min-w-0 max-w-[85%]">
+      <div className="min-w-0 max-w-[calc(100%-3.25rem)] sm:max-w-[85%]">
         {header}
         {children}
       </div>
@@ -312,7 +322,7 @@ function BubbleText({
     >
       <div
         className={[
-          "rounded-2xl border border-border px-4 py-3",
+          "max-w-full rounded-2xl border border-border px-4 py-3 text-sm leading-6 break-words",
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
@@ -887,15 +897,15 @@ export default function DmChatClient({
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="flex min-h-[calc(100dvh-13rem)] flex-col gap-3 sm:min-h-[60vh]">
         <div
           ref={listRef}
           onScroll={updatePinned}
-          className="max-h-[60vh] overflow-y-auto space-y-4"
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-2 sm:px-2"
         >
           {messages.length === 0 && localUploads.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              まだメッセージがありません。最初の一言（またはメディア）を送ってみよう。
+            <div className="flex min-h-[42vh] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+              まだメッセージがありません。最初の一言、またはメディアを送ってみよう。
             </div>
           ) : (
             <>
@@ -1087,7 +1097,7 @@ export default function DmChatClient({
 
         <form
           action={submitText}
-          className="flex gap-2"
+          className="shrink-0 rounded-xl border border-border bg-background/95 p-2 shadow-sm"
         >
           <input
             ref={filePickerRef}
@@ -1103,43 +1113,48 @@ export default function DmChatClient({
             onChange={onPickFile}
           />
 
-          <button
-            type="button"
-            onClick={openFilePicker}
-            disabled={textBusy}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border hover:bg-secondary/50 transition disabled:opacity-50"
-            aria-label="ファイルを送る"
-            title="ファイルを送る"
-          >
-            📎
-          </button>
-
-          <button
-            type="button"
-            onClick={openMediaPicker}
-            disabled={textBusy}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border hover:bg-secondary/50 transition disabled:opacity-50"
-            aria-label="画像・動画を送る"
-            title="画像・動画を送る"
-          >
-            🎞️
-          </button>
-
-          <Input
-            name="body"
+          <textarea
             value={draft}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
             placeholder="メッセージを入力…"
             disabled={textBusy}
+            rows={2}
+            className="max-h-36 min-h-11 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
           />
 
-          <SubmitButton
-            busy={textSubmitting}
-            disabled={!canSendText}
-            onSettled={() => {
-              router.refresh();
-            }}
-          />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openFilePicker}
+                disabled={textBusy}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:opacity-50"
+                aria-label="ファイルを送る"
+                title="ファイルを送る"
+              >
+                <Paperclip className="h-4 w-4" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                onClick={openMediaPicker}
+                disabled={textBusy}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:opacity-50"
+                aria-label="画像・動画を送る"
+                title="画像・動画を送る"
+              >
+                <ImagePlus className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <SubmitButton
+              busy={textSubmitting}
+              disabled={!canSendText}
+              onSettled={() => {
+                router.refresh();
+              }}
+            />
+          </div>
         </form>
       </div>
     </>
