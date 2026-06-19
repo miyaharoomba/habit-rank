@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dispatchPendingPush } from "@/lib/push/dispatchPendingPush";
 
 const CRON_DISPATCH_VERSION = "cron_dispatch_v2026_06_19_check";
 
@@ -37,22 +38,6 @@ export async function GET(request: Request) {
     });
   }
 
-  const origin = new URL(request.url).origin;
-
-  const resp = await fetch(`${origin}/api/push/dispatch`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${cronSecret}`,
-      "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
-      "Content-Type": "application/json",
-    },
-    cache: "no-store",
-  });
-
-  const text = await resp.text();
-
-  return new NextResponse(text, {
-    status: resp.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  const result = await dispatchPendingPush();
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }

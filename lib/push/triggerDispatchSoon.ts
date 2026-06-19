@@ -1,3 +1,5 @@
+import { dispatchPendingPush } from "@/lib/push/dispatchPendingPush";
+
 export type PushDispatchResult = {
   ok: boolean;
   status: number;
@@ -6,16 +8,6 @@ export type PushDispatchResult = {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function resolveBaseUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
-
-function trimTrailingSlash(url: string) {
-  return url.replace(/\/+$/, "");
 }
 
 export async function triggerPushDispatchSoon({
@@ -29,28 +21,15 @@ export async function triggerPushDispatchSoon({
     await sleep(delayMs);
   }
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  // Kept for older callers; direct dispatch no longer needs a public base URL.
+  void baseUrl;
 
-  if (process.env.PUSH_DISPATCH_SECRET) {
-    headers["x-push-secret"] = process.env.PUSH_DISPATCH_SECRET;
-  }
+  const result = await dispatchPendingPush();
+  const body = JSON.stringify(result);
 
-  if (process.env.CRON_SECRET) {
-    headers.Authorization = `Bearer ${process.env.CRON_SECRET}`;
-  }
-
-  const resp = await fetch(`${trimTrailingSlash(baseUrl ?? resolveBaseUrl())}/api/push/dispatch`, {
-    method: "POST",
-    headers,
-    cache: "no-store",
-  });
-
-  const body = await resp.text().catch(() => "");
   return {
-    ok: resp.ok,
-    status: resp.status,
+    ok: result.ok,
+    status: result.ok ? 200 : 500,
     body,
   };
 }
