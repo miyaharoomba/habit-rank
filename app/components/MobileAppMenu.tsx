@@ -57,11 +57,10 @@ export default function MobileAppMenu({
 
   return (
     <>
-      {/* 右上固定ボタン：document幅に参加させない */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="fixed right-3 top-3 z-[100] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50 sm:hidden"
+        className="relative z-[100] inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background/90 text-base shadow-md backdrop-blur transition hover:bg-secondary/50 sm:hidden"
         aria-controls="mobile-app-menu"
         aria-expanded={open}
         aria-label="メニューを開閉"

@@ -49,12 +49,6 @@ export default async function AppPage() {
 
   return (
     <>
-      <MobileAppMenu
-        displayName={displayName}
-        avatarPath={avatarPath}
-        statusMessage={statusMessage}
-      />
-
       <Container>
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -64,8 +58,13 @@ export default async function AppPage() {
             </p>
           </div>
 
-          <div className="self-end sm:self-start">
+          <div className="flex items-center gap-2 self-end sm:self-start">
             <NotificationBell />
+            <MobileAppMenu
+              displayName={displayName}
+              avatarPath={avatarPath}
+              statusMessage={statusMessage}
+            />
           </div>
         </header>
 
