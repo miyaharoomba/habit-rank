@@ -1,5 +1,6 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { checkAndAwardBadges } from "@/app/services/badgeService";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 
 type SessionRow = {
   id: number;
@@ -180,6 +181,7 @@ export async function adjustSession({
   });
 
   await checkAndAwardBadges(userId);
+  await triggerPushDispatchBestEffort("adjustSession");
 
   return {
     sessionId,
@@ -259,6 +261,7 @@ export async function mergeSessionWithNext({
   });
 
   await checkAndAwardBadges(userId);
+  await triggerPushDispatchBestEffort("mergeSessionWithNext");
 
   return {
     keptSessionId: Number(next.id),
@@ -342,6 +345,7 @@ export async function splitFinishedSession({
     .single();
 
   if (insertErr) throw new Error(insertErr.message);
+  const insertedSession = inserted as SessionRow;
 
   const afterPayload = {
     first: {
@@ -351,7 +355,7 @@ export async function splitFinishedSession({
       ended_at: actualEndedAt,
       end_reason: firstEndReason,
     },
-    second: inserted,
+    second: insertedSession,
   };
 
   await writeEditLog({
@@ -364,9 +368,10 @@ export async function splitFinishedSession({
   });
 
   await checkAndAwardBadges(userId);
+  await triggerPushDispatchBestEffort("splitFinishedSession");
 
   return {
     firstSessionId: sessionId,
-    secondSessionId: Number((inserted as any).id),
+    secondSessionId: Number(insertedSession.id),
   };
 }

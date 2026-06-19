@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 
 type AnnouncementRow = {
   id: string;
@@ -99,9 +100,9 @@ export default async function AdminAnnouncementsPage() {
       throw new Error(recErr.message);
     }
 
-    const allUserIds = (recipients ?? [])
-      .map((r: any) => r.id as string)
-      .filter(Boolean);
+    const allUserIds = ((recipients ?? []) as Array<{ id: string | null }>)
+      .map((r) => r.id)
+      .filter((id): id is string => Boolean(id));
 
     if (allUserIds.length > 0) {
       const outboxRows = allUserIds.map((recipientId) => ({
@@ -125,6 +126,8 @@ export default async function AdminAnnouncementsPage() {
     }
 
     // 4) 監査ログ
+    await triggerPushDispatchBestEffort("adminAnnouncement");
+
     await supabase.from("admin_audit_logs").insert({
       actor_id: user.id,
       action: "SEND_ANNOUNCEMENT",

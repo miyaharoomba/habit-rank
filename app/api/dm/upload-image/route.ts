@@ -1,34 +1,28 @@
 import { NextResponse } from "next/server";
+import { triggerPushDispatchSoon } from "@/lib/push/triggerDispatchSoon";
 import { createClient } from "@/lib/supabase/server";
 
-async function triggerDispatchSoon(origin: string) {
-  // notifications / push_outbox がDB側で確定するのを少し待つ
-  await new Promise((r) => setTimeout(r, 500));
+type MessageType = "image" | "video" | "file";
 
-  const resp = await fetch(`${origin}/api/push/dispatch`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
-    },
-    cache: "no-store",
-  });
+type DmMessageInsert = {
+  thread_id: string;
+  sender_id: string;
+  body: string;
+  message_type: MessageType;
+  image_path: string | null;
+  image_mime: string | null;
+  image_size: number | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_mime: string | null;
+  file_size: number | null;
+};
 
-  const text = await resp.text().catch(() => "");
-  return {
-    ok: resp.ok,
-    status: resp.status,
-    body: text,
-  };
-}
-
-// Nodeでも動く簡易UUID
 function uuidLike() {
-  // @ts-ignore
-  if (globalThis.crypto?.randomUUID) {
-    // @ts-ignore
+  if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
   }
+
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
@@ -45,7 +39,6 @@ function safeExt(filename: string) {
 export async function POST(req: Request) {
   const supabase = await createClient();
 
-  // ログインチェック
   const {
     data: { user },
     error: userError,
@@ -55,7 +48,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  // multipart/form-data
   const form = await req.formData();
   const threadId = String(form.get("threadId") ?? "");
   const caption = String(form.get("caption") ?? "").trim();
@@ -64,21 +56,18 @@ export async function POST(req: Request) {
   if (!threadId) {
     return NextResponse.json({ ok: false, error: "threadId is required" }, { status: 400 });
   }
+
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "file is required" }, { status: 400 });
   }
 
-  // 種別判定（image / video / file）
   const mime = (file.type || "application/octet-stream").toLowerCase();
   const isImage = mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
-  const messageType = isImage ? "image" : isVideo ? "video" : "file";
-
-  // 保存パス
+  const messageType: MessageType = isImage ? "image" : isVideo ? "video" : "file";
   const ext = safeExt(file.name);
   const objectPath = `${threadId}/${uuidLike()}.${ext}`;
 
-  // 1) Storage にアップロード
   const { error: upErr } = await supabase.storage
     .from("dm-media")
     .upload(objectPath, file, {
@@ -90,31 +79,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: upErr.message }, { status: 400 });
   }
 
-  // 2) dm_messages に保存
-  const insertPayload: any = {
+  const insertPayload: DmMessageInsert = {
     thread_id: threadId,
     sender_id: user.id,
     body: caption || "",
     message_type: messageType,
+    image_path: messageType === "image" ? objectPath : null,
+    image_mime: messageType === "image" ? mime : null,
+    image_size: messageType === "image" ? file.size : null,
+    file_path: messageType === "image" ? null : objectPath,
+    file_name: messageType === "image" ? null : file.name,
+    file_mime: messageType === "image" ? null : mime,
+    file_size: messageType === "image" ? null : file.size,
   };
-
-  if (messageType === "image") {
-    insertPayload.image_path = objectPath;
-    insertPayload.image_mime = mime;
-    insertPayload.image_size = file.size;
-    insertPayload.file_path = null;
-    insertPayload.file_name = null;
-    insertPayload.file_mime = null;
-    insertPayload.file_size = null;
-  } else {
-    insertPayload.file_path = objectPath;
-    insertPayload.file_name = file.name;
-    insertPayload.file_mime = mime;
-    insertPayload.file_size = file.size;
-    insertPayload.image_path = null;
-    insertPayload.image_mime = null;
-    insertPayload.image_size = null;
-  }
 
   const { data: inserted, error: insErr } = await supabase
     .from("dm_messages")
@@ -126,17 +103,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: insErr.message }, { status: 400 });
   }
 
-  // ✅ 即時通知：動作実績のある dispatch を叩く
   const origin = new URL(req.url).origin;
   let dispatchResult: { ok: boolean; status: number; body: string } | null = null;
+
   try {
-    dispatchResult = await triggerDispatchSoon(origin);
-    console.log("upload-image triggerDispatchSoon:", dispatchResult.status, dispatchResult.body);
+    dispatchResult = await triggerPushDispatchSoon({ baseUrl: origin });
+    console.log("upload-image triggerPushDispatchSoon:", dispatchResult.status, dispatchResult.body);
   } catch (e) {
-    console.error("upload-image triggerDispatchSoon failed:", e);
+    console.error("upload-image triggerPushDispatchSoon failed:", e);
   }
 
-  // 3) 表示用 signed URL を返す
   const { data: signed, error: sErr } = await supabase.storage
     .from("dm-media")
     .createSignedUrl(objectPath, 60 * 60);
@@ -152,9 +128,6 @@ export async function POST(req: Request) {
     mime,
     size: file.size,
     warning: sErr ? sErr.message : null,
-
-    // 確認用：あとで不要になったら消してOK
     dispatchResult,
   });
 }
-``

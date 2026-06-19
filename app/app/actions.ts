@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { checkAndAwardBadges } from "@/app/services/badgeService";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -176,6 +177,8 @@ export async function finishSession(formData: FormData) {
     } catch (e) {
       console.error("checkAndAwardBadges failed:", e);
     }
+
+    await triggerPushDispatchBestEffort("finishSession");
   }
 
   revalidatePath("/app");

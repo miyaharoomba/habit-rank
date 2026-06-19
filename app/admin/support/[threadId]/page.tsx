@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { formatJst } from "@/lib/time";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 
 type ThreadRow = {
   id: string;
@@ -130,6 +131,8 @@ export default async function AdminSupportThreadPage({
     }
 
     // 3) 監査ログ
+    await triggerPushDispatchBestEffort("supportReply");
+
     await supabase.from("admin_audit_logs").insert({
       actor_id: user.id,
       action: "SUPPORT_REPLY",
