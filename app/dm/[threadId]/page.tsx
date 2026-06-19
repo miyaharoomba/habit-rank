@@ -1,8 +1,17 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
+import {
+  Flag,
+  Home,
+  MessageCircle,
+  MoreVertical,
+  Trophy,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import DmBackButton from "./DmBackButton";
 import DmChatClient from "./DmChatClient";
 
 type MessageRow = {
@@ -282,71 +291,123 @@ export default async function DmThreadPage({
   });
 
   const reportStatus = typeof sp.report === "string" ? sp.report : "";
+  const otherProfileHref = `/users/${encodeURIComponent(otherUserId)}`;
+  const otherInitial = otherName.trim().slice(0, 1) || "?";
 
   return (
-    <Container>
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-sm text-muted-foreground">DM</div>
-          <h1 className="text-2xl font-bold tracking-tight truncate">{otherName}</h1>
-        </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-2 sm:h-16 sm:px-6">
+          <DmBackButton />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Link className="text-sm text-primary hover:underline" href="/dm">
-            ← DM一覧
-          </Link>
-          <Link className="text-sm text-primary hover:underline" href="/app">
-            /app
-          </Link>
-
-          <details className="relative">
-            <summary className="cursor-pointer select-none rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary/40">
-              通報
-            </summary>
-            <div className="absolute right-0 mt-2 w-[320px] rounded-xl border border-border bg-card p-3 shadow-glow z-50">
-              {reportStatus === "ok" && (
-                <div className="mb-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
-                  通報しました。ご協力ありがとうございます。
-                </div>
-              )}
-              {reportStatus === "error" && (
-                <div className="mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  通報に失敗しました（理由は3文字以上で入力）
-                </div>
-              )}
-
-              <form action={submitReport}>
-                <textarea
-                  name="reason"
-                  className="w-full rounded-lg bg-background border border-input px-3 py-2 text-sm"
-                  placeholder="通報理由（例：迷惑行為、スパム、暴言など）"
-                  rows={3}
-                  required
-                  minLength={3}
-                />
-                <button
-                  type="submit"
-                  className="mt-2 w-full rounded-lg bg-destructive text-destructive-foreground px-3 py-2 text-sm font-semibold hover:opacity-90"
-                >
-                  通報を送信
-                </button>
-              </form>
-
-              <div className="mt-2 text-[11px] text-muted-foreground">
-                ※ 通報は管理者の「通報一覧」に送られます。
-              </div>
+          <Link
+            href={otherProfileHref}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1 transition hover:bg-secondary/40"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-secondary/50 text-sm font-bold">
+              {otherInitial}
             </div>
-          </details>
+            <div className="min-w-0">
+              <div className="truncate text-base font-bold leading-tight sm:text-lg">
+                {otherName}
+              </div>
+              <div className="hidden text-xs text-muted-foreground sm:block">DM</div>
+            </div>
+          </Link>
+
+          <nav
+            className="flex shrink-0 items-center gap-1"
+            aria-label="DMナビゲーション"
+          >
+            <Link
+              href="/app"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-secondary/50"
+              aria-label="メイン画面へ"
+              title="メイン画面へ"
+            >
+              <Home className="h-5 w-5" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/ranking"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-secondary/50"
+              aria-label="ランキングへ"
+              title="ランキングへ"
+            >
+              <Trophy className="h-5 w-5" aria-hidden="true" />
+            </Link>
+
+            <details className="relative shrink-0">
+              <summary
+                className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-xl transition hover:bg-secondary/50 [&::-webkit-details-marker]:hidden"
+                aria-label="DMメニュー"
+                title="DMメニュー"
+              >
+                <MoreVertical className="h-5 w-5" aria-hidden="true" />
+              </summary>
+              <div className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] rounded-xl border border-border bg-card p-3 shadow-glow">
+                <div className="space-y-1 border-b border-border pb-2">
+                  <Link
+                    href={otherProfileHref}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary/50"
+                  >
+                    <UserRound className="h-4 w-4" aria-hidden="true" />
+                    プロフィール
+                  </Link>
+                  <Link
+                    href="/dm"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-secondary/50"
+                  >
+                    <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                    DM一覧
+                  </Link>
+                </div>
+
+                <div className="pt-3">
+                  {reportStatus === "ok" && (
+                    <div className="mb-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
+                      通報しました。ご協力ありがとうございます。
+                    </div>
+                  )}
+                  {reportStatus === "error" && (
+                    <div className="mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      通報に失敗しました。理由は3文字以上で入力してください。
+                    </div>
+                  )}
+
+                  <form action={submitReport}>
+                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                      <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                      通報
+                    </div>
+                    <textarea
+                      name="reason"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="理由を入力"
+                      rows={3}
+                      required
+                      minLength={3}
+                    />
+                    <button
+                      type="submit"
+                      className="mt-2 w-full rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90"
+                    >
+                      通報を送信
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </details>
+          </nav>
         </div>
       </header>
 
-      <div className="mt-4">
+      <main className="mx-auto max-w-3xl px-3 py-3 sm:px-6">
         <DmChatClient
           threadId={threadId}
           myUserId={user.id}
           messages={messages}
         />
-      </div>
-    </Container>
+      </main>
+    </div>
   );
 }

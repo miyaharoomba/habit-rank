@@ -897,7 +897,7 @@ export default function DmChatClient({
         </div>
       )}
 
-      <div className="flex min-h-[calc(100dvh-13rem)] flex-col gap-3 sm:min-h-[60vh]">
+      <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 sm:min-h-[calc(100dvh-8rem)]">
         <div
           ref={listRef}
           onScroll={updatePinned}
