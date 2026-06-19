@@ -15,6 +15,7 @@ export async function GET(request: Request) {
   const resp = await fetch(`${origin}/api/push/dispatch`, {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${cronSecret}`,
       "x-push-secret": process.env.PUSH_DISPATCH_SECRET ?? "",
       "Content-Type": "application/json",
     },
