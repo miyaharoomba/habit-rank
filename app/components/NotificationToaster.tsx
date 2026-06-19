@@ -33,6 +33,8 @@ type Toast = {
   tone: "default" | "trophy";
 };
 
+const FIRST_LOAD_TOAST_WINDOW_MS = 30_000;
+
 function isAdminBroadcast(n: NotifItem) {
   return n.type === "admin_broadcast";
 }
@@ -115,6 +117,29 @@ function iconFor(n: NotifItem) {
 function toneFor(n: NotifItem): "default" | "trophy" {
   if (n.type === "trophy_unlock") return "trophy";
   return "default";
+}
+
+function toToast(n: NotifItem): Toast {
+  return {
+    id: n.id,
+    title: titleFor(n),
+    body: bodyFor(n),
+    href: routeFor(n),
+    sticky: isAdminBroadcast(n),
+    icon: iconFor(n),
+    tone: toneFor(n),
+  };
+}
+
+function shouldToastOnInitialLoad(n: NotifItem, nowMs: number) {
+  if (n.read) return false;
+  if (!isToastTarget(n)) return false;
+
+  const createdMs = new Date(n.created_at).getTime();
+  if (!Number.isFinite(createdMs)) return false;
+
+  const ageMs = nowMs - createdMs;
+  return ageMs >= 0 && ageMs <= FIRST_LOAD_TOAST_WINDOW_MS;
 }
 
 export default function NotificationToaster({
@@ -201,8 +226,12 @@ export default function NotificationToaster({
       const items = json.items ?? [];
 
       if (!initializedRef.current) {
+        const nowMs = Date.now();
         for (const n of items) {
           seenRef.current.add(n.id);
+          if (shouldToastOnInitialLoad(n, nowMs)) {
+            enqueue(toToast(n));
+          }
         }
 
         initializedRef.current = true;
@@ -216,15 +245,7 @@ export default function NotificationToaster({
         if (n.read) continue;
         if (!isToastTarget(n)) continue;
 
-        enqueue({
-          id: n.id,
-          title: titleFor(n),
-          body: bodyFor(n),
-          href: routeFor(n),
-          sticky: isAdminBroadcast(n),
-          icon: iconFor(n),
-          tone: toneFor(n),
-        });
+        enqueue(toToast(n));
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name === "AbortError") return;

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 import { formatJst } from "@/lib/time";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -28,6 +29,10 @@ type OwnedBadgeRow = {
   unlocked_at: string;
 };
 
+type BadgeCountRow = {
+  user_id: string | null;
+};
+
 type ControlRow = {
   id: string;
   badge_id: string;
@@ -46,7 +51,7 @@ type AuditRow = {
   badge_id: string;
   action: string;
   reason: string;
-  details: any;
+  details: unknown;
   created_at: string;
 };
 
@@ -84,6 +89,53 @@ function badgeRankLabel(rank: BadgeLite["badge_rank"]) {
 
 function maskId(id: string) {
   return `${id.slice(0, 8)}…`;
+}
+
+function badgeUnlockMessage(badge: Pick<BadgeLite, "title" | "title_label">) {
+  const titleLabel = (badge.title_label ?? "").trim();
+  if (titleLabel) {
+    return `「${badge.title}」を獲得しました。称号「${titleLabel}」が使えるようになりました。`;
+  }
+  return `「${badge.title}」を獲得しました。`;
+}
+
+async function createManualBadgeGrantNotification({
+  admin,
+  targetUserId,
+  badgeId,
+}: {
+  admin: ReturnType<typeof getAdminClient>;
+  targetUserId: string;
+  badgeId: string;
+}) {
+  const { data: badge, error: badgeErr } = await admin
+    .from("badges")
+    .select("title, title_label")
+    .eq("id", badgeId)
+    .maybeSingle();
+
+  if (badgeErr || !badge) {
+    console.error("manual badge grant notification badge lookup failed:", badgeErr?.message);
+    return false;
+  }
+
+  const { error: notifErr } = await admin.from("notifications").insert({
+    recipient_id: targetUserId,
+    actor_id: targetUserId,
+    type: "trophy_unlock",
+    thread_id: null,
+    session_id: null,
+    announcement_id: null,
+    support_thread_id: null,
+    message_preview: badgeUnlockMessage(badge as Pick<BadgeLite, "title" | "title_label">),
+  });
+
+  if (notifErr) {
+    console.error("manual badge grant notification insert failed:", notifErr.message);
+    return false;
+  }
+
+  return true;
 }
 
 export default async function AdminBadgesPage({
@@ -140,14 +192,31 @@ export default async function AdminBadgesPage({
 
     if (checkErr) throw new Error(checkErr.message);
 
+    let granted = false;
+
     if (!existing) {
       const { error: insertErr } = await admin.from("user_badges").insert({
         user_id: targetUserId,
         badge_id: badgeId,
       });
 
-      if (insertErr && (insertErr as any).code !== "23505") {
+      if (insertErr && insertErr.code !== "23505") {
         throw new Error(insertErr.message);
+      }
+
+      granted = !insertErr;
+    }
+
+    let notified = false;
+    if (granted) {
+      notified = await createManualBadgeGrantNotification({
+        admin,
+        targetUserId,
+        badgeId,
+      });
+
+      if (notified) {
+        await triggerPushDispatchBestEffort("manualBadgeGrant");
       }
     }
 
@@ -157,7 +226,7 @@ export default async function AdminBadgesPage({
       badge_id: badgeId,
       action: "grant",
       reason,
-      details: { silent: true },
+      details: { notified },
     });
 
     revalidatePath("/admin/badges");
@@ -369,8 +438,9 @@ export default async function AdminBadgesPage({
 
     if (badgeCountErr) throw new Error(badgeCountErr.message);
 
-    (badgeRows ?? []).forEach((row: any) => {
-      const uid = row.user_id as string;
+    ((badgeRows ?? []) as BadgeCountRow[]).forEach((row) => {
+      const uid = row.user_id;
+      if (!uid) return;
       badgeCountMap.set(uid, (badgeCountMap.get(uid) ?? 0) + 1);
     });
   }
