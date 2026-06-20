@@ -16,9 +16,10 @@ export const config = {
      * - /api/*
      * - _next/static
      * - _next/image
+     * - PWA manifest / Service Worker
      * - favicon.ico
-     * - 画像などの静的拡張子
+     * - 画像や JS などの静的拡張子
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|manifest.webmanifest|sw.js|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|map|txt|webmanifest)$).*)",
   ],
 };
