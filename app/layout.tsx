@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import "./globals.css";
 
 import NotificationToaster from "@/app/components/NotificationToaster";
+import PwaServiceWorker from "@/app/components/PwaServiceWorker";
 
 const defaultUrl =
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
@@ -18,6 +19,13 @@ export const metadata: Metadata = {
   },
   description: "継続を記録し、通知や仲間とのつながりで続けるためのアプリ",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     title: "HabitBase",
@@ -54,6 +62,7 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <NotificationToaster />
           </Suspense>
+          <PwaServiceWorker />
           {children}
         </ThemeProvider>
       </body>

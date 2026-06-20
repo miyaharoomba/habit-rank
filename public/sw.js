@@ -1,5 +1,17 @@
 /* public/sw.js */
 
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+// Chrome の PWA 判定では fetch handler を持つ Service Worker が必要な環境がある。
+// オフラインキャッシュはまだ行わず、通常のネットワーク処理に任せる。
+self.addEventListener("fetch", () => {});
+
 /**
  * Payload 例（サーバーから送るJSON）
  * {
@@ -19,7 +31,7 @@ self.addEventListener("push", (event) => {
     data = { title: "通知", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "通知";
+  const title = data.title || "HabitBase";
   const body = data.body || "新しい通知があります";
   const url = data.url || "/app";
 
