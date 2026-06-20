@@ -53,7 +53,7 @@ function iconFor(n: NotifItem) {
 
 export default function NotificationBell({
   limit = 20,
-  pollMs = 5000,
+  pollMs = 60000,
 }: {
   limit?: number;
   pollMs?: number;
@@ -68,13 +68,17 @@ export default function NotificationBell({
   const boxRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(false);
   const fetchingRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
 
   const fetchNotifs = useCallback(
     async ({ background = false }: { background?: boolean } = {}) => {
+      const now = Date.now();
+      if (background && now - lastFetchAtRef.current < 5000) return;
       if (fetchingRef.current) return;
       fetchingRef.current = true;
+      lastFetchAtRef.current = now;
 
-      if (!background && !mountedRef.current && items.length === 0) {
+      if (!background && !mountedRef.current) {
         setInitialLoading(true);
       } else {
         setRefreshing(true);
@@ -92,15 +96,15 @@ export default function NotificationBell({
         setUnread(json.unreadCount ?? 0);
         setItems(json.items ?? []);
         mountedRef.current = true;
-      } catch (e: any) {
-        setError(e?.message ?? "fetch failed");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "fetch failed");
       } finally {
         setInitialLoading(false);
         setRefreshing(false);
         fetchingRef.current = false;
       }
     },
-    [limit, items.length]
+    [limit]
   );
 
   const markRead = useCallback(
@@ -138,6 +142,8 @@ export default function NotificationBell({
 
   useEffect(() => {
     const id = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
       fetchNotifs({ background: true });
     }, pollMs);
 
@@ -369,4 +375,3 @@ export default function NotificationBell({
     </div>
   );
 }
-``

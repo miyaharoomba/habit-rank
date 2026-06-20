@@ -31,6 +31,10 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(data.signedUrl, 307);
+  const response = NextResponse.redirect(data.signedUrl, 307);
+  response.headers.set(
+    "Cache-Control",
+    "private, max-age=600, stale-while-revalidate=300"
+  );
+  return response;
 }
-``

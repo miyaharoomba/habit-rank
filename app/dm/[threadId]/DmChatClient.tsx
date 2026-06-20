@@ -56,6 +56,9 @@ type LocalUpload = {
   fingerprint: string;
 };
 
+const DM_REFRESH_MS = 10000;
+const MIN_REFRESH_GAP_MS = 3000;
+
 function bytes(size: number) {
   if (!Number.isFinite(size)) return "";
   const kb = size / 1024;
@@ -87,6 +90,8 @@ function AvatarLink({
         <img
           src={url}
           alt={name || "avatar"}
+          loading="lazy"
+          decoding="async"
           className="h-9 w-9 rounded-full object-cover border border-border"
         />
       ) : (
@@ -457,6 +462,8 @@ function BubbleImage({
           <img
             src={url}
             alt={caption || "image"}
+            loading="lazy"
+            decoding="async"
             className="block max-h-[360px] w-full object-cover"
           />
         </button>
@@ -526,7 +533,12 @@ function BubbleVideo({
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
-        <video src={url} controls className="block max-h-[360px] w-full bg-black" />
+        <video
+          src={url}
+          controls
+          preload="metadata"
+          className="block max-h-[360px] w-full bg-black"
+        />
         <button
           type="button"
           onClick={() => onOpen("video", url)}
@@ -656,6 +668,7 @@ export default function DmChatClient({
   const lastUploadKeyRef = useRef<{ key: string; at: number } | null>(null);
   const textSubmittingRef = useRef(false);
   const pinnedRef = useRef(true);
+  const lastRefreshAtRef = useRef(0);
 
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
 
@@ -715,12 +728,30 @@ export default function DmChatClient({
   }, [messages]);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      const now = Date.now();
+      if (now - lastRefreshAtRef.current < MIN_REFRESH_GAP_MS) return;
+      lastRefreshAtRef.current = now;
       router.refresh();
-    }, 2500);
+    };
 
-    return () => window.clearInterval(id);
+    const id = window.setInterval(refreshIfVisible, DM_REFRESH_MS);
+
+    const onFocus = () => refreshIfVisible();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshIfVisible();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [router, threadId]);
 
   const openFilePicker = () => {

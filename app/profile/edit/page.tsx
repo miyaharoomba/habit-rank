@@ -189,6 +189,7 @@ export default async function ProfileEditPage({
         .from("profile-avatars")
         .upload(path, arrayBuffer, {
           contentType: avatar.type || "application/octet-stream",
+          cacheControl: "604800",
           upsert: true,
         });
 

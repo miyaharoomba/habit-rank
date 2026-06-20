@@ -100,6 +100,8 @@ function Avatar({
         <img
           src={avatarUrl}
           alt={userName}
+          loading="lazy"
+          decoding="async"
           className="h-9 w-9 rounded-full border border-border object-cover"
         />
       ) : (
@@ -361,6 +363,8 @@ function ImageBubble({
         <img
           src={item.image_url}
           alt="chat image"
+          loading="lazy"
+          decoding="async"
           className="block h-auto max-h-[28rem] w-full object-cover"
         />
       </button>
@@ -420,6 +424,7 @@ function VideoBubble({
           src={item.file_url}
           controls
           playsInline
+          preload="metadata"
           className="block h-auto max-h-[28rem] w-full"
         />
       </div>
@@ -509,8 +514,8 @@ function FileBubble({
 
 export default function GlobalChatBoard({
   myUserId,
-  limit = 50,
-  pollMs = 5000,
+  limit = 30,
+  pollMs = 30000,
 }: {
   myUserId: string;
   limit?: number;
@@ -528,10 +533,22 @@ export default function GlobalChatBoard({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
+  const inFlightRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
+  const moderationFetchedRef = useRef(false);
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    const now = Date.now();
+    if (background && now - lastFetchAtRef.current < 5000) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    lastFetchAtRef.current = now;
+
     try {
-      const res = await fetch(`/api/global-chat?limit=${limit}`, {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (!moderationFetchedRef.current) params.set("moderation", "1");
+
+      const res = await fetch(`/api/global-chat?${params.toString()}`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -540,11 +557,15 @@ export default function GlobalChatBoard({
       const rows = [...(json.items ?? [])].reverse();
 
       setItems(rows);
-      setCanModerate(!!json.canModerate);
+      if (typeof json.canModerate === "boolean") {
+        setCanModerate(json.canModerate);
+        moderationFetchedRef.current = true;
+      }
       setError(null);
     } catch (e: unknown) {
       setError(getErrorMessage(e, "fetch failed"));
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }, [limit]);
@@ -552,10 +573,30 @@ export default function GlobalChatBoard({
   useEffect(() => {
     fetchMessages();
     const id = window.setInterval(() => {
-      fetchMessages();
+      if (document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      fetchMessages({ background: true });
     }, pollMs);
 
-    return () => window.clearInterval(id);
+    const onFocus = () => {
+      if (document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      fetchMessages({ background: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchMessages({ background: true });
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchMessages, pollMs]);
 
   useEffect(() => {

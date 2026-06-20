@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+type MessageType = "image" | "video" | "file";
+
+type GlobalChatMessageInsert = {
+  user_id: string;
+  body: string;
+  message_type: MessageType;
+  file_name: string | null;
+  file_mime: string | null;
+  file_size: number | null;
+  image_url: string | null;
+  file_url: string | null;
+};
+
 // Nodeでも動く簡易UUID
 function uuidLike() {
-  // @ts-ignore
-  if (globalThis.crypto?.randomUUID) {
-    // @ts-ignore
+  if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
   }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -51,7 +62,7 @@ export async function POST(req: Request) {
   const mime = (file.type || "application/octet-stream").toLowerCase();
   const isImage = mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
-  const messageType = isImage ? "image" : isVideo ? "video" : "file";
+  const messageType: MessageType = isImage ? "image" : isVideo ? "video" : "file";
 
   // 既存 DM と同じ bucket を流用
   const ext = safeExt(file.name);
@@ -62,6 +73,7 @@ export async function POST(req: Request) {
     .from("dm-media")
     .upload(objectPath, file, {
       contentType: mime,
+      cacheControl: "604800",
       upsert: false,
     });
 
@@ -70,7 +82,7 @@ export async function POST(req: Request) {
   }
 
   // 2) global_chat_messages に保存
-  const insertPayload: any = {
+  const insertPayload: GlobalChatMessageInsert = {
     user_id: user.id,
     body: caption || "",
     message_type: messageType,

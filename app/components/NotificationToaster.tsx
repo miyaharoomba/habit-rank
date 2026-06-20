@@ -143,8 +143,8 @@ function shouldToastOnInitialLoad(n: NotifItem, nowMs: number) {
 }
 
 export default function NotificationToaster({
-  limit = 20,
-  pollMs = 8000,
+  limit = 10,
+  pollMs = 30000,
   showMs = 5000,
   maxToasts = 3,
 }: {
@@ -160,6 +160,7 @@ export default function NotificationToaster({
   const initializedRef = useRef(false);
   const timersRef = useRef<Map<string, number>>(new Map());
   const inFlightRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const fetchNotifsRef = useRef<() => Promise<void>>(async () => {});
   const toasterDisabled =
@@ -207,8 +208,11 @@ export default function NotificationToaster({
   };
 
   const fetchNotifs = async () => {
+    const now = Date.now();
+    if (initializedRef.current && now - lastFetchAtRef.current < 5000) return;
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    lastFetchAtRef.current = now;
 
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -273,15 +277,29 @@ export default function NotificationToaster({
 
     const tick = async () => {
       if (!alive) return;
+      if (document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
       await fetchNotifsRef.current();
     };
 
     tick();
     const id = window.setInterval(tick, pollMs);
 
+    const onFocus = () => {
+      void tick();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       alive = false;
       window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
       abortRef.current?.abort();
       timers.forEach((t) => window.clearTimeout(t));
       timers.clear();

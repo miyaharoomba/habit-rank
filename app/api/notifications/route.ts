@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     ? Math.max(1, Math.min(rawLimit, 50))
     : 20;
 
-  const fetchLimit = Math.max(limit * 5, 100);
+  const fetchLimit = Math.max(limit * 3, 40);
 
   let notificationQuery = supabase
     .from("notifications")

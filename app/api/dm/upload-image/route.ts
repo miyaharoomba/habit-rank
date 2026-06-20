@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     .from("dm-media")
     .upload(objectPath, file, {
       contentType: mime,
+      cacheControl: "604800",
       upsert: false,
     });
 

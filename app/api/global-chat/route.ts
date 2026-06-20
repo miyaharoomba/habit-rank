@@ -49,7 +49,12 @@ export async function GET(request: Request) {
   }
 
   const requestUrl = new URL(request.url);
-  const limit = Math.min(Number(requestUrl.searchParams.get("limit") ?? 50), 100);
+  const rawLimit = Number(requestUrl.searchParams.get("limit") ?? 30);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.max(1, Math.min(rawLimit, 50))
+    : 30;
+  const includeModeration =
+    requestUrl.searchParams.get("moderation") === "1";
 
   const { data, error } = await supabase
     .from("global_chat_messages")
@@ -74,8 +79,8 @@ export async function GET(request: Request) {
       .select("id, display_name, avatar_path, current_title_badge_id")
       .in("id", userIds);
 
-    (profiles ?? []).forEach((p: any) => {
-      profileMap.set(p.id, p as ProfileRow);
+    ((profiles ?? []) as ProfileRow[]).forEach((p) => {
+      profileMap.set(p.id, p);
     });
   }
 
@@ -94,14 +99,17 @@ export async function GET(request: Request) {
       .select("id, title_label, badge_rank")
       .in("id", badgeIds);
 
-    (badges ?? []).forEach((b: any) => {
-      badgeMap.set(b.id, b as BadgeLiteRow);
+    ((badges ?? []) as BadgeLiteRow[]).forEach((b) => {
+      badgeMap.set(b.id, b);
     });
   }
 
   // 管理者判定
-  const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
-  const canModerate = !adminErr && !!isAdmin;
+  let canModerate = false;
+  if (includeModeration) {
+    const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
+    canModerate = !adminErr && !!isAdmin;
+  }
 
   const items = rows.map((r) => {
     const profile = profileMap.get(r.user_id);
@@ -128,7 +136,10 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({ items, canModerate });
+  return NextResponse.json({
+    items,
+    ...(includeModeration ? { canModerate } : {}),
+  });
 }
 
 export async function POST(request: Request) {
