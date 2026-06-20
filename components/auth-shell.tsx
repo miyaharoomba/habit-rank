@@ -5,9 +5,9 @@ export function AuthShell({ children }: { children: ReactNode }) {
     <main className="min-h-svh bg-background px-4 py-8 text-foreground sm:px-6">
       <div className="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-md flex-col justify-center gap-6">
         <div className="space-y-2 text-center">
-          <div className="text-3xl font-bold tracking-tight">Habit Rank</div>
+          <div className="text-3xl font-bold tracking-tight">HabitBase</div>
           <p className="text-sm text-muted-foreground">
-            継続を記録して、ランキングと通知で続ける。
+            継続を記録して、通知や仲間とのつながりで続ける。
           </p>
         </div>
 

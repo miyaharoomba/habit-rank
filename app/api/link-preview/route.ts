@@ -126,7 +126,7 @@ async function fetchHtml(targetUrl: string) {
       redirect: "follow",
       signal: ac.signal,
       headers: {
-        "User-Agent": "habit-rank-link-preview/1.0",
+        "User-Agent": "habitbase-link-preview/1.0",
         Accept: "text/html,application/xhtml+xml",
       },
       cache: "no-store",
@@ -197,10 +197,12 @@ async function buildPreview(url: string): Promise<PreviewResponse | FailResponse
 
     setCached(url, value);
     return value;
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const errorName = e instanceof Error ? e.name : "";
+    const errorMessage = e instanceof Error ? e.message : "fetch_failed";
     const fail: FailResponse = {
       ok: false,
-      error: e?.name === "AbortError" ? "timeout" : e?.message ?? "fetch_failed",
+      error: errorName === "AbortError" ? "timeout" : errorMessage,
     };
     setCached(url, fail);
     return fail;

@@ -11,8 +11,18 @@ const defaultUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Habit Rank",
-  description: "継続を記録し、ランキングと通知で続けるためのアプリ",
+  applicationName: "HabitBase",
+  title: {
+    default: "HabitBase",
+    template: "%s | HabitBase",
+  },
+  description: "継続を記録し、通知や仲間とのつながりで続けるためのアプリ",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "HabitBase",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {

@@ -61,7 +61,7 @@ export function SignUpForm({
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">新規登録</CardTitle>
-          <CardDescription>Habit Rank のアカウントを作成します。</CardDescription>
+          <CardDescription>HabitBase のアカウントを作成します。</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp}>

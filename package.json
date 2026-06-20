@@ -1,4 +1,5 @@
 {
+  "name": "habitbase",
   "private": true,
   "scripts": {
     "dev": "next dev",
