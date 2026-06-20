@@ -3,13 +3,16 @@
 import Link from "next/link";
 import {
   useEffect,
+  useCallback,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type ReactNode,
 } from "react";
+import { ImagePlus, Paperclip, SendHorizonal } from "lucide-react";
 import { formatJstStartLabel } from "@/lib/time";
+import Button from "@/app/components/ui/Button";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 
@@ -49,6 +52,28 @@ function profileHref(userId: string, myUserId: string) {
   return userId === myUserId
     ? "/profile"
     : `/users/${encodeURIComponent(userId)}`;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (
+    error &&
+    typeof error === "object" &&
+    "error" in error &&
+    typeof error.error === "string"
+  ) {
+    return error.error;
+  }
+  return fallback;
+}
+
+function isOkResponse(value: unknown) {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "ok" in value &&
+    value.ok === true
+  );
 }
 
 function Avatar({
@@ -110,7 +135,7 @@ function NameLine({
       ) : (
         <Link
           href={href}
-          className="min-w-0 truncate text-sm font-semibold hover:underline"
+          className="min-w-0 break-all text-sm font-semibold hover:underline sm:break-normal"
         >
           {userName}
         </Link>
@@ -131,7 +156,7 @@ function NameLine({
 
 function ChatMeta({ createdAt }: { createdAt: string }) {
   return (
-    <div className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+    <div className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground tabular-nums">
       {formatJstStartLabel(createdAt)}
     </div>
   );
@@ -220,13 +245,14 @@ function BubbleFrame({
     >
       {!mine ? avatar : null}
 
-      <div className="min-w-0 max-w-[min(100%,42rem)] flex-1 sm:flex-none">
+      <div className="min-w-0 max-w-[min(100%,44rem)] flex-1 sm:flex-none">
         {/* ここでヘッダーを吹き出しの外に出す */}
         <div className={mine ? "mb-2 flex justify-end" : "mb-2"}>{header}</div>
 
         <div
           className={[
             "min-w-0 rounded-2xl border px-4 py-3 shadow-sm overflow-hidden",
+            "[overflow-wrap:anywhere]",
             mine
               ? "border-primary/20 bg-primary/10"
               : "border-border bg-background/80",
@@ -278,7 +304,7 @@ function TextBubble({
         />
       }
     >
-      <div className="min-w-0 break-words whitespace-pre-wrap text-sm leading-6">
+      <div className="min-w-0 break-words whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">
         <LinkifiedText text={item.body || ""} />
       </div>
     </BubbleFrame>
@@ -340,7 +366,7 @@ function ImageBubble({
       </button>
 
       {item.body?.trim() ? (
-        <div className="mt-3 min-w-0 break-words whitespace-pre-wrap text-sm leading-6">
+        <div className="mt-3 min-w-0 break-words whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">
           <LinkifiedText text={item.body} />
         </div>
       ) : null}
@@ -407,7 +433,7 @@ function VideoBubble({
       </button>
 
       {item.body?.trim() ? (
-        <div className="mt-3 min-w-0 break-words whitespace-pre-wrap text-sm leading-6">
+        <div className="mt-3 min-w-0 break-words whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">
           <LinkifiedText text={item.body} />
         </div>
       ) : null}
@@ -460,12 +486,12 @@ function FileBubble({
         href={item.file_url}
         target="_blank"
         rel="noreferrer"
-        className="block min-w-0 rounded-xl border border-border bg-secondary/30 px-4 py-3"
+        className="block min-w-0 overflow-hidden rounded-xl border border-border bg-secondary/30 px-4 py-3"
       >
-        <div className="break-words text-sm font-semibold">
+        <div className="break-words text-sm font-semibold [overflow-wrap:anywhere]">
           {item.file_name || "file"}
         </div>
-        <div className="mt-1 break-words text-xs text-muted-foreground">
+        <div className="mt-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
           {label} ・ {bytes(Number(item.file_size ?? 0))} ・{" "}
           {item.file_mime || "application/octet-stream"}
         </div>
@@ -473,7 +499,7 @@ function FileBubble({
       </a>
 
       {item.body?.trim() ? (
-        <div className="mt-3 min-w-0 break-words whitespace-pre-wrap text-sm leading-6">
+        <div className="mt-3 min-w-0 break-words whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">
           <LinkifiedText text={item.body} />
         </div>
       ) : null}
@@ -503,7 +529,7 @@ export default function GlobalChatBoard({
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const res = await fetch(`/api/global-chat?limit=${limit}`, {
         cache: "no-store",
@@ -516,12 +542,12 @@ export default function GlobalChatBoard({
       setItems(rows);
       setCanModerate(!!json.canModerate);
       setError(null);
-    } catch (e: any) {
-      setError(e?.message ?? "fetch failed");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "fetch failed"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [limit]);
 
   useEffect(() => {
     fetchMessages();
@@ -530,7 +556,7 @@ export default function GlobalChatBoard({
     }, pollMs);
 
     return () => window.clearInterval(id);
-  }, [pollMs, limit]);
+  }, [fetchMessages, pollMs]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
@@ -570,15 +596,15 @@ export default function GlobalChatBoard({
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as any)?.error ?? `HTTP ${res.status}`);
+      if (!res.ok) throw new Error(getErrorMessage(json, `HTTP ${res.status}`));
 
       setDraft("");
       await fetchMessages();
       setTimeout(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       }, 50);
-    } catch (e: any) {
-      setError(e?.message ?? "送信に失敗しました。");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "送信に失敗しました。"));
     } finally {
       setSending(false);
     }
@@ -601,8 +627,8 @@ export default function GlobalChatBoard({
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !(json as any).ok) {
-        throw new Error((json as any)?.error ?? `HTTP ${res.status}`);
+      if (!res.ok || !isOkResponse(json)) {
+        throw new Error(getErrorMessage(json, `HTTP ${res.status}`));
       }
 
       setDraft("");
@@ -610,8 +636,8 @@ export default function GlobalChatBoard({
       setTimeout(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       }, 50);
-    } catch (e: any) {
-      setError(e?.message ?? "アップロードに失敗しました。");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "アップロードに失敗しました。"));
     } finally {
       setSending(false);
     }
@@ -633,12 +659,12 @@ export default function GlobalChatBoard({
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error((json as any)?.error ?? `HTTP ${res.status}`);
+        throw new Error(getErrorMessage(json, `HTTP ${res.status}`));
       }
 
       await fetchMessages();
-    } catch (e: any) {
-      setError(e?.message ?? "削除に失敗しました。");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "削除に失敗しました。"));
     } finally {
       setDeletingId(null);
     }
@@ -791,52 +817,64 @@ export default function GlobalChatBoard({
               </div>
             ) : null}
 
-            <div className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-end gap-2">
-              <button
-                type="button"
-                onClick={() => filePickerRef.current?.click()}
-                disabled={sending}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:opacity-50"
-                aria-label="ファイルを送る"
-                title="ファイルを送る"
-              >
-                📎
-              </button>
-
-              <button
-                type="button"
-                onClick={() => mediaPickerRef.current?.click()}
-                disabled={sending}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:opacity-50"
-                aria-label="画像・動画を送る"
-                title="画像・動画を送る"
-              >
-                🎞️
-              </button>
-
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void onSend();
+              }}
+              className="min-w-0"
+            >
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                rows={1}
+                rows={2}
                 maxLength={200}
                 placeholder="全体に向けて投稿…"
-                className="min-w-0 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+                className="max-h-32 min-h-11 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={sending}
               />
 
-              <button
-                type="button"
-                onClick={onSend}
-                disabled={!canSend || sending}
-                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
-              >
-                {sending ? "送信中…" : "送信"}
-              </button>
-            </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => filePickerRef.current?.click()}
+                    disabled={sending}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="ファイルを送る"
+                    title="ファイルを送る"
+                  >
+                    <Paperclip className="h-4 w-4" aria-hidden="true" />
+                  </button>
 
-            <div className="mt-2 text-right text-[11px] text-muted-foreground">
-              {draft.trim().length}/200
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => mediaPickerRef.current?.click()}
+                    disabled={sending}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="画像・動画を送る"
+                    title="画像・動画を送る"
+                  >
+                    <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    {draft.length}/200
+                  </span>
+                  <Button
+                    type="submit"
+                    disabled={!canSend || sending}
+                    aria-busy={sending}
+                    className="h-10 shrink-0 gap-2 px-4"
+                  >
+                    <SendHorizonal className="h-4 w-4" aria-hidden="true" />
+                    {sending ? "送信中…" : "送信"}
+                  </Button>
+                </div>
+              </div>
+            </form>
 
             <input
               ref={filePickerRef}
