@@ -12,6 +12,7 @@ type GlobalChatMessageInsert = {
   file_size: number | null;
   image_url: string | null;
   file_url: string | null;
+  reply_to_message_id: string | null;
 };
 
 // Nodeでも動く簡易UUID
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
   // multipart/form-data
   const form = await req.formData();
   const caption = String(form.get("caption") ?? "").trim();
+  const replyToMessageId = String(form.get("replyToMessageId") ?? "").trim();
   const file = form.get("file");
 
   if (!(file instanceof File)) {
@@ -56,6 +58,25 @@ export async function POST(req: Request) {
 
   if (caption.length > 200) {
     return NextResponse.json({ ok: false, error: "caption is too long" }, { status: 400 });
+  }
+
+  if (replyToMessageId) {
+    const { data: replyTarget, error: replyErr } = await supabase
+      .from("global_chat_messages")
+      .select("id")
+      .eq("id", replyToMessageId)
+      .maybeSingle();
+
+    if (replyErr) {
+      return NextResponse.json({ ok: false, error: replyErr.message }, { status: 400 });
+    }
+
+    if (!replyTarget) {
+      return NextResponse.json(
+        { ok: false, error: "reply target not found" },
+        { status: 400 }
+      );
+    }
   }
 
   // 種別判定（image / video / file）
@@ -91,6 +112,7 @@ export async function POST(req: Request) {
     file_size: null,
     image_url: null,
     file_url: null,
+    reply_to_message_id: replyToMessageId || null,
   };
 
   if (messageType === "image") {

@@ -12,6 +12,8 @@ type ChatRow = {
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
+  edited_at: string | null;
+  reply_to_message_id: string | null;
 };
 
 type ProfileRow = {
@@ -34,6 +36,15 @@ function mediaProxyUrl(path: string) {
 function avatarProxyUrl(path: string | null) {
   if (!path) return null;
   return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
+}
+
+function messagePreview(row: ChatRow) {
+  const text = row.body.trim();
+  if (text) return text;
+  if (row.message_type === "image") return "画像";
+  if (row.message_type === "video") return "動画";
+  if (row.message_type === "file") return row.file_name || "ファイル";
+  return "メッセージ";
 }
 
 export async function GET(request: Request) {
@@ -59,7 +70,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("global_chat_messages")
     .select(
-      "id, user_id, body, created_at, message_type, image_url, file_url, file_name, file_mime, file_size"
+      "id, user_id, body, created_at, message_type, image_url, file_url, file_name, file_mime, file_size, edited_at, reply_to_message_id"
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -69,6 +80,7 @@ export async function GET(request: Request) {
   }
 
   const rows = (data ?? []) as ChatRow[];
+  const rowMap = new Map(rows.map((r) => [r.id, r]));
 
   const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
   const profileMap = new Map<string, ProfileRow>();
@@ -133,6 +145,26 @@ export async function GET(request: Request) {
       file_name: r.file_name,
       file_mime: r.file_mime,
       file_size: r.file_size,
+      edited_at: r.edited_at,
+      reply_to_message_id: r.reply_to_message_id,
+      reply_to: r.reply_to_message_id
+        ? (() => {
+            const reply = rowMap.get(r.reply_to_message_id);
+            const replyProfile = reply ? profileMap.get(reply.user_id) : null;
+
+            return reply
+              ? {
+                  id: reply.id,
+                  user_name: (replyProfile?.display_name ?? "").trim() || "NoName",
+                  body: messagePreview(reply),
+                }
+              : {
+                  id: r.reply_to_message_id,
+                  user_name: "NoName",
+                  body: "元のメッセージを表示できません",
+                };
+          })()
+        : null,
     };
   });
 
@@ -156,6 +188,7 @@ export async function POST(request: Request) {
 
   const bodyJson = await request.json().catch(() => null);
   const body = String(bodyJson?.body ?? "").trim();
+  const replyToMessageId = String(bodyJson?.replyToMessageId ?? "").trim();
 
   if (!body) {
     return NextResponse.json({ error: "本文は必須です。" }, { status: 400 });
@@ -163,6 +196,25 @@ export async function POST(request: Request) {
 
   if (body.length > 200) {
     return NextResponse.json({ error: "本文は200文字以内です。" }, { status: 400 });
+  }
+
+  if (replyToMessageId) {
+    const { data: replyTarget, error: replyErr } = await supabase
+      .from("global_chat_messages")
+      .select("id")
+      .eq("id", replyToMessageId)
+      .maybeSingle();
+
+    if (replyErr) {
+      return NextResponse.json({ error: replyErr.message }, { status: 400 });
+    }
+
+    if (!replyTarget) {
+      return NextResponse.json(
+        { error: "返信先のメッセージが見つかりません。" },
+        { status: 400 }
+      );
+    }
   }
 
   const { data, error } = await supabase
@@ -176,6 +228,7 @@ export async function POST(request: Request) {
       file_name: null,
       file_mime: null,
       file_size: null,
+      reply_to_message_id: replyToMessageId || null,
     })
     .select("id, user_id, body, created_at, message_type")
     .single();

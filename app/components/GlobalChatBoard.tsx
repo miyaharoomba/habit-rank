@@ -10,7 +10,15 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
-import { ImagePlus, Paperclip, SendHorizonal } from "lucide-react";
+import {
+  ImagePlus,
+  Paperclip,
+  Pencil,
+  Reply,
+  SendHorizonal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { formatJstStartLabel } from "@/lib/time";
 import Button from "@/app/components/ui/Button";
 import LinkifiedText from "@/app/components/LinkifiedText";
@@ -31,6 +39,25 @@ type ChatItem = {
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
+  edited_at?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to?: ReplyPreview | null;
+};
+
+type ReplyPreview = {
+  id: string;
+  user_name: string;
+  body: string;
+};
+
+type MenuPoint = {
+  x: number;
+  y: number;
+};
+
+type MessageMenuState = {
+  item: ChatItem;
+  point: MenuPoint;
 };
 
 type ApiResponse = {
@@ -74,6 +101,15 @@ function isOkResponse(value: unknown) {
     "ok" in value &&
     value.ok === true
   );
+}
+
+function previewMessage(item: ChatItem) {
+  const text = item.body.trim();
+  if (text) return text;
+  if (item.message_type === "image") return "画像";
+  if (item.message_type === "video") return "動画";
+  if (item.message_type === "file") return item.file_name || "ファイル";
+  return "メッセージ";
 }
 
 function Avatar({
@@ -164,64 +200,59 @@ function ChatMeta({ createdAt }: { createdAt: string }) {
   );
 }
 
-function DeleteButton({
-  visible,
-  deleting,
-  onClick,
-}: {
-  visible: boolean;
-  deleting: boolean;
-  onClick: () => void;
-}) {
-  if (!visible) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={deleting}
-      className="shrink-0 rounded-md px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10 disabled:opacity-50"
-    >
-      {deleting ? "削除中…" : "削除"}
-    </button>
-  );
-}
-
 function MessageHeader({
   mine,
   item,
   myUserId,
-  canModerate,
-  deleting,
-  onDelete,
 }: {
   mine: boolean;
   item: ChatItem;
   myUserId: string;
-  canModerate: boolean;
-  deleting: boolean;
-  onDelete: () => void;
 }) {
   return (
-    <div className="flex min-w-0 items-start justify-between gap-2">
-      <div className="min-w-0">
-        <NameLine
-          mine={mine}
-          userId={item.user_id}
-          userName={item.user_name}
-          myUserId={myUserId}
-          titleLabel={item.user_title_label}
-          titleRank={item.user_title_rank}
-        />
-      </div>
+    <div className={["flex min-w-0", mine ? "justify-end" : "justify-start"].join(" ")}>
+      <NameLine
+        mine={mine}
+        userId={item.user_id}
+        userName={item.user_name}
+        myUserId={myUserId}
+        titleLabel={item.user_title_label}
+        titleRank={item.user_title_rank}
+      />
+    </div>
+  );
+}
 
-      <div className="flex shrink-0 items-center gap-1">
-        <ChatMeta createdAt={item.created_at} />
-        <DeleteButton
-          visible={canModerate}
-          deleting={deleting}
-          onClick={onDelete}
-        />
+function MessageMeta({
+  mine,
+  item,
+}: {
+  mine: boolean;
+  item: ChatItem;
+}) {
+  return (
+    <div
+      className={[
+        "mt-1 flex items-center gap-2 px-1",
+        mine ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
+      {item.edited_at ? (
+        <span className="text-[10px] text-muted-foreground">編集済み</span>
+      ) : null}
+      <ChatMeta createdAt={item.created_at} />
+    </div>
+  );
+}
+
+function ReplyPreviewBox({ reply }: { reply?: ReplyPreview | null }) {
+  if (!reply) return null;
+
+  return (
+    <div className="mb-2 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs">
+      <div className="font-semibold text-muted-foreground">{reply.user_name}</div>
+      <div className="mt-0.5 line-clamp-2 break-words text-muted-foreground">
+        {reply.body}
       </div>
     </div>
   );
@@ -231,13 +262,31 @@ function BubbleFrame({
   mine,
   avatar,
   header,
+  meta,
+  onOpenMenu,
   children,
 }: {
   mine: boolean;
   avatar: ReactNode;
   header: ReactNode;
+  meta: ReactNode;
+  onOpenMenu?: (point: MenuPoint) => void;
   children: ReactNode;
 }) {
+  const longPressTimerRef = useRef<number | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const openMenu = (point: MenuPoint) => {
+    clearLongPress();
+    onOpenMenu?.(point);
+  };
+
   return (
     <div
       className={[
@@ -252,6 +301,21 @@ function BubbleFrame({
         <div className={mine ? "mb-2 flex justify-end" : "mb-2"}>{header}</div>
 
         <div
+          onContextMenu={(event) => {
+            if (!onOpenMenu) return;
+            event.preventDefault();
+            openMenu({ x: event.clientX, y: event.clientY });
+          }}
+          onPointerDown={(event) => {
+            if (!onOpenMenu || event.pointerType === "mouse") return;
+            clearLongPress();
+            longPressTimerRef.current = window.setTimeout(() => {
+              openMenu({ x: event.clientX, y: event.clientY });
+            }, 520);
+          }}
+          onPointerUp={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onPointerMove={clearLongPress}
           className={[
             "min-w-0 rounded-2xl border px-4 py-3 shadow-sm overflow-hidden",
             "[overflow-wrap:anywhere]",
@@ -262,6 +326,7 @@ function BubbleFrame({
         >
           <div className="min-w-0">{children}</div>
         </div>
+        {meta}
       </div>
 
       {mine ? avatar : null}
@@ -273,16 +338,12 @@ function TextBubble({
   item,
   mine,
   myUserId,
-  canModerate,
-  deleting,
-  onDelete,
+  onOpenMenu,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
-  canModerate: boolean;
-  deleting: boolean;
-  onDelete: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
     <BubbleFrame
@@ -300,12 +361,12 @@ function TextBubble({
           mine={mine}
           item={item}
           myUserId={myUserId}
-          canModerate={canModerate}
-          deleting={deleting}
-          onDelete={onDelete}
         />
       }
+      meta={<MessageMeta mine={mine} item={item} />}
+      onOpenMenu={onOpenMenu}
     >
+      <ReplyPreviewBox reply={item.reply_to} />
       <div className="min-w-0 break-words whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">
         <LinkifiedText text={item.body || ""} />
       </div>
@@ -318,17 +379,13 @@ function ImageBubble({
   mine,
   myUserId,
   onOpen,
-  canModerate,
-  deleting,
-  onDelete,
+  onOpenMenu,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
   onOpen: (kind: "image" | "video", url: string) => void;
-  canModerate: boolean;
-  deleting: boolean;
-  onDelete: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   if (!item.image_url) return null;
 
@@ -348,12 +405,12 @@ function ImageBubble({
           mine={mine}
           item={item}
           myUserId={myUserId}
-          canModerate={canModerate}
-          deleting={deleting}
-          onDelete={onDelete}
         />
       }
+      meta={<MessageMeta mine={mine} item={item} />}
+      onOpenMenu={onOpenMenu}
     >
+      <ReplyPreviewBox reply={item.reply_to} />
       <button
         type="button"
         onClick={() => onOpen("image", item.image_url!)}
@@ -383,17 +440,13 @@ function VideoBubble({
   mine,
   myUserId,
   onOpen,
-  canModerate,
-  deleting,
-  onDelete,
+  onOpenMenu,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
   onOpen: (kind: "image" | "video", url: string) => void;
-  canModerate: boolean;
-  deleting: boolean;
-  onDelete: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   if (!item.file_url) return null;
 
@@ -413,12 +466,12 @@ function VideoBubble({
           mine={mine}
           item={item}
           myUserId={myUserId}
-          canModerate={canModerate}
-          deleting={deleting}
-          onDelete={onDelete}
         />
       }
+      meta={<MessageMeta mine={mine} item={item} />}
+      onOpenMenu={onOpenMenu}
     >
+      <ReplyPreviewBox reply={item.reply_to} />
       <div className="overflow-hidden rounded-xl border border-border">
         <video
           src={item.file_url}
@@ -450,16 +503,12 @@ function FileBubble({
   item,
   mine,
   myUserId,
-  canModerate,
-  deleting,
-  onDelete,
+  onOpenMenu,
 }: {
   item: ChatItem;
   mine: boolean;
   myUserId: string;
-  canModerate: boolean;
-  deleting: boolean;
-  onDelete: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   if (!item.file_url) return null;
 
@@ -481,12 +530,12 @@ function FileBubble({
           mine={mine}
           item={item}
           myUserId={myUserId}
-          canModerate={canModerate}
-          deleting={deleting}
-          onDelete={onDelete}
         />
       }
+      meta={<MessageMeta mine={mine} item={item} />}
+      onOpenMenu={onOpenMenu}
     >
+      <ReplyPreviewBox reply={item.reply_to} />
       <a
         href={item.file_url}
         target="_blank"
@@ -529,6 +578,10 @@ export default function GlobalChatBoard({
   const [modal, setModal] = useState<{ kind: "image" | "video"; url: string } | null>(null);
   const [canModerate, setCanModerate] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [messageMenu, setMessageMenu] = useState<MessageMenuState | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ChatItem | null>(null);
+  const [editingItem, setEditingItem] = useState<ChatItem | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
@@ -536,6 +589,39 @@ export default function GlobalChatBoard({
   const inFlightRef = useRef(false);
   const lastFetchAtRef = useRef(0);
   const moderationFetchedRef = useRef(false);
+
+  const openMessageMenu = (item: ChatItem, point: MenuPoint) => {
+    const mine = item.user_id === myUserId;
+    const width = 192;
+    const height = mine || canModerate ? 152 : 56;
+    const viewportWidth =
+      typeof window !== "undefined" ? window.innerWidth : point.x + width;
+    const viewportHeight =
+      typeof window !== "undefined" ? window.innerHeight : point.y + height;
+
+    setMessageMenu({
+      item,
+      point: {
+        x: Math.min(Math.max(12, point.x), Math.max(12, viewportWidth - width - 12)),
+        y: Math.min(Math.max(12, point.y), Math.max(12, viewportHeight - height - 12)),
+      },
+    });
+  };
+
+  const startReply = (item: ChatItem) => {
+    setReplyTarget(item);
+    setEditingItem(null);
+    setDraft("");
+    setMessageMenu(null);
+  };
+
+  const startEdit = (item: ChatItem) => {
+    if (item.user_id !== myUserId) return;
+    setEditingItem(item);
+    setReplyTarget(null);
+    setDraft(item.body);
+    setMessageMenu(null);
+  };
 
   const fetchMessages = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     const now = Date.now();
@@ -615,21 +701,31 @@ export default function GlobalChatBoard({
     };
   }, [modal]);
 
+  useEffect(() => {
+    if (!messageMenu) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMessageMenu(null);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [messageMenu]);
+
   const canSend = useMemo(() => {
     const body = draft.trim();
-    return body.length > 0 && body.length <= 200;
-  }, [draft]);
+    return body.length > 0 && body.length <= 200 && !editingId;
+  }, [draft, editingId]);
 
-  const sendText = async () => {
-    const body = draft.trim();
-    if (!body || sending) return;
+  const saveEdit = async (messageId: string, body: string) => {
+    if (editingId) return;
 
-    setSending(true);
+    setEditingId(messageId);
     setError(null);
 
     try {
-      const res = await fetch("/api/global-chat", {
-        method: "POST",
+      const res = await fetch(`/api/global-chat/${messageId}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
@@ -640,6 +736,44 @@ export default function GlobalChatBoard({
       if (!res.ok) throw new Error(getErrorMessage(json, `HTTP ${res.status}`));
 
       setDraft("");
+      setEditingItem(null);
+      await fetchMessages();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "編集に失敗しました。"));
+    } finally {
+      setEditingId(null);
+    }
+  };
+
+  const sendText = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+
+    if (editingItem) {
+      await saveEdit(editingItem.id, body);
+      return;
+    }
+
+    setSending(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/global-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          body,
+          replyToMessageId: replyTarget?.id ?? null,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(getErrorMessage(json, `HTTP ${res.status}`));
+
+      setDraft("");
+      setReplyTarget(null);
       await fetchMessages();
       setTimeout(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -652,7 +786,7 @@ export default function GlobalChatBoard({
   };
 
   const uploadFile = async (file: File) => {
-    if (sending) return;
+    if (sending || editingItem) return;
 
     setSending(true);
     setError(null);
@@ -661,6 +795,7 @@ export default function GlobalChatBoard({
       const fd = new FormData();
       fd.append("file", file);
       if (draft.trim()) fd.append("caption", draft.trim());
+      if (replyTarget) fd.append("replyToMessageId", replyTarget.id);
 
       const res = await fetch("/api/global-chat/upload", {
         method: "POST",
@@ -673,6 +808,7 @@ export default function GlobalChatBoard({
       }
 
       setDraft("");
+      setReplyTarget(null);
       await fetchMessages();
       setTimeout(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -684,17 +820,18 @@ export default function GlobalChatBoard({
     }
   };
 
-  const deleteMessage = async (messageId: string) => {
-    if (!canModerate || deletingId) return;
+  const deleteMessage = async (item: ChatItem) => {
+    const mine = item.user_id === myUserId;
+    if ((!mine && !canModerate) || deletingId) return;
 
     const ok = window.confirm("このメッセージを削除しますか？");
     if (!ok) return;
 
-    setDeletingId(messageId);
+    setDeletingId(item.id);
     setError(null);
 
     try {
-      const res = await fetch(`/api/global-chat/${messageId}`, {
+      const res = await fetch(`/api/global-chat/${item.id}`, {
         method: "DELETE",
       });
 
@@ -703,6 +840,13 @@ export default function GlobalChatBoard({
         throw new Error(getErrorMessage(json, `HTTP ${res.status}`));
       }
 
+      if (editingItem?.id === item.id) {
+        setEditingItem(null);
+        setDraft("");
+      }
+      if (replyTarget?.id === item.id) {
+        setReplyTarget(null);
+      }
       await fetchMessages();
     } catch (e: unknown) {
       setError(getErrorMessage(e, "削除に失敗しました。"));
@@ -725,6 +869,55 @@ export default function GlobalChatBoard({
 
   return (
     <>
+      {messageMenu ? (
+        <div className="fixed inset-0 z-[120]" onClick={() => setMessageMenu(null)}>
+          <div
+            className="fixed w-48 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-glow"
+            style={{
+              left: messageMenu.point.x,
+              top: messageMenu.point.y,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => startReply(messageMenu.item)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-secondary/50"
+            >
+              <Reply className="h-4 w-4" aria-hidden="true" />
+              リプライ
+            </button>
+
+            {messageMenu.item.user_id === myUserId ? (
+              <button
+                type="button"
+                onClick={() => startEdit(messageMenu.item)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-secondary/50"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                編集
+              </button>
+            ) : null}
+
+            {messageMenu.item.user_id === myUserId || canModerate ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const item = messageMenu.item;
+                  setMessageMenu(null);
+                  void deleteMessage(item);
+                }}
+                disabled={deletingId === messageMenu.item.id}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                {deletingId === messageMenu.item.id ? "削除中…" : "削除"}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {modal ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4">
           <button
@@ -787,7 +980,6 @@ export default function GlobalChatBoard({
                 {items.map((item) => {
                   const mine = item.user_id === myUserId;
                   const type = item.message_type ?? "text";
-                  const deleting = deletingId === item.id;
 
                   if (type === "image" && item.image_url) {
                     return (
@@ -797,9 +989,7 @@ export default function GlobalChatBoard({
                         mine={mine}
                         myUserId={myUserId}
                         onOpen={(kind, url) => setModal({ kind, url })}
-                        canModerate={canModerate}
-                        deleting={deleting}
-                        onDelete={() => deleteMessage(item.id)}
+                        onOpenMenu={(point) => openMessageMenu(item, point)}
                       />
                     );
                   }
@@ -812,9 +1002,7 @@ export default function GlobalChatBoard({
                         mine={mine}
                         myUserId={myUserId}
                         onOpen={(kind, url) => setModal({ kind, url })}
-                        canModerate={canModerate}
-                        deleting={deleting}
-                        onDelete={() => deleteMessage(item.id)}
+                        onOpenMenu={(point) => openMessageMenu(item, point)}
                       />
                     );
                   }
@@ -826,9 +1014,7 @@ export default function GlobalChatBoard({
                         item={item}
                         mine={mine}
                         myUserId={myUserId}
-                        canModerate={canModerate}
-                        deleting={deleting}
-                        onDelete={() => deleteMessage(item.id)}
+                        onOpenMenu={(point) => openMessageMenu(item, point)}
                       />
                     );
                   }
@@ -839,9 +1025,7 @@ export default function GlobalChatBoard({
                       item={item}
                       mine={mine}
                       myUserId={myUserId}
-                      canModerate={canModerate}
-                      deleting={deleting}
-                      onDelete={() => deleteMessage(item.id)}
+                      onOpenMenu={(point) => openMessageMenu(item, point)}
                     />
                   );
                 })}
@@ -865,14 +1049,40 @@ export default function GlobalChatBoard({
               }}
               className="min-w-0"
             >
+              {replyTarget || editingItem ? (
+                <div className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-foreground">
+                      {editingItem ? "編集中" : "リプライ"}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 break-words text-muted-foreground">
+                      {previewMessage(editingItem ?? replyTarget!)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyTarget(null);
+                      setEditingItem(null);
+                      setDraft("");
+                    }}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-secondary/60"
+                    aria-label="キャンセル"
+                    title="キャンセル"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
+
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 rows={2}
                 maxLength={200}
-                placeholder="全体に向けて投稿…"
+                placeholder={editingItem ? "編集内容を入力…" : "全体に向けて投稿…"}
                 className="max-h-32 min-h-11 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={sending}
+                disabled={sending || Boolean(editingId)}
               />
 
               <div className="mt-2 flex items-center justify-between gap-2">
@@ -880,7 +1090,7 @@ export default function GlobalChatBoard({
                   <button
                     type="button"
                     onClick={() => filePickerRef.current?.click()}
-                    disabled={sending}
+                    disabled={sending || Boolean(editingItem) || Boolean(editingId)}
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="ファイルを送る"
                     title="ファイルを送る"
@@ -891,7 +1101,7 @@ export default function GlobalChatBoard({
                   <button
                     type="button"
                     onClick={() => mediaPickerRef.current?.click()}
-                    disabled={sending}
+                    disabled={sending || Boolean(editingItem) || Boolean(editingId)}
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border transition hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="画像・動画を送る"
                     title="画像・動画を送る"
@@ -906,12 +1116,18 @@ export default function GlobalChatBoard({
                   </span>
                   <Button
                     type="submit"
-                    disabled={!canSend || sending}
-                    aria-busy={sending}
+                    disabled={!canSend || sending || Boolean(editingId)}
+                    aria-busy={sending || Boolean(editingId)}
                     className="h-10 shrink-0 gap-2 px-4"
                   >
                     <SendHorizonal className="h-4 w-4" aria-hidden="true" />
-                    {sending ? "送信中…" : "送信"}
+                    {editingItem
+                      ? editingId
+                        ? "保存中…"
+                        : "保存"
+                      : sending
+                        ? "送信中…"
+                        : "送信"}
                   </Button>
                 </div>
               </div>
