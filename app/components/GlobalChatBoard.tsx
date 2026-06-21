@@ -584,7 +584,8 @@ export default function GlobalChatBoard({
   const [replyTarget, setReplyTarget] = useState<ChatItem | null>(null);
   const [editingItem, setEditingItem] = useState<ChatItem | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
   const inFlightRef = useRef(false);
@@ -622,6 +623,21 @@ export default function GlobalChatBoard({
     setReplyTarget(null);
     setDraft(item.body);
     setMessageMenu(null);
+  };
+
+  const scrollToBottom = (smooth: boolean) => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: smooth ? "smooth" : "auto",
+    });
+  };
+
+  const focusDraft = () => {
+    window.requestAnimationFrame(() => {
+      draftRef.current?.focus({ preventScroll: true });
+    });
   };
 
   const fetchMessages = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
@@ -687,7 +703,7 @@ export default function GlobalChatBoard({
   }, [fetchMessages, pollMs]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    scrollToBottom(false);
   }, [items.length]);
 
   useEffect(() => {
@@ -739,6 +755,7 @@ export default function GlobalChatBoard({
       setDraft("");
       setEditingItem(null);
       await fetchMessages();
+      focusDraft();
     } catch (e: unknown) {
       setError(getErrorMessage(e, "編集に失敗しました。"));
     } finally {
@@ -776,9 +793,9 @@ export default function GlobalChatBoard({
       setDraft("");
       setReplyTarget(null);
       await fetchMessages();
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      }, 50);
+      scrollToBottom(true);
+      focusDraft();
+      setTimeout(() => scrollToBottom(true), 50);
     } catch (e: unknown) {
       setError(getErrorMessage(e, "送信に失敗しました。"));
     } finally {
@@ -811,9 +828,9 @@ export default function GlobalChatBoard({
       setDraft("");
       setReplyTarget(null);
       await fetchMessages();
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      }, 50);
+      scrollToBottom(true);
+      focusDraft();
+      setTimeout(() => scrollToBottom(true), 50);
     } catch (e: unknown) {
       setError(getErrorMessage(e, "アップロードに失敗しました。"));
     } finally {
@@ -976,7 +993,10 @@ export default function GlobalChatBoard({
         </div>
 
         <div className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-3">
-          <div className="min-h-[22rem] max-h-[62vh] min-w-0 overflow-y-auto overflow-x-hidden px-1 py-2 sm:px-2">
+          <div
+            ref={listRef}
+            className="min-h-[22rem] max-h-[62vh] min-w-0 overflow-y-auto overflow-x-hidden px-1 py-2 sm:px-2"
+          >
             {loading ? (
               <div className="flex min-h-[18rem] items-center justify-center px-4 text-center text-sm text-muted-foreground">
                 読み込み中…
@@ -1040,7 +1060,6 @@ export default function GlobalChatBoard({
                   );
                 })}
 
-                <div ref={bottomRef} />
               </div>
             )}
           </div>
@@ -1086,6 +1105,7 @@ export default function GlobalChatBoard({
               ) : null}
 
               <textarea
+                ref={draftRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={onDraftKeyDown}

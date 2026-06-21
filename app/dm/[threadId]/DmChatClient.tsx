@@ -777,7 +777,7 @@ export default function DmChatClient({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
   const lastUploadKeyRef = useRef<{ key: string; at: number } | null>(null);
@@ -837,9 +837,18 @@ export default function DmChatClient({
   };
 
   const scrollToBottom = (smooth: boolean) => {
-    const el = bottomRef.current;
+    const el = listRef.current;
     if (!el) return;
-    el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "end" });
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: smooth ? "smooth" : "auto",
+    });
+  };
+
+  const focusDraft = () => {
+    window.requestAnimationFrame(() => {
+      draftRef.current?.focus({ preventScroll: true });
+    });
   };
 
   const updatePinned = () => {
@@ -991,6 +1000,7 @@ export default function DmChatClient({
       setReplyTarget(null);
       router.refresh();
       scrollToBottom(true);
+      focusDraft();
       setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
     } catch (err: unknown) {
       setUploadError(getErrorMessage(err, "送信に失敗しました。"));
@@ -1047,6 +1057,7 @@ export default function DmChatClient({
       setDraft("");
       setEditingMessage(null);
       router.refresh();
+      focusDraft();
     } catch (err: unknown) {
       setUploadError(getErrorMessage(err, "編集に失敗しました。"));
     } finally {
@@ -1084,6 +1095,7 @@ export default function DmChatClient({
       pinnedRef.current = true;
       router.refresh();
       scrollToBottom(true);
+      focusDraft();
       setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
     } catch (err: unknown) {
       setUploadError(getErrorMessage(err, "送信に失敗しました。"));
@@ -1374,7 +1386,6 @@ export default function DmChatClient({
                 );
               })}
 
-              <div ref={bottomRef} />
             </>
           )}
         </div>
@@ -1428,6 +1439,7 @@ export default function DmChatClient({
           ) : null}
 
           <textarea
+            ref={draftRef}
             value={draft}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
             onKeyDown={onDraftKeyDown}
