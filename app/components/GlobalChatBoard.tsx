@@ -296,7 +296,7 @@ function BubbleFrame({
     >
       {!mine ? avatar : null}
 
-      <div className="min-w-0 max-w-[min(100%,44rem)] flex-1 sm:flex-none">
+      <div className="min-w-0 max-w-[calc(100%-3.25rem)] flex-1 sm:max-w-[85%] sm:flex-none">
         {/* ここでヘッダーを吹き出しの外に出す */}
         <div className={mine ? "mb-2 flex justify-end" : "mb-2"}>{header}</div>
 
@@ -952,7 +952,7 @@ export default function GlobalChatBoard({
         </div>
       ) : null}
 
-      <section className="w-full min-w-0 max-w-full overflow-x-hidden">
+      <section className="flex w-full min-w-0 max-w-full flex-col overflow-x-hidden">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-lg font-semibold">掲示板</h3>
@@ -965,14 +965,14 @@ export default function GlobalChatBoard({
           </div>
         </div>
 
-        <div className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-background/70">
-          <div className="max-h-[60vh] min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-5">
+        <div className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-3">
+          <div className="min-h-[22rem] max-h-[62vh] min-w-0 overflow-y-auto overflow-x-hidden px-1 py-2 sm:px-2">
             {loading ? (
-              <div className="rounded-xl border border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
+              <div className="flex min-h-[18rem] items-center justify-center px-4 text-center text-sm text-muted-foreground">
                 読み込み中…
               </div>
             ) : items.length === 0 ? (
-              <div className="rounded-xl border border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
+              <div className="flex min-h-[18rem] items-center justify-center px-4 text-center text-sm text-muted-foreground">
                 まだ投稿がありません。最初の一言を送ってみよう。
               </div>
             ) : (
@@ -1035,7 +1035,7 @@ export default function GlobalChatBoard({
             )}
           </div>
 
-          <div className="border-t border-border bg-background/80 p-3 sm:p-4">
+          <div className="shrink-0 rounded-xl border border-border bg-background/95 p-2 shadow-sm sm:p-3">
             {error ? (
               <div className="mb-3 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
