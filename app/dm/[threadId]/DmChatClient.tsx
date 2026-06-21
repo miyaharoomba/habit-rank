@@ -37,6 +37,7 @@ type Message = {
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
+  read_at?: string | null;
   unsent_at?: string | null;
 };
 
@@ -180,6 +181,22 @@ function BubbleMeta({ createdAt }: { createdAt: string }) {
   );
 }
 
+function ReadReceipt({
+  mine,
+  readAt,
+}: {
+  mine: boolean;
+  readAt?: string | null;
+}) {
+  if (!mine || !readAt) return null;
+
+  return (
+    <div className="text-[10px] font-semibold text-primary">
+      既読
+    </div>
+  );
+}
+
 function UnsendButton({
   visible,
   busy,
@@ -210,6 +227,7 @@ function MessageHeader({
   senderTitleLabel,
   senderTitleRank,
   createdAt,
+  readAt,
   showUnsend,
   unsendBusy,
   onUnsend,
@@ -220,6 +238,7 @@ function MessageHeader({
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
   createdAt: string;
+  readAt?: string | null;
   showUnsend: boolean;
   unsendBusy: boolean;
   onUnsend: () => void;
@@ -245,6 +264,7 @@ function MessageHeader({
           mine ? "justify-end" : "justify-start",
         ].join(" ")}
       >
+        <ReadReceipt mine={mine} readAt={readAt} />
         <BubbleMeta createdAt={createdAt} />
         <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
       </div>
@@ -284,6 +304,7 @@ function BubbleText({
   mine,
   body,
   createdAt,
+  readAt,
   senderName,
   senderAvatarUrl,
   senderProfileHref,
@@ -296,6 +317,7 @@ function BubbleText({
   mine: boolean;
   body: string;
   createdAt: string;
+  readAt?: string | null;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
@@ -319,6 +341,7 @@ function BubbleText({
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
           createdAt={createdAt}
+          readAt={readAt}
           showUnsend={showUnsend}
           unsendBusy={unsendBusy}
           onUnsend={onUnsend}
@@ -402,6 +425,7 @@ function BubbleImage({
   url,
   caption,
   createdAt,
+  readAt,
   onOpen,
   senderName,
   senderAvatarUrl,
@@ -416,6 +440,7 @@ function BubbleImage({
   url: string;
   caption?: string;
   createdAt: string;
+  readAt?: string | null;
   onOpen: (kind: "image" | "video", url: string) => void;
   senderName: string;
   senderAvatarUrl: string | null;
@@ -440,6 +465,7 @@ function BubbleImage({
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
           createdAt={createdAt}
+          readAt={readAt}
           showUnsend={showUnsend}
           unsendBusy={unsendBusy}
           onUnsend={onUnsend}
@@ -483,6 +509,7 @@ function BubbleVideo({
   url,
   caption,
   createdAt,
+  readAt,
   onOpen,
   senderName,
   senderAvatarUrl,
@@ -497,6 +524,7 @@ function BubbleVideo({
   url: string;
   caption?: string;
   createdAt: string;
+  readAt?: string | null;
   onOpen: (kind: "image" | "video", url: string) => void;
   senderName: string;
   senderAvatarUrl: string | null;
@@ -521,6 +549,7 @@ function BubbleVideo({
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
           createdAt={createdAt}
+          readAt={readAt}
           showUnsend={showUnsend}
           unsendBusy={unsendBusy}
           onUnsend={onUnsend}
@@ -565,6 +594,7 @@ function BubbleFile({
   size,
   caption,
   createdAt,
+  readAt,
   senderName,
   senderAvatarUrl,
   senderProfileHref,
@@ -581,6 +611,7 @@ function BubbleFile({
   size: number;
   caption?: string;
   createdAt: string;
+  readAt?: string | null;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
@@ -606,6 +637,7 @@ function BubbleFile({
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
           createdAt={createdAt}
+          readAt={readAt}
           showUnsend={showUnsend}
           unsendBusy={unsendBusy}
           onUnsend={onUnsend}
@@ -975,6 +1007,7 @@ export default function DmChatClient({
                       url={m.image_url}
                       caption={m.body}
                       createdAt={m.created_at}
+                      readAt={m.read_at}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
@@ -996,6 +1029,7 @@ export default function DmChatClient({
                       url={m.file_url}
                       caption={m.body}
                       createdAt={m.created_at}
+                      readAt={m.read_at}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
@@ -1020,6 +1054,7 @@ export default function DmChatClient({
                       size={Number(m.file_size ?? 0)}
                       caption={m.body}
                       createdAt={m.created_at}
+                      readAt={m.read_at}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
@@ -1038,6 +1073,7 @@ export default function DmChatClient({
                     mine={mine}
                     body={m.body}
                     createdAt={m.created_at}
+                    readAt={m.read_at}
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}
                     senderProfileHref={senderProfileHref}
@@ -1061,6 +1097,7 @@ export default function DmChatClient({
                       url={u.signedUrl}
                       caption={u.caption}
                       createdAt={u.created_at}
+                      readAt={null}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
@@ -1082,6 +1119,7 @@ export default function DmChatClient({
                       url={u.signedUrl}
                       caption={u.caption}
                       createdAt={u.created_at}
+                      readAt={null}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={u.sender_name}
                       senderAvatarUrl={u.sender_avatar_url}
@@ -1105,6 +1143,7 @@ export default function DmChatClient({
                     size={u.size}
                     caption={u.caption}
                     createdAt={u.created_at}
+                    readAt={null}
                     senderName={u.sender_name}
                     senderAvatarUrl={u.sender_avatar_url}
                     senderProfileHref={u.sender_profile_href}

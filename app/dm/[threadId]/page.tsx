@@ -26,6 +26,7 @@ type MessageRow = {
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
+  read_at: string | null;
   unsent_at: string | null;
 };
 
@@ -60,6 +61,7 @@ type MessageForClient = {
   file_name?: string | null;
   file_mime?: string | null;
   file_size?: number | null;
+  read_at?: string | null;
   unsent_at?: string | null;
 };
 
@@ -160,6 +162,14 @@ export default async function DmThreadPage({
   const otherUserId =
     thread.user_low === user.id ? thread.user_high : thread.user_low;
 
+  const { error: readErr } = await supabase.rpc("mark_dm_thread_read", {
+    p_thread_id: threadId,
+  });
+
+  if (readErr) {
+    console.error("mark_dm_thread_read failed:", readErr.message);
+  }
+
   // 2) 参加ユーザーのプロフィールをまとめて取得
   const userIds = [user.id, otherUserId];
   const { data: profiles, error: profilesErr } = await supabase
@@ -210,7 +220,7 @@ export default async function DmThreadPage({
   const { data: msgs, error: msgErr } = await supabase
     .from("dm_messages")
     .select(
-      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, unsent_at"
+      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, unsent_at"
     )
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
@@ -263,6 +273,7 @@ export default async function DmThreadPage({
       file_name: m.file_name ?? undefined,
       file_mime: m.file_mime ?? undefined,
       file_size: m.file_size ?? undefined,
+      read_at: m.read_at ?? undefined,
       unsent_at: m.unsent_at ?? undefined,
     };
 

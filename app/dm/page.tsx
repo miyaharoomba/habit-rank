@@ -18,6 +18,7 @@ type ThreadRow = {
   other_display_name: string;
   last_message: string | null;
   last_message_at: string | null;
+  unread_count?: number | null;
   avatar_path?: string | null;
   title_label?: string | null;
   title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
@@ -158,6 +159,8 @@ export default async function DmListPage() {
                   const lastMessage =
                     (t.last_message ?? "").trim() || "（まだメッセージがありません）";
 
+                  const unreadCount = Number(t.unread_count ?? 0);
+
                   return (
                     <li key={t.thread_id}>
                       <Link
@@ -170,6 +173,8 @@ export default async function DmListPage() {
                               <img
                                 src={avatar}
                                 alt={t.other_display_name || "avatar"}
+                                loading="lazy"
+                                decoding="async"
                                 className="h-12 w-12 rounded-full object-cover border border-border"
                               />
                             ) : (
@@ -198,14 +203,26 @@ export default async function DmListPage() {
                                 </div>
                               </div>
 
-                              <div className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
-                                {t.last_message_at ? formatJst(t.last_message_at) : ""}
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <div className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+                                  {t.last_message_at ? formatJst(t.last_message_at) : ""}
+                                </div>
+                                {unreadCount > 0 ? (
+                                  <div className="min-w-5 rounded-full bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-primary-foreground">
+                                    {unreadCount > 99 ? "99+" : unreadCount}
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
 
                             {/* 下段: 最終メッセージ */}
                             <div
-                              className="mt-2 text-sm text-muted-foreground break-words overflow-hidden"
+                              className={[
+                                "mt-2 text-sm break-words overflow-hidden",
+                                unreadCount > 0
+                                  ? "font-semibold text-foreground"
+                                  : "text-muted-foreground",
+                              ].join(" ")}
                               style={{
                                 display: "-webkit-box",
                                 WebkitLineClamp: 2,
