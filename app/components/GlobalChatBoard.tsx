@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -867,6 +868,15 @@ export default function GlobalChatBoard({
     await sendText();
   };
 
+  const onDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    if (canSend) void onSend();
+  };
+
   return (
     <>
       {messageMenu ? (
@@ -1078,6 +1088,7 @@ export default function GlobalChatBoard({
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onDraftKeyDown}
                 rows={2}
                 maxLength={200}
                 placeholder={editingItem ? "編集内容を入力…" : "全体に向けて投稿…"}

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { useFormStatus } from "react-dom";
@@ -1095,6 +1096,15 @@ export default function DmChatClient({
   const textBusy = textSubmitting || uploading || Boolean(editingId);
   const canSendText = draft.trim().length > 0 && !textBusy;
 
+  const onDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    if (canSendText) void submitText();
+  };
+
   return (
     <>
       {messageMenu ? (
@@ -1420,6 +1430,7 @@ export default function DmChatClient({
           <textarea
             value={draft}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
+            onKeyDown={onDraftKeyDown}
             placeholder={editingMessage ? "編集内容を入力…" : "メッセージを入力…"}
             disabled={textBusy}
             rows={2}
