@@ -27,6 +27,8 @@ type MessageRow = {
   file_mime: string | null;
   file_size: number | null;
   read_at: string | null;
+  edited_at: string | null;
+  reply_to_message_id: string | null;
   unsent_at: string | null;
 };
 
@@ -62,8 +64,25 @@ type MessageForClient = {
   file_mime?: string | null;
   file_size?: number | null;
   read_at?: string | null;
+  edited_at?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to?: {
+    id: string;
+    sender_name: string;
+    body: string;
+  } | null;
   unsent_at?: string | null;
 };
+
+function messagePreview(row: MessageRow) {
+  if (row.unsent_at) return "送信を取り消しました";
+  const text = row.body.trim();
+  if (text) return text;
+  if (row.message_type === "image") return "画像";
+  if (row.message_type === "video") return "動画";
+  if (row.message_type === "file") return row.file_name || "ファイル";
+  return "メッセージ";
+}
 
 function mediaProxyUrl(path: string) {
   return `/api/media/dm?path=${encodeURIComponent(path)}`;
@@ -220,7 +239,7 @@ export default async function DmThreadPage({
   const { data: msgs, error: msgErr } = await supabase
     .from("dm_messages")
     .select(
-      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, unsent_at"
+      "id, sender_id, body, created_at, message_type, image_path, file_path, file_name, file_mime, file_size, read_at, edited_at, reply_to_message_id, unsent_at"
     )
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
@@ -244,6 +263,7 @@ export default async function DmThreadPage({
   }
 
   const rows = (msgs ?? []) as MessageRow[];
+  const messageMap = new Map(rows.map((m) => [m.id, m]));
 
   // 5) fixed proxy URL + 送信者プロフィール情報 + 称号を返す
   const messages: MessageForClient[] = rows.map((m) => {
@@ -274,8 +294,27 @@ export default async function DmThreadPage({
       file_mime: m.file_mime ?? undefined,
       file_size: m.file_size ?? undefined,
       read_at: m.read_at ?? undefined,
+      edited_at: m.edited_at ?? undefined,
+      reply_to_message_id: m.reply_to_message_id ?? undefined,
+      reply_to: null,
       unsent_at: m.unsent_at ?? undefined,
     };
+
+    if (m.reply_to_message_id) {
+      const reply = messageMap.get(m.reply_to_message_id);
+      const replyProfile = reply ? profileMap.get(reply.sender_id) : null;
+      base.reply_to = reply
+        ? {
+            id: reply.id,
+            sender_name: replyProfile?.display_name?.trim() || "NoName",
+            body: messagePreview(reply),
+          }
+        : {
+            id: m.reply_to_message_id,
+            sender_name: "NoName",
+            body: "元のメッセージを表示できません",
+          };
+    }
 
     if (m.message_type === "text") return base;
 

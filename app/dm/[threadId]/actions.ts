@@ -16,9 +16,12 @@ export async function sendDm(threadId: string, formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return;
 
+  const replyToMessageId = String(formData.get("reply_to_message_id") ?? "").trim();
+
   const { error } = await supabase.rpc("send_dm_message", {
     p_thread_id: threadId,
     p_body: body,
+    p_reply_to_message_id: replyToMessageId || null,
   });
 
   if (error) throw new Error(error.message);

@@ -16,6 +16,7 @@ type DmMessageInsert = {
   file_name: string | null;
   file_mime: string | null;
   file_size: number | null;
+  reply_to_message_id: string | null;
 };
 
 function uuidLike() {
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const threadId = String(form.get("threadId") ?? "");
   const caption = String(form.get("caption") ?? "").trim();
+  const replyToMessageId = String(form.get("replyToMessageId") ?? "").trim();
   const file = form.get("file");
 
   if (!threadId) {
@@ -59,6 +61,27 @@ export async function POST(req: Request) {
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "file is required" }, { status: 400 });
+  }
+
+  if (replyToMessageId) {
+    const { data: replyTarget, error: replyErr } = await supabase
+      .from("dm_messages")
+      .select("id")
+      .eq("id", replyToMessageId)
+      .eq("thread_id", threadId)
+      .is("unsent_at", null)
+      .maybeSingle();
+
+    if (replyErr) {
+      return NextResponse.json({ ok: false, error: replyErr.message }, { status: 400 });
+    }
+
+    if (!replyTarget) {
+      return NextResponse.json(
+        { ok: false, error: "reply target not found" },
+        { status: 400 }
+      );
+    }
   }
 
   const mime = (file.type || "application/octet-stream").toLowerCase();
@@ -92,6 +115,7 @@ export async function POST(req: Request) {
     file_name: messageType === "image" ? null : file.name,
     file_mime: messageType === "image" ? null : mime,
     file_size: messageType === "image" ? null : file.size,
+    reply_to_message_id: replyToMessageId || null,
   };
 
   const { data: inserted, error: insErr } = await supabase

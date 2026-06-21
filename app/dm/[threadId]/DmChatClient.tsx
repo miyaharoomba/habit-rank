@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Paperclip } from "lucide-react";
+import { ImagePlus, Paperclip, Pencil, Reply, Trash2, X } from "lucide-react";
 import Button from "@/app/components/ui/Button";
 import { sendDm } from "./actions";
 import { formatJst } from "@/lib/time";
@@ -38,7 +38,26 @@ type Message = {
   file_mime?: string | null;
   file_size?: number | null;
   read_at?: string | null;
+  edited_at?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to?: ReplyPreview | null;
   unsent_at?: string | null;
+};
+
+type ReplyPreview = {
+  id: string;
+  sender_name: string;
+  body: string;
+};
+
+type MenuPoint = {
+  x: number;
+  y: number;
+};
+
+type MessageMenuState = {
+  message: Message;
+  point: MenuPoint;
 };
 
 type LocalUpload = {
@@ -145,10 +164,14 @@ function NameLine({
 function SubmitButton({
   busy,
   disabled,
+  label = "送信",
+  busyLabel = "送信中…",
   onSettled,
 }: {
   busy: boolean;
   disabled: boolean;
+  label?: string;
+  busyLabel?: string;
   onSettled: () => void;
 }) {
   const { pending } = useFormStatus();
@@ -166,9 +189,10 @@ function SubmitButton({
       type="submit"
       disabled={isDisabled}
       aria-busy={submitting}
+      aria-label={submitting ? busyLabel : label}
       className="h-10 shrink-0 px-4"
     >
-      {submitting ? "送信中…" : "送信"}
+      {submitting ? busyLabel : label}
     </Button>
   );
 }
@@ -197,26 +221,43 @@ function ReadReceipt({
   );
 }
 
-function UnsendButton({
-  visible,
-  busy,
-  onClick,
+function MessageMeta({
+  mine,
+  createdAt,
+  readAt,
+  editedAt,
 }: {
-  visible: boolean;
-  busy: boolean;
-  onClick: () => void;
+  mine: boolean;
+  createdAt: string;
+  readAt?: string | null;
+  editedAt?: string | null;
 }) {
-  if (!visible) return null;
+  return (
+    <div
+      className={[
+        "mt-1 flex items-center gap-2 px-1",
+        mine ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
+      <ReadReceipt mine={mine} readAt={readAt} />
+      {editedAt ? (
+        <span className="text-[10px] text-muted-foreground">編集済み</span>
+      ) : null}
+      <BubbleMeta createdAt={createdAt} />
+    </div>
+  );
+}
+
+function ReplyPreviewBox({ reply }: { reply?: ReplyPreview | null }) {
+  if (!reply) return null;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      className="rounded-md border border-border bg-background px-2 py-1 text-[10px] font-semibold hover:bg-secondary/40 disabled:opacity-50"
-    >
-      {busy ? "取消中…" : "取り消し"}
-    </button>
+    <div className="mb-2 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs">
+      <div className="font-semibold text-muted-foreground">{reply.sender_name}</div>
+      <div className="mt-0.5 line-clamp-2 break-words text-muted-foreground">
+        {reply.body}
+      </div>
+    </div>
   );
 }
 
@@ -226,22 +267,12 @@ function MessageHeader({
   senderName,
   senderTitleLabel,
   senderTitleRank,
-  createdAt,
-  readAt,
-  showUnsend,
-  unsendBusy,
-  onUnsend,
 }: {
   mine: boolean;
   senderProfileHref: string;
   senderName: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
-  createdAt: string;
-  readAt?: string | null;
-  showUnsend: boolean;
-  unsendBusy: boolean;
-  onUnsend: () => void;
 }) {
   return (
     <div
@@ -257,17 +288,6 @@ function MessageHeader({
         titleLabel={senderTitleLabel}
         titleRank={senderTitleRank}
       />
-
-      <div
-        className={[
-          "flex min-w-0 w-full items-center gap-2",
-          mine ? "justify-end" : "justify-start",
-        ].join(" ")}
-      >
-        <ReadReceipt mine={mine} readAt={readAt} />
-        <BubbleMeta createdAt={createdAt} />
-        <UnsendButton visible={showUnsend} busy={unsendBusy} onClick={onUnsend} />
-      </div>
     </div>
   );
 }
@@ -276,13 +296,31 @@ function BubbleFrame({
   mine,
   avatar,
   header,
+  meta,
+  onOpenMenu,
   children,
 }: {
   mine: boolean;
   avatar: ReactNode;
   header: ReactNode;
+  meta: ReactNode;
+  onOpenMenu?: (point: MenuPoint) => void;
   children: ReactNode;
 }) {
+  const longPressTimerRef = useRef<number | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const openMenu = (point: MenuPoint) => {
+    clearLongPress();
+    onOpenMenu?.(point);
+  };
+
   return (
     <div
       className={[
@@ -293,7 +331,26 @@ function BubbleFrame({
       {!mine && avatar}
       <div className="min-w-0 max-w-[calc(100%-3.25rem)] sm:max-w-[85%]">
         {header}
-        {children}
+        <div
+          onContextMenu={(event) => {
+            if (!onOpenMenu) return;
+            event.preventDefault();
+            openMenu({ x: event.clientX, y: event.clientY });
+          }}
+          onPointerDown={(event) => {
+            if (!onOpenMenu || event.pointerType === "mouse") return;
+            clearLongPress();
+            longPressTimerRef.current = window.setTimeout(() => {
+              openMenu({ x: event.clientX, y: event.clientY });
+            }, 520);
+          }}
+          onPointerUp={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onPointerMove={clearLongPress}
+        >
+          {children}
+        </div>
+        {meta}
       </div>
       {mine && avatar}
     </div>
@@ -305,27 +362,27 @@ function BubbleText({
   body,
   createdAt,
   readAt,
+  editedAt,
+  replyTo,
   senderName,
   senderAvatarUrl,
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
-  showUnsend,
-  unsendBusy,
-  onUnsend,
+  onOpenMenu,
 }: {
   mine: boolean;
   body: string;
   createdAt: string;
   readAt?: string | null;
+  editedAt?: string | null;
+  replyTo?: ReplyPreview | null;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
-  showUnsend: boolean;
-  unsendBusy: boolean;
-  onUnsend: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
     <BubbleFrame
@@ -340,13 +397,17 @@ function BubbleText({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
-          createdAt={createdAt}
-          readAt={readAt}
-          showUnsend={showUnsend}
-          unsendBusy={unsendBusy}
-          onUnsend={onUnsend}
         />
       }
+      meta={
+        <MessageMeta
+          mine={mine}
+          createdAt={createdAt}
+          readAt={readAt}
+          editedAt={editedAt}
+        />
+      }
+      onOpenMenu={onOpenMenu}
     >
       <div
         className={[
@@ -354,6 +415,7 @@ function BubbleText({
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
+        <ReplyPreviewBox reply={replyTo} />
         <LinkifiedText text={body} />
       </div>
     </BubbleFrame>
@@ -397,16 +459,9 @@ function BubbleUnsent({
             titleLabel={senderTitleLabel}
             titleRank={senderTitleRank}
           />
-          <div
-            className={[
-              "flex min-w-0 w-full items-center gap-2",
-              mine ? "justify-end" : "justify-start",
-            ].join(" ")}
-          >
-            <BubbleMeta createdAt={createdAt} />
-          </div>
         </div>
       }
+      meta={<MessageMeta mine={mine} createdAt={createdAt} />}
     >
       <div
         className={[
@@ -426,30 +481,30 @@ function BubbleImage({
   caption,
   createdAt,
   readAt,
+  editedAt,
+  replyTo,
   onOpen,
   senderName,
   senderAvatarUrl,
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
-  showUnsend,
-  unsendBusy,
-  onUnsend,
+  onOpenMenu,
 }: {
   mine: boolean;
   url: string;
   caption?: string;
   createdAt: string;
   readAt?: string | null;
+  editedAt?: string | null;
+  replyTo?: ReplyPreview | null;
   onOpen: (kind: "image" | "video", url: string) => void;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
-  showUnsend: boolean;
-  unsendBusy: boolean;
-  onUnsend: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
     <BubbleFrame
@@ -464,13 +519,17 @@ function BubbleImage({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
-          createdAt={createdAt}
-          readAt={readAt}
-          showUnsend={showUnsend}
-          unsendBusy={unsendBusy}
-          onUnsend={onUnsend}
         />
       }
+      meta={
+        <MessageMeta
+          mine={mine}
+          createdAt={createdAt}
+          readAt={readAt}
+          editedAt={editedAt}
+        />
+      }
+      onOpenMenu={onOpenMenu}
     >
       <div
         className={[
@@ -478,6 +537,11 @@ function BubbleImage({
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
+        {replyTo ? (
+          <div className="px-3 pt-3">
+            <ReplyPreviewBox reply={replyTo} />
+          </div>
+        ) : null}
         <button
           type="button"
           onClick={() => onOpen("image", url)}
@@ -510,30 +574,30 @@ function BubbleVideo({
   caption,
   createdAt,
   readAt,
+  editedAt,
+  replyTo,
   onOpen,
   senderName,
   senderAvatarUrl,
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
-  showUnsend,
-  unsendBusy,
-  onUnsend,
+  onOpenMenu,
 }: {
   mine: boolean;
   url: string;
   caption?: string;
   createdAt: string;
   readAt?: string | null;
+  editedAt?: string | null;
+  replyTo?: ReplyPreview | null;
   onOpen: (kind: "image" | "video", url: string) => void;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
-  showUnsend: boolean;
-  unsendBusy: boolean;
-  onUnsend: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
     <BubbleFrame
@@ -548,13 +612,17 @@ function BubbleVideo({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
-          createdAt={createdAt}
-          readAt={readAt}
-          showUnsend={showUnsend}
-          unsendBusy={unsendBusy}
-          onUnsend={onUnsend}
         />
       }
+      meta={
+        <MessageMeta
+          mine={mine}
+          createdAt={createdAt}
+          readAt={readAt}
+          editedAt={editedAt}
+        />
+      }
+      onOpenMenu={onOpenMenu}
     >
       <div
         className={[
@@ -562,6 +630,11 @@ function BubbleVideo({
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
+        {replyTo ? (
+          <div className="px-3 pt-3">
+            <ReplyPreviewBox reply={replyTo} />
+          </div>
+        ) : null}
         <video
           src={url}
           controls
@@ -595,14 +668,14 @@ function BubbleFile({
   caption,
   createdAt,
   readAt,
+  editedAt,
+  replyTo,
   senderName,
   senderAvatarUrl,
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
-  showUnsend,
-  unsendBusy,
-  onUnsend,
+  onOpenMenu,
 }: {
   mine: boolean;
   url: string;
@@ -612,14 +685,14 @@ function BubbleFile({
   caption?: string;
   createdAt: string;
   readAt?: string | null;
+  editedAt?: string | null;
+  replyTo?: ReplyPreview | null;
   senderName: string;
   senderAvatarUrl: string | null;
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
-  showUnsend: boolean;
-  unsendBusy: boolean;
-  onUnsend: () => void;
+  onOpenMenu?: (point: MenuPoint) => void;
 }) {
   const label = mime?.includes("pdf") ? "PDF" : "FILE";
 
@@ -636,13 +709,17 @@ function BubbleFile({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
-          createdAt={createdAt}
-          readAt={readAt}
-          showUnsend={showUnsend}
-          unsendBusy={unsendBusy}
-          onUnsend={onUnsend}
         />
       }
+      meta={
+        <MessageMeta
+          mine={mine}
+          createdAt={createdAt}
+          readAt={readAt}
+          editedAt={editedAt}
+        />
+      }
+      onOpenMenu={onOpenMenu}
     >
       <div
         className={[
@@ -650,6 +727,7 @@ function BubbleFile({
           mine ? "bg-primary/10" : "bg-secondary/30",
         ].join(" ")}
       >
+        <ReplyPreviewBox reply={replyTo} />
         <a
           href={url}
           target="_blank"
@@ -692,6 +770,10 @@ export default function DmChatClient({
     null
   );
   const [unsendingId, setUnsendingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [messageMenu, setMessageMenu] = useState<MessageMenuState | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -710,6 +792,48 @@ export default function DmChatClient({
   const selfProfileHref = "/profile";
   const selfTitleLabel = selfSeedMessage?.sender_title_label ?? null;
   const selfTitleRank = selfSeedMessage?.sender_title_rank ?? null;
+
+  const previewMessage = (message: Message) => {
+    if (message.unsent_at) return "送信を取り消しました";
+    const text = message.body.trim();
+    if (text) return text;
+    if (message.message_type === "image") return "画像";
+    if (message.message_type === "video") return "動画";
+    if (message.message_type === "file") return message.file_name || "ファイル";
+    return "メッセージ";
+  };
+
+  const openMessageMenu = (message: Message, point: MenuPoint) => {
+    const width = 192;
+    const height = message.sender_id === myUserId ? 152 : 56;
+    const viewportWidth =
+      typeof window !== "undefined" ? window.innerWidth : point.x + width;
+    const viewportHeight =
+      typeof window !== "undefined" ? window.innerHeight : point.y + height;
+
+    setMessageMenu({
+      message,
+      point: {
+        x: Math.min(Math.max(12, point.x), Math.max(12, viewportWidth - width - 12)),
+        y: Math.min(Math.max(12, point.y), Math.max(12, viewportHeight - height - 12)),
+      },
+    });
+  };
+
+  const startReply = (message: Message) => {
+    setReplyTarget(message);
+    setEditingMessage(null);
+    setDraft("");
+    setMessageMenu(null);
+  };
+
+  const startEdit = (message: Message) => {
+    if (message.sender_id !== myUserId || message.unsent_at) return;
+    setEditingMessage(message);
+    setReplyTarget(null);
+    setDraft(message.body);
+    setMessageMenu(null);
+  };
 
   const scrollToBottom = (smooth: boolean) => {
     const el = bottomRef.current;
@@ -786,6 +910,17 @@ export default function DmChatClient({
     };
   }, [router, threadId]);
 
+  useEffect(() => {
+    if (!messageMenu) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMessageMenu(null);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [messageMenu]);
+
   const openFilePicker = () => {
     setUploadError(null);
     if (!uploading) filePickerRef.current?.click();
@@ -813,6 +948,7 @@ export default function DmChatClient({
       fd.append("threadId", threadId);
       fd.append("file", file);
       if (draft.trim()) fd.append("caption", draft.trim());
+      if (replyTarget) fd.append("replyToMessageId", replyTarget.id);
 
       const res = await fetch("/api/dm/upload-image", {
         method: "POST",
@@ -851,6 +987,7 @@ export default function DmChatClient({
       }
 
       setDraft("");
+      setReplyTarget(null);
       router.refresh();
       scrollToBottom(true);
       setTimeout(() => pinnedRef.current && scrollToBottom(true), 120);
@@ -888,6 +1025,34 @@ export default function DmChatClient({
     }
   };
 
+  const saveEdit = async (messageId: string, body: string) => {
+    if (editingId) return;
+
+    setEditingId(messageId);
+    setUploadError(null);
+
+    try {
+      const res = await fetch(`/api/dm/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`);
+      }
+
+      setDraft("");
+      setEditingMessage(null);
+      router.refresh();
+    } catch (err: unknown) {
+      setUploadError(getErrorMessage(err, "編集に失敗しました。"));
+    } finally {
+      setEditingId(null);
+    }
+  };
+
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -899,6 +1064,11 @@ export default function DmChatClient({
     const body = draft.trim();
     if (!body || uploading || textSubmittingRef.current) return;
 
+    if (editingMessage) {
+      await saveEdit(editingMessage.id, body);
+      return;
+    }
+
     textSubmittingRef.current = true;
     setTextSubmitting(true);
     setUploadError(null);
@@ -906,8 +1076,10 @@ export default function DmChatClient({
     try {
       const fd = new FormData();
       fd.set("body", body);
+      if (replyTarget) fd.set("reply_to_message_id", replyTarget.id);
       await textAction(fd);
       setDraft("");
+      setReplyTarget(null);
       pinnedRef.current = true;
       router.refresh();
       scrollToBottom(true);
@@ -920,11 +1092,59 @@ export default function DmChatClient({
     }
   };
 
-  const textBusy = textSubmitting || uploading;
+  const textBusy = textSubmitting || uploading || Boolean(editingId);
   const canSendText = draft.trim().length > 0 && !textBusy;
 
   return (
     <>
+      {messageMenu ? (
+        <div className="fixed inset-0 z-[80]" onClick={() => setMessageMenu(null)}>
+          <div
+            className="fixed w-48 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-glow"
+            style={{
+              left: messageMenu.point.x,
+              top: messageMenu.point.y,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => startReply(messageMenu.message)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-secondary/50"
+            >
+              <Reply className="h-4 w-4" aria-hidden="true" />
+              リプライ
+            </button>
+
+            {messageMenu.message.sender_id === myUserId &&
+            !messageMenu.message.unsent_at ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => startEdit(messageMenu.message)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-secondary/50"
+                >
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                  編集
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = messageMenu.message.id;
+                    setMessageMenu(null);
+                    void unsendMessage(id);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  削除
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {modal && (
         <div className="fixed inset-0 z-[70] bg-black/80">
           <div
@@ -981,9 +1201,6 @@ export default function DmChatClient({
                   (mine ? "/profile" : `/users/${encodeURIComponent(m.sender_id)}`);
                 const senderTitleLabel = m.sender_title_label ?? null;
                 const senderTitleRank = m.sender_title_rank ?? null;
-                const showUnsend = mine && !m.unsent_at;
-                const unsendBusy = unsendingId === m.id;
-
                 if (m.unsent_at) {
                   return (
                     <BubbleUnsent
@@ -1008,15 +1225,15 @@ export default function DmChatClient({
                       caption={m.body}
                       createdAt={m.created_at}
                       readAt={m.read_at}
+                      editedAt={m.edited_at}
+                      replyTo={m.reply_to}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
-                      showUnsend={showUnsend}
-                      unsendBusy={unsendBusy}
-                      onUnsend={() => unsendMessage(m.id)}
+                      onOpenMenu={(point) => openMessageMenu(m, point)}
                     />
                   );
                 }
@@ -1030,15 +1247,15 @@ export default function DmChatClient({
                       caption={m.body}
                       createdAt={m.created_at}
                       readAt={m.read_at}
+                      editedAt={m.edited_at}
+                      replyTo={m.reply_to}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
-                      showUnsend={showUnsend}
-                      unsendBusy={unsendBusy}
-                      onUnsend={() => unsendMessage(m.id)}
+                      onOpenMenu={(point) => openMessageMenu(m, point)}
                     />
                   );
                 }
@@ -1055,14 +1272,14 @@ export default function DmChatClient({
                       caption={m.body}
                       createdAt={m.created_at}
                       readAt={m.read_at}
+                      editedAt={m.edited_at}
+                      replyTo={m.reply_to}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
-                      showUnsend={showUnsend}
-                      unsendBusy={unsendBusy}
-                      onUnsend={() => unsendMessage(m.id)}
+                      onOpenMenu={(point) => openMessageMenu(m, point)}
                     />
                   );
                 }
@@ -1074,14 +1291,14 @@ export default function DmChatClient({
                     body={m.body}
                     createdAt={m.created_at}
                     readAt={m.read_at}
+                    editedAt={m.edited_at}
+                    replyTo={m.reply_to}
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}
                     senderProfileHref={senderProfileHref}
                     senderTitleLabel={senderTitleLabel}
                     senderTitleRank={senderTitleRank}
-                    showUnsend={showUnsend}
-                    unsendBusy={unsendBusy}
-                    onUnsend={() => unsendMessage(m.id)}
+                    onOpenMenu={(point) => openMessageMenu(m, point)}
                   />
                 );
               })}
@@ -1104,9 +1321,6 @@ export default function DmChatClient({
                       senderProfileHref={u.sender_profile_href}
                       senderTitleLabel={selfTitleLabel}
                       senderTitleRank={selfTitleRank}
-                      showUnsend={false}
-                      unsendBusy={false}
-                      onUnsend={() => {}}
                     />
                   );
                 }
@@ -1126,9 +1340,6 @@ export default function DmChatClient({
                       senderProfileHref={u.sender_profile_href}
                       senderTitleLabel={selfTitleLabel}
                       senderTitleRank={selfTitleRank}
-                      showUnsend={false}
-                      unsendBusy={false}
-                      onUnsend={() => {}}
                     />
                   );
                 }
@@ -1149,9 +1360,6 @@ export default function DmChatClient({
                     senderProfileHref={u.sender_profile_href}
                     senderTitleLabel={selfTitleLabel}
                     senderTitleRank={selfTitleRank}
-                    showUnsend={false}
-                    unsendBusy={false}
-                    onUnsend={() => {}}
                   />
                 );
               })}
@@ -1183,10 +1391,36 @@ export default function DmChatClient({
             onChange={onPickFile}
           />
 
+          {replyTarget || editingMessage ? (
+            <div className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs">
+              <div className="min-w-0">
+                <div className="font-semibold text-foreground">
+                  {editingMessage ? "編集中" : "リプライ"}
+                </div>
+                <div className="mt-0.5 line-clamp-2 break-words text-muted-foreground">
+                  {previewMessage(editingMessage ?? replyTarget!)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTarget(null);
+                  setEditingMessage(null);
+                  setDraft("");
+                }}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-secondary/60"
+                aria-label="キャンセル"
+                title="キャンセル"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+
           <textarea
             value={draft}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
-            placeholder="メッセージを入力…"
+            placeholder={editingMessage ? "編集内容を入力…" : "メッセージを入力…"}
             disabled={textBusy}
             rows={2}
             className="max-h-36 min-h-11 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
@@ -1220,6 +1454,8 @@ export default function DmChatClient({
             <SubmitButton
               busy={textSubmitting}
               disabled={!canSendText}
+              label={editingMessage ? "保存" : "送信"}
+              busyLabel={editingMessage ? "保存中…" : "送信中…"}
               onSettled={() => {
                 router.refresh();
               }}
