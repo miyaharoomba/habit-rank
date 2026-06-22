@@ -20,23 +20,28 @@ export type ResultCommentItem = {
   user_profile_href: string;
   body: string;
   created_at: string;
+  reply_to_comment_id: string | null;
+  reply_to: {
+    id: string;
+    user_name: string;
+    body: string;
+  } | null;
+  can_delete: boolean;
 };
 
 type CommentsResponse = {
   items?: ResultCommentItem[];
   item?: ResultCommentItem;
+  deletedId?: string;
   error?: string;
 };
 
 const COMMENT_REFRESH_MS = 3000;
 const MIN_REFRESH_GAP_MS = 1200;
 
-function mergeComments(
-  prev: ResultCommentItem[],
-  next: ResultCommentItem[]
-) {
+function sortComments(items: ResultCommentItem[]) {
   const map = new Map<string, ResultCommentItem>();
-  [...prev, ...next].forEach((item) => {
+  items.forEach((item) => {
     map.set(item.id, item);
   });
 
@@ -91,7 +96,9 @@ export default function ResultCommentsClient({
 }) {
   const [comments, setComments] = useState(initialComments);
   const [draft, setDraft] = useState("");
+  const [replyTarget, setReplyTarget] = useState<ResultCommentItem | null>(null);
   const [sending, setSending] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,7 +108,7 @@ export default function ResultCommentsClient({
   const sendingRef = useRef(false);
 
   useEffect(() => {
-    setComments(initialComments);
+    setComments(sortComments(initialComments));
   }, [initialComments]);
 
   const fetchComments = useCallback(
@@ -126,7 +133,7 @@ export default function ResultCommentsClient({
           throw new Error(json?.error ?? `HTTP ${res.status}`);
         }
 
-        setComments((prev) => mergeComments(prev, json.items ?? []));
+        setComments(sortComments(json.items ?? []));
         setError(null);
       } catch (err: unknown) {
         setError(errorMessage(err, "コメントの更新に失敗しました。"));
@@ -173,7 +180,10 @@ export default function ResultCommentsClient({
       const res = await fetch(`/api/results/${sessionId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({
+          body,
+          replyToCommentId: replyTarget?.id ?? null,
+        }),
       });
 
       const json = (await res.json().catch(() => null)) as
@@ -184,8 +194,9 @@ export default function ResultCommentsClient({
         throw new Error(json?.error ?? `HTTP ${res.status}`);
       }
 
-      setComments((prev) => mergeComments(prev, [json.item!]));
+      setComments((prev) => sortComments([...prev, json.item!]));
       setDraft("");
+      setReplyTarget(null);
       draftRef.current?.focus();
       void fetchComments({ force: true });
     } catch (err: unknown) {
@@ -197,6 +208,58 @@ export default function ResultCommentsClient({
   };
 
   const canSubmit = draft.trim().length > 0 && !sending;
+
+  const startReply = (comment: ResultCommentItem) => {
+    setReplyTarget(comment);
+    setError(null);
+    draftRef.current?.focus();
+  };
+
+  const deleteComment = async (comment: ResultCommentItem) => {
+    if (deletingId) return;
+
+    const ok = window.confirm("このコメントを削除しますか？");
+    if (!ok) return;
+
+    setDeletingId(comment.id);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/results/${sessionId}/comments`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId: comment.id }),
+      });
+
+      const json = (await res.json().catch(() => null)) as
+        | CommentsResponse
+        | null;
+
+      if (!res.ok || !json?.deletedId) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`);
+      }
+
+      setComments((prev) =>
+        prev
+          .filter((item) => item.id !== json.deletedId)
+          .map((item) =>
+            item.reply_to_comment_id === json.deletedId
+              ? { ...item, reply_to_comment_id: null, reply_to: null }
+              : item
+          )
+      );
+
+      if (replyTarget?.id === json.deletedId) {
+        setReplyTarget(null);
+      }
+
+      void fetchComments({ force: true });
+    } catch (err: unknown) {
+      setError(errorMessage(err, "コメントの削除に失敗しました。"));
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const onDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
@@ -227,6 +290,26 @@ export default function ResultCommentsClient({
           ) : null}
 
           <div className="grid gap-3">
+            {replyTarget ? (
+              <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-xs">
+                <div className="min-w-0">
+                  <div className="font-semibold text-foreground">
+                    {replyTarget.user_name} に返信
+                  </div>
+                  <div className="mt-1 line-clamp-2 break-words text-muted-foreground">
+                    {replyTarget.body}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyTarget(null)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-muted-foreground transition hover:bg-secondary/60 hover:text-foreground"
+                >
+                  キャンセル
+                </button>
+              </div>
+            ) : null}
+
             <textarea
               ref={draftRef}
               value={draft}
@@ -235,7 +318,11 @@ export default function ResultCommentsClient({
               rows={3}
               maxLength={280}
               disabled={sending}
-              placeholder={`${resultOwnerName}さんのリザルトにコメント`}
+              placeholder={
+                replyTarget
+                  ? `${replyTarget.user_name} に返信`
+                  : `${resultOwnerName}さんのリザルトにコメント`
+              }
               className="w-full resize-y rounded-2xl border border-input bg-background px-4 py-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
             />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -249,7 +336,7 @@ export default function ResultCommentsClient({
                 aria-busy={sending}
                 className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {sending ? "送信中..." : "コメントする"}
+                {sending ? "送信中..." : replyTarget ? "返信する" : "コメントする"}
               </button>
             </div>
           </div>
@@ -282,7 +369,36 @@ export default function ResultCommentsClient({
                         </span>
                       </div>
                       <div className="mt-1 rounded-2xl rounded-tl-md border border-border bg-background/70 px-4 py-3 text-sm leading-6">
+                        {comment.reply_to ? (
+                          <div className="mb-3 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs">
+                            <div className="font-semibold text-muted-foreground">
+                              {comment.reply_to.user_name}
+                            </div>
+                            <div className="mt-0.5 line-clamp-2 break-words text-muted-foreground">
+                              {comment.reply_to.body}
+                            </div>
+                          </div>
+                        ) : null}
                         <LinkifiedText text={comment.body} />
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 px-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => startReply(comment)}
+                          className="font-semibold text-muted-foreground transition hover:text-primary"
+                        >
+                          返信
+                        </button>
+                        {comment.can_delete ? (
+                          <button
+                            type="button"
+                            onClick={() => void deleteComment(comment)}
+                            disabled={deletingId === comment.id}
+                            className="font-semibold text-muted-foreground transition hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingId === comment.id ? "削除中..." : "削除"}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </li>

@@ -19,6 +19,7 @@ type ResultCommentRow = {
   user_id: string;
   body: string;
   created_at: string;
+  reply_to_comment_id: string | null;
 };
 
 type CommentProfileRow = {
@@ -100,7 +101,7 @@ export default async function ResultPage({
 
   const { data: commentRows, error: commentErr } = await supabase
     .from("result_comments")
-    .select("id, user_id, body, created_at")
+    .select("id, user_id, body, created_at, reply_to_comment_id")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -113,6 +114,7 @@ export default async function ResultPage({
     (a, b) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
+  const commentMap = new Map(comments.map((comment) => [comment.id, comment]));
   const commentUserIds = Array.from(new Set(comments.map((c) => c.user_id)));
   const commentProfileMap = new Map<string, CommentProfileRow>();
 
@@ -146,6 +148,21 @@ export default async function ResultPage({
           : `/users/${encodeURIComponent(comment.user_id)}`,
       body: comment.body,
       created_at: comment.created_at,
+      reply_to_comment_id: comment.reply_to_comment_id,
+      reply_to: comment.reply_to_comment_id
+        ? (() => {
+            const reply = commentMap.get(comment.reply_to_comment_id);
+            if (!reply) return null;
+
+            const replyProfile = commentProfileMap.get(reply.user_id);
+            return {
+              id: reply.id,
+              user_name: (replyProfile?.display_name ?? "").trim() || "NoName",
+              body: reply.body,
+            };
+          })()
+        : null,
+      can_delete: comment.user_id === user.id,
     };
   });
 

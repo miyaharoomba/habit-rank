@@ -9,6 +9,7 @@ type CommentRow = {
   user_id: string;
   body: string;
   created_at: string;
+  reply_to_comment_id: string | null;
 };
 
 type ProfileRow = {
@@ -44,7 +45,19 @@ function avatarUrl(path: string | null) {
 }
 
 function toProfileHref(userId: string, currentUserId: string) {
-  return userId === currentUserId ? "/profile" : `/users/${encodeURIComponent(userId)}`;
+  return userId === currentUserId
+    ? "/profile"
+    : `/users/${encodeURIComponent(userId)}`;
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(values.filter((value): value is string => Boolean(value)))
+  );
+}
+
+function commentPreview(comment: CommentRow) {
+  return comment.body.trim() || "コメント";
 }
 
 async function loadCommentItems({
@@ -58,7 +71,7 @@ async function loadCommentItems({
 }) {
   const { data: rows, error } = await supabase
     .from("result_comments")
-    .select("id, user_id, body, created_at")
+    .select("id, user_id, body, created_at, reply_to_comment_id")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -69,7 +82,31 @@ async function loadCommentItems({
     (a, b) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
-  const userIds = Array.from(new Set(comments.map((comment) => comment.user_id)));
+
+  const commentMap = new Map(comments.map((comment) => [comment.id, comment]));
+  const missingReplyIds = uniqueStrings(
+    comments
+      .map((comment) => comment.reply_to_comment_id)
+      .filter((replyId) => replyId && !commentMap.has(replyId))
+  );
+
+  if (missingReplyIds.length > 0) {
+    const { data: replies, error: replyErr } = await supabase
+      .from("result_comments")
+      .select("id, user_id, body, created_at, reply_to_comment_id")
+      .eq("session_id", sessionId)
+      .in("id", missingReplyIds);
+
+    if (replyErr) throw new Error(replyErr.message);
+
+    ((replies ?? []) as CommentRow[]).forEach((reply) => {
+      commentMap.set(reply.id, reply);
+    });
+  }
+
+  const userIds = uniqueStrings(
+    Array.from(commentMap.values()).map((comment) => comment.user_id)
+  );
   const profileMap = new Map<string, ProfileRow>();
 
   if (userIds.length > 0) {
@@ -97,35 +134,58 @@ async function loadCommentItems({
       user_profile_href: toProfileHref(comment.user_id, currentUserId),
       body: comment.body,
       created_at: comment.created_at,
+      reply_to_comment_id: comment.reply_to_comment_id,
+      reply_to: comment.reply_to_comment_id
+        ? (() => {
+            const reply = commentMap.get(comment.reply_to_comment_id);
+            if (!reply) return null;
+
+            const replyProfile = profileMap.get(reply.user_id);
+            return {
+              id: reply.id,
+              user_name: (replyProfile?.display_name ?? "").trim() || "NoName",
+              body: commentPreview(reply),
+            };
+          })()
+        : null,
+      can_delete: comment.user_id === currentUserId,
     };
   });
 }
 
-async function createResultCommentNotification({
+async function createResultCommentNotifications({
   sessionId,
   ownerId,
+  replyOwnerId,
   actorId,
   body,
 }: {
   sessionId: number;
   ownerId: string;
+  replyOwnerId?: string | null;
   actorId: string;
   body: string;
 }) {
-  if (ownerId === actorId) return;
+  const recipientIds = uniqueStrings([ownerId, replyOwnerId]).filter(
+    (recipientId) => recipientId !== actorId
+  );
+
+  if (recipientIds.length === 0) return;
 
   try {
     const admin = getAdminClient();
-    const { error } = await admin.from("notifications").insert({
-      recipient_id: ownerId,
-      actor_id: actorId,
-      type: "result_comment",
-      thread_id: null,
-      session_id: sessionId,
-      announcement_id: null,
-      support_thread_id: null,
-      message_preview: body.slice(0, 200),
-    });
+    const { error } = await admin.from("notifications").insert(
+      recipientIds.map((recipientId) => ({
+        recipient_id: recipientId,
+        actor_id: actorId,
+        type: "result_comment",
+        thread_id: null,
+        session_id: sessionId,
+        announcement_id: null,
+        support_thread_id: null,
+        message_preview: body.slice(0, 200),
+      }))
+    );
 
     if (error) {
       console.error("result comment notification insert failed:", error);
@@ -197,9 +257,13 @@ export async function POST(
 
   const bodyJson = await request.json().catch(() => null);
   const body = String(bodyJson?.body ?? "").trim().slice(0, 280);
+  const replyToCommentId = String(bodyJson?.replyToCommentId ?? "").trim();
 
   if (!body) {
-    return NextResponse.json({ error: "コメントを入力してください。" }, { status: 400 });
+    return NextResponse.json(
+      { error: "コメントを入力してください。" },
+      { status: 400 }
+    );
   }
 
   const { data: sess, error: sessErr } = await supabase
@@ -213,7 +277,10 @@ export async function POST(
   }
 
   if (!sess) {
-    return NextResponse.json({ error: "リザルトが見つかりません。" }, { status: 404 });
+    return NextResponse.json(
+      { error: "リザルトが見つかりません。" },
+      { status: 404 }
+    );
   }
 
   if (!sess.ended_at) {
@@ -223,14 +290,38 @@ export async function POST(
     );
   }
 
+  let replyOwnerId: string | null = null;
+  if (replyToCommentId) {
+    const { data: replyTarget, error: replyErr } = await supabase
+      .from("result_comments")
+      .select("id, user_id")
+      .eq("id", replyToCommentId)
+      .eq("session_id", sessionId)
+      .maybeSingle();
+
+    if (replyErr) {
+      return NextResponse.json({ error: replyErr.message }, { status: 500 });
+    }
+
+    if (!replyTarget) {
+      return NextResponse.json(
+        { error: "返信先のコメントが見つかりません。" },
+        { status: 404 }
+      );
+    }
+
+    replyOwnerId = String(replyTarget.user_id);
+  }
+
   const { data: inserted, error: insertErr } = await supabase
     .from("result_comments")
     .insert({
       session_id: sessionId,
       user_id: user.id,
       body,
+      reply_to_comment_id: replyToCommentId || null,
     })
-    .select("id, user_id, body, created_at")
+    .select("id, user_id, body, created_at, reply_to_comment_id")
     .single();
 
   if (insertErr || !inserted) {
@@ -240,9 +331,10 @@ export async function POST(
     );
   }
 
-  await createResultCommentNotification({
+  await createResultCommentNotifications({
     sessionId,
     ownerId: String(sess.user_id),
+    replyOwnerId,
     actorId: user.id,
     body,
   });
@@ -260,4 +352,70 @@ export async function POST(
     item: items.find((item) => item.id === (inserted as CommentRow).id) ?? null,
     items,
   });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ sessionId: string }> }
+) {
+  const { sessionId: rawSessionId } = await params;
+  const sessionId = parseSessionId(rawSessionId);
+
+  if (!sessionId) {
+    return NextResponse.json({ error: "invalid session id" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+
+  if (userErr || !user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const bodyJson = await request.json().catch(() => null);
+  const commentId = String(bodyJson?.commentId ?? "").trim();
+
+  if (!commentId) {
+    return NextResponse.json(
+      { error: "comment id is required" },
+      { status: 400 }
+    );
+  }
+
+  const { data: comment, error: commentErr } = await supabase
+    .from("result_comments")
+    .select("id, user_id")
+    .eq("id", commentId)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (commentErr) {
+    return NextResponse.json({ error: commentErr.message }, { status: 500 });
+  }
+
+  if (!comment) {
+    return NextResponse.json({ error: "comment not found" }, { status: 404 });
+  }
+
+  if (comment.user_id !== user.id) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const { error: deleteErr } = await supabase
+    .from("result_comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("session_id", sessionId)
+    .eq("user_id", user.id);
+
+  if (deleteErr) {
+    return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+  }
+
+  revalidatePath(`/results/${sessionId}`);
+
+  return NextResponse.json({ ok: true, deletedId: commentId });
 }
