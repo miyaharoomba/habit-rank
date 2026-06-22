@@ -66,6 +66,15 @@ type ApiResponse = {
   canModerate?: boolean;
 };
 
+type GlobalChatBoardProps = {
+  myUserId: string;
+  limit?: number;
+  pollMs?: number;
+  mode?: "embedded" | "drawer";
+  hideHeader?: boolean;
+  className?: string;
+};
+
 function bytes(size: number) {
   if (!Number.isFinite(size)) return "";
   const kb = size / 1024;
@@ -566,11 +575,10 @@ export default function GlobalChatBoard({
   myUserId,
   limit = 30,
   pollMs = 30000,
-}: {
-  myUserId: string;
-  limit?: number;
-  pollMs?: number;
-}) {
+  mode = "embedded",
+  hideHeader = false,
+  className = "",
+}: GlobalChatBoardProps) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -894,6 +902,8 @@ export default function GlobalChatBoard({
     if (canSend) void onSend();
   };
 
+  const isDrawer = mode === "drawer";
+
   return (
     <>
       {messageMenu ? (
@@ -979,23 +989,40 @@ export default function GlobalChatBoard({
         </div>
       ) : null}
 
-      <section className="flex w-full min-w-0 max-w-full flex-col overflow-x-hidden">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-lg font-semibold">掲示板</h3>
-            <p className="text-sm text-muted-foreground">
-              全員が読める公開チャット
-            </p>
+      <section
+        className={[
+          "flex w-full min-w-0 max-w-full flex-col overflow-x-hidden",
+          isDrawer ? "h-full min-h-0" : "",
+          className,
+        ].join(" ")}
+      >
+        {!hideHeader ? (
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold">掲示板</h3>
+              <p className="text-sm text-muted-foreground">
+                全員が読める公開チャット
+              </p>
+            </div>
+            <div className="shrink-0 text-xs text-muted-foreground">
+              {loading ? "読み込み中…" : `${items.length}件`}
+            </div>
           </div>
-          <div className="shrink-0 text-xs text-muted-foreground">
-            {loading ? "読み込み中…" : `${items.length}件`}
-          </div>
-        </div>
+        ) : null}
 
-        <div className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-3">
+        <div
+          className={[
+            "flex min-h-0 w-full min-w-0 max-w-full flex-col gap-3",
+            isDrawer ? "flex-1" : "",
+          ].join(" ")}
+        >
           <div
             ref={listRef}
-            className="min-h-[22rem] max-h-[62vh] min-w-0 overflow-y-auto overflow-x-hidden px-1 py-2 sm:px-2"
+            className={
+              isDrawer
+                ? "min-h-0 flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain px-1 py-2 sm:px-2"
+                : "min-h-[22rem] max-h-[62vh] min-w-0 overflow-y-auto overflow-x-hidden px-1 py-2 sm:px-2"
+            }
           >
             {loading ? (
               <div className="flex min-h-[18rem] items-center justify-center px-4 text-center text-sm text-muted-foreground">
