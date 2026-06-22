@@ -147,6 +147,8 @@ export async function GET(request: Request) {
     const notificationUrl =
       n.type === "streak_end" && n.session_id
         ? `/results/${n.session_id}`
+        : n.type === "result_comment" && n.session_id
+        ? `/results/${n.session_id}`
         : n.type === "dm" && n.thread_id
         ? `/dm/${n.thread_id}`
         : n.type === "admin_broadcast" && n.announcement_id

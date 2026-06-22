@@ -172,6 +172,16 @@ async function buildPayloadMap(
       continue;
     }
 
+    if (notification.type === "result_comment" && notification.session_id !== null) {
+      map.set(row.id, {
+        ...base,
+        title: `${actorName} がリザルトにコメント`,
+        body: preview || "コメントが届きました",
+        url: `/results/${notification.session_id}`,
+      });
+      continue;
+    }
+
     if (notification.type === "streak_end" && notification.session_id !== null) {
       map.set(row.id, {
         ...base,

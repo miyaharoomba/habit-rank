@@ -6,7 +6,13 @@ import { formatJstStartLabel } from "@/lib/time";
 
 type NotifItem = {
   id: string;
-  type: "dm" | "streak_end" | "admin_broadcast" | "support_reply" | "trophy_unlock";
+  type:
+    | "dm"
+    | "streak_end"
+    | "admin_broadcast"
+    | "support_reply"
+    | "trophy_unlock"
+    | "result_comment";
   created_at: string;
   message_preview: string;
   thread_id: string | null;
@@ -43,6 +49,7 @@ function bellIcon(className = "h-5 w-5") {
 }
 
 function iconFor(n: NotifItem) {
+  if (n.type === "result_comment") return "💬";
   if (n.type === "trophy_unlock") return "🏆";
   if (n.type === "streak_end") return "⏱️";
   if (n.type === "dm") return "✉️";
@@ -207,6 +214,9 @@ export default function NotificationBell({
   const routeFor = (n: NotifItem) => {
     if (n.url && n.url.trim().length > 0) return n.url;
     if (n.type === "streak_end" && n.session_id) return `/results/${n.session_id}`;
+    if (n.type === "result_comment" && n.session_id) {
+      return `/results/${n.session_id}`;
+    }
     if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
     if (n.type === "admin_broadcast" && n.announcement_id) {
       return `/announcements/${n.announcement_id}`;
@@ -221,6 +231,9 @@ export default function NotificationBell({
   };
 
   const titleFor = (n: NotifItem) => {
+    if (n.type === "result_comment") {
+      return `${n.actor_name ?? "誰か"} がリザルトにコメント`;
+    }
     if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
     if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
     if (n.type === "admin_broadcast") return "管理者からのお知らせ";
@@ -230,6 +243,9 @@ export default function NotificationBell({
   };
 
   const bodyFor = (n: NotifItem) => {
+    if (n.type === "result_comment") {
+      return n.message_preview || "コメントが届きました";
+    }
     if (n.type === "dm") return n.message_preview || "新しいDMがあります";
     if (n.type === "streak_end") return `理由: ${n.message_preview || "finished"}`;
     if (n.type === "admin_broadcast") return n.message_preview || "お知らせが届きました";

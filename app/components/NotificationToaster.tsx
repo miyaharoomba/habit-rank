@@ -43,7 +43,8 @@ function isToastTarget(n: NotifItem) {
   return (
     n.type === "admin_broadcast" ||
     n.type === "streak_end" ||
-    n.type === "trophy_unlock"
+    n.type === "trophy_unlock" ||
+    n.type === "result_comment"
   );
 }
 
@@ -51,6 +52,9 @@ function routeFor(n: NotifItem) {
   if (n.url && n.url.trim().length > 0) return n.url;
   if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
   if (n.type === "streak_end" && n.session_id) return `/results/${n.session_id}`;
+  if (n.type === "result_comment" && n.session_id) {
+    return `/results/${n.session_id}`;
+  }
   if (n.type === "admin_broadcast" && n.announcement_id) {
     return `/announcements/${n.announcement_id}`;
   }
@@ -64,6 +68,9 @@ function routeFor(n: NotifItem) {
 }
 
 function titleFor(n: NotifItem) {
+  if (n.type === "result_comment") {
+    return `${n.actor_name ?? "誰か"} がリザルトにコメント`;
+  }
   if (n.type === "dm") return `${n.actor_name ?? "誰か"} からDM`;
   if (n.type === "streak_end") return `${n.actor_name ?? "誰か"} が継続を終了`;
   if (n.type === "admin_broadcast") {
@@ -80,6 +87,10 @@ function titleFor(n: NotifItem) {
 
 function bodyFor(n: NotifItem) {
   const txt = (n.message_preview ?? "").trim();
+
+  if (n.type === "result_comment") {
+    return txt || "コメントが届きました";
+  }
 
   if (n.type === "streak_end") {
     return txt ? `理由: ${txt}` : "理由: -";
@@ -101,6 +112,7 @@ function bodyFor(n: NotifItem) {
 }
 
 function iconFor(n: NotifItem) {
+  if (n.type === "result_comment") return "💬";
   if (n.type === "trophy_unlock") {
     const text = (n.message_preview ?? "").toLowerCase();
     if (text.includes("プラチナ")) return "🏆";
