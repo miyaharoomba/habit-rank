@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -777,6 +778,7 @@ export default function DmChatClient({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  const listContentRef = useRef<HTMLDivElement | null>(null);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const filePickerRef = useRef<HTMLInputElement | null>(null);
   const mediaPickerRef = useRef<HTMLInputElement | null>(null);
@@ -836,14 +838,29 @@ export default function DmChatClient({
     setMessageMenu(null);
   };
 
-  const scrollToBottom = (smooth: boolean) => {
+  const scrollToBottom = useCallback((smooth: boolean) => {
     const el = listRef.current;
     if (!el) return;
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: smooth ? "smooth" : "auto",
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
+  const scheduleScrollToBottom = useCallback((smooth: boolean, force = false) => {
+    if (!force && !pinnedRef.current) return;
+    scrollToBottom(smooth);
+    window.requestAnimationFrame(() => {
+      if (force || pinnedRef.current) scrollToBottom(smooth);
     });
-  };
+    setTimeout(() => {
+      if (force || pinnedRef.current) scrollToBottom(smooth);
+    }, 80);
+    setTimeout(() => {
+      if (force || pinnedRef.current) scrollToBottom(smooth);
+    }, 240);
+  }, [scrollToBottom]);
 
   const focusDraft = () => {
     window.requestAnimationFrame(() => {
@@ -858,35 +875,30 @@ export default function DmChatClient({
     pinnedRef.current = distance < 120;
   };
 
-  const maybeStickBottom = () => {
+  const maybeStickBottom = useCallback(() => {
     if (pinnedRef.current) {
-      scrollToBottom(false);
-      setTimeout(() => pinnedRef.current && scrollToBottom(false), 60);
-      setTimeout(() => pinnedRef.current && scrollToBottom(false), 160);
+      scheduleScrollToBottom(false);
     }
-  };
+  }, [scheduleScrollToBottom]);
 
   useLayoutEffect(() => {
     pinnedRef.current = true;
-    scrollToBottom(false);
-    setTimeout(() => scrollToBottom(false), 50);
-    setTimeout(() => scrollToBottom(false), 150);
-    setTimeout(() => scrollToBottom(false), 300);
-  }, []);
+    scheduleScrollToBottom(false, true);
+  }, [scheduleScrollToBottom]);
 
   useLayoutEffect(() => {
     maybeStickBottom();
-  }, [messages.length, localUploads.length]);
+  }, [maybeStickBottom, messages.length, localUploads.length]);
 
   useEffect(() => {
-    const el = listRef.current;
+    const el = listContentRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      if (pinnedRef.current) scrollToBottom(false);
+      if (pinnedRef.current) scheduleScrollToBottom(false);
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [scheduleScrollToBottom]);
 
   useEffect(() => {
     const serverIds = new Set(messages.map((m) => m.id));
@@ -1202,19 +1214,20 @@ export default function DmChatClient({
         </div>
       )}
 
-      <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col gap-3 sm:min-h-[calc(100dvh-8rem)]">
+      <div className="flex h-[calc(100dvh-6.5rem)] flex-col gap-3 sm:h-[calc(100dvh-8rem)]">
         <div
           ref={listRef}
           onScroll={updatePinned}
-          className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-2 sm:px-2"
+          className="min-h-0 flex-1 overflow-y-auto px-1 py-2 sm:px-2"
         >
-          {messages.length === 0 && localUploads.length === 0 ? (
-            <div className="flex min-h-[42vh] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-              まだメッセージがありません。最初の一言、またはメディアを送ってみよう。
-            </div>
-          ) : (
-            <>
-              {messages.map((m) => {
+          <div ref={listContentRef} className="space-y-4">
+            {messages.length === 0 && localUploads.length === 0 ? (
+              <div className="flex min-h-[42vh] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                まだメッセージがありません。最初の一言、またはメディアを送ってみよう。
+              </div>
+            ) : (
+              <>
+                {messages.map((m) => {
                 const mine = m.sender_id === myUserId;
                 const senderName = (m.sender_name ?? "").trim() || "NoName";
                 const senderAvatarUrl = m.sender_avatar_url ?? null;
@@ -1323,9 +1336,9 @@ export default function DmChatClient({
                     onOpenMenu={(point) => openMessageMenu(m, point)}
                   />
                 );
-              })}
+                })}
 
-              {localUploads.map((u) => {
+                {localUploads.map((u) => {
                 const mine = u.sender_id === myUserId;
 
                 if (u.type === "image") {
@@ -1384,10 +1397,11 @@ export default function DmChatClient({
                     senderTitleRank={selfTitleRank}
                   />
                 );
-              })}
+                })}
 
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         {uploadError ? (
