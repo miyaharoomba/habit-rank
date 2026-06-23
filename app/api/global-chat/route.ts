@@ -21,6 +21,7 @@ type ProfileRow = {
   display_name: string | null;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  level: number | null;
 };
 
 type BadgeLiteRow = {
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_path, current_title_badge_id")
+      .select("id, display_name, avatar_path, current_title_badge_id, level")
       .in("id", userIds);
 
     ((profiles ?? []) as ProfileRow[]).forEach((p) => {
@@ -137,6 +138,7 @@ export async function GET(request: Request) {
       user_avatar_url: avatarProxyUrl(profile?.avatar_path ?? null),
       user_title_label: currentBadge?.title_label?.trim() || null,
       user_title_rank: currentBadge?.badge_rank ?? null,
+      user_level: profile?.level ?? 1,
       body: r.body,
       created_at: r.created_at,
       message_type: r.message_type ?? "text",

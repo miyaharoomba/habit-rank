@@ -11,6 +11,7 @@ import {
 } from "@/app/components/AppPageHeader";
 import { formatJstStartLabel } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
+import LevelBadge from "@/app/components/LevelBadge";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
 
 type BestRow = {
@@ -32,6 +33,7 @@ type ProfileRow = {
   id: string;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  level: number | null;
 };
 
 type BadgeLiteRow = {
@@ -175,11 +177,12 @@ export default async function RankingPage({
 
   const avatarMap = new Map<string, string | null>();
   const titleBadgeIdMap = new Map<string, string | null>();
+  const levelMap = new Map<string, number | null>();
 
   if (targetUserIds.length > 0) {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path, current_title_badge_id")
+      .select("id, avatar_path, current_title_badge_id, level")
       .in("id", targetUserIds);
 
     if (profilesErr) {
@@ -189,6 +192,7 @@ export default async function RankingPage({
     ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
+      levelMap.set(row.id, row.level ?? 1);
     });
   }
 
@@ -279,6 +283,7 @@ export default async function RankingPage({
                     const avatar = avatarUrl(avatarMap.get(r.user_id));
                     const badgeId = titleBadgeIdMap.get(r.user_id) ?? null;
                     const title = badgeId ? badgeMap.get(badgeId) ?? null : null;
+                    const level = levelMap.get(r.user_id) ?? 1;
 
                     return (
                       <li
@@ -305,6 +310,8 @@ export default async function RankingPage({
                                 {r.display_name}
                                 {isMe ? "（あなた）" : ""}
                               </Link>
+
+                              <LevelBadge level={level} compact />
 
                               <TitleBadge
                                 label={title?.title_label ?? null}
@@ -339,6 +346,7 @@ export default async function RankingPage({
                   const avatar = avatarUrl(avatarMap.get(r.user_id));
                   const badgeId = titleBadgeIdMap.get(r.user_id) ?? null;
                   const title = badgeId ? badgeMap.get(badgeId) ?? null : null;
+                  const level = levelMap.get(r.user_id) ?? 1;
 
                   return (
                     <li
@@ -365,6 +373,8 @@ export default async function RankingPage({
                               {r.display_name}
                               {isMe ? "（あなた）" : ""}
                             </Link>
+
+                            <LevelBadge level={level} compact />
 
                             <TitleBadge
                               label={title?.title_label ?? null}

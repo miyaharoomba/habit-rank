@@ -2,6 +2,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
+import LevelBadge from "@/app/components/LevelBadge";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +15,7 @@ import {
   PageHeader,
 } from "@/app/components/AppPageHeader";
 import { Pencil } from "lucide-react";
+import { levelProgress } from "@/app/lib/leveling";
 
 type ProfileRow = {
   id: string;
@@ -22,6 +24,8 @@ type ProfileRow = {
   status_message: string | null;
   updated_at: string | null;
   current_title_badge_id: string | null;
+  xp_total: number | null;
+  level: number | null;
 };
 
 type SessionRow = {
@@ -97,7 +101,7 @@ export default async function ProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "id, display_name, avatar_path, status_message, updated_at, current_title_badge_id"
+          "id, display_name, avatar_path, status_message, updated_at, current_title_badge_id, xp_total, level"
         )
         .eq("id", user.id)
         .maybeSingle(),
@@ -190,6 +194,7 @@ export default async function ProfilePage() {
   const statusText =
     (row.status_message ?? "").trim() ||
     "ステータスメッセージはまだ設定されていません。";
+  const xpProgress = levelProgress(row.xp_total ?? 0, row.level ?? 1);
 
   return (
     <Container>
@@ -229,8 +234,45 @@ export default async function ProfilePage() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-xl font-bold break-words">
-                  {(row.display_name ?? "").trim() || "NoName"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-xl font-bold break-words">
+                    {(row.display_name ?? "").trim() || "NoName"}
+                  </div>
+                  <LevelBadge level={xpProgress.level} />
+                </div>
+
+                <div className="mt-3 rounded-xl border border-border bg-background/60 px-4 py-3">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground">レベル</div>
+                      <div className="mt-1 text-lg font-bold tabular-nums">
+                        Lv {xpProgress.level}
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <div className="font-semibold text-foreground tabular-nums">
+                        {xpProgress.totalXp.toLocaleString()} XP
+                      </div>
+                      <div>
+                        次まで {xpProgress.remaining.toLocaleString()} XP
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{
+                        width: `${
+                          xpProgress.ratio > 0
+                            ? Math.max(3, Math.round(xpProgress.ratio * 100))
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    継続1分ごとに1XP。終了済みの過去記録も含まれます。
+                  </div>
                 </div>
 
                 {/* 現在の称号 */}

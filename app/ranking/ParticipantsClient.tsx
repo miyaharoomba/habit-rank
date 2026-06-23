@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TitleBadge from "@/app/components/TitleBadge";
+import LevelBadge from "@/app/components/LevelBadge";
 
 type Participant = {
   user_id: string;
@@ -14,6 +15,7 @@ type Participant = {
   avatar_path?: string | null;
   title_label?: string | null;
   title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  level?: number | null;
 };
 
 function formatTime(sec: number) {
@@ -62,8 +64,8 @@ function MessageButton({ targetUserId }: { targetUserId: string }) {
       }
 
       router.push(`/dm/${json.threadId}`);
-    } catch (e: any) {
-      alert(e?.message ?? "DMを開けませんでした");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "DMを開けませんでした");
     } finally {
       setOpening(false);
     }
@@ -149,6 +151,8 @@ export default function ParticipantsClient({
                         {p.display_name || "NoName"}
                       </div>
 
+                      <LevelBadge level={p.level} compact />
+
                       {p.title_label?.trim() ? (
                         <TitleBadge
                           label={p.title_label}
@@ -192,4 +196,3 @@ export default function ParticipantsClient({
     </div>
   );
 }
-``

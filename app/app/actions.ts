@@ -184,7 +184,12 @@ export async function finishSession(formData: FormData) {
   revalidatePath("/app");
   revalidatePath("/history");
   revalidatePath("/badges");
+  revalidatePath("/profile");
+  revalidatePath("/participants");
+  revalidatePath("/ranking");
+  revalidatePath("/dm");
   revalidatePath(`/users/${user.id}/badges`);
+  revalidatePath(`/users/${user.id}`);
   revalidatePath(`/results/${finishedSessionId}`);
 
   redirect(`/results/${finishedSessionId}`);

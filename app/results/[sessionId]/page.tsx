@@ -26,6 +26,7 @@ type CommentProfileRow = {
   id: string;
   display_name: string | null;
   avatar_path: string | null;
+  level: number | null;
 };
 
 function avatarUrl(path: string | null) {
@@ -121,7 +122,7 @@ export default async function ResultPage({
   if (commentUserIds.length > 0) {
     const { data: commentProfiles, error: commentProfileErr } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_path")
+      .select("id, display_name, avatar_path, level")
       .in("id", commentUserIds);
 
     if (commentProfileErr) {
@@ -146,6 +147,7 @@ export default async function ResultPage({
         comment.user_id === user.id
           ? "/profile"
           : `/users/${encodeURIComponent(comment.user_id)}`,
+      user_level: profile?.level ?? 1,
       body: comment.body,
       created_at: comment.created_at,
       reply_to_comment_id: comment.reply_to_comment_id,

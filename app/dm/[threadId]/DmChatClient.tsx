@@ -20,6 +20,7 @@ import { sendDm } from "./actions";
 import { formatJst } from "@/lib/time";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
+import LevelBadge from "@/app/components/LevelBadge";
 
 type TitleRank = "platinum" | "gold" | "silver" | "bronze" | null;
 
@@ -31,6 +32,7 @@ type Message = {
   sender_profile_href?: string;
   sender_title_label?: string | null;
   sender_title_rank?: TitleRank;
+  sender_level?: number | null;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -68,6 +70,7 @@ type LocalUpload = {
   sender_name: string;
   sender_avatar_url: string | null;
   sender_profile_href: string;
+  sender_level: number | null;
   created_at: string;
   type: "image" | "video" | "file";
   signedUrl: string;
@@ -131,12 +134,14 @@ function NameLine({
   name,
   titleLabel,
   titleRank,
+  level,
 }: {
   mine: boolean;
   href: string;
   name: string;
   titleLabel?: string | null;
   titleRank?: TitleRank;
+  level?: number | null;
 }) {
   return (
     <div
@@ -159,6 +164,8 @@ function NameLine({
       <div className="min-w-0 max-w-[160px] sm:max-w-[220px]">
         <TitleBadge label={titleLabel} rank={titleRank} compact />
       </div>
+
+      <LevelBadge level={level} compact />
     </div>
   );
 }
@@ -269,12 +276,14 @@ function MessageHeader({
   senderName,
   senderTitleLabel,
   senderTitleRank,
+  senderLevel,
 }: {
   mine: boolean;
   senderProfileHref: string;
   senderName: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
+  senderLevel?: number | null;
 }) {
   return (
     <div
@@ -289,6 +298,7 @@ function MessageHeader({
         name={senderName}
         titleLabel={senderTitleLabel}
         titleRank={senderTitleRank}
+        level={senderLevel}
       />
     </div>
   );
@@ -371,6 +381,7 @@ function BubbleText({
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
+  senderLevel,
   onOpenMenu,
 }: {
   mine: boolean;
@@ -384,6 +395,7 @@ function BubbleText({
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
+  senderLevel?: number | null;
   onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
@@ -399,6 +411,7 @@ function BubbleText({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
+          senderLevel={senderLevel}
         />
       }
       meta={
@@ -432,6 +445,7 @@ function BubbleUnsent({
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
+  senderLevel,
 }: {
   mine: boolean;
   createdAt: string;
@@ -440,6 +454,7 @@ function BubbleUnsent({
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
+  senderLevel?: number | null;
 }) {
   return (
     <BubbleFrame
@@ -460,6 +475,7 @@ function BubbleUnsent({
             name={senderName}
             titleLabel={senderTitleLabel}
             titleRank={senderTitleRank}
+            level={senderLevel}
           />
         </div>
       }
@@ -491,6 +507,7 @@ function BubbleImage({
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
+  senderLevel,
   onOpenMenu,
 }: {
   mine: boolean;
@@ -506,6 +523,7 @@ function BubbleImage({
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
+  senderLevel?: number | null;
   onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
@@ -521,6 +539,7 @@ function BubbleImage({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
+          senderLevel={senderLevel}
         />
       }
       meta={
@@ -584,6 +603,7 @@ function BubbleVideo({
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
+  senderLevel,
   onOpenMenu,
 }: {
   mine: boolean;
@@ -599,6 +619,7 @@ function BubbleVideo({
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
+  senderLevel?: number | null;
   onOpenMenu?: (point: MenuPoint) => void;
 }) {
   return (
@@ -614,6 +635,7 @@ function BubbleVideo({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
+          senderLevel={senderLevel}
         />
       }
       meta={
@@ -677,6 +699,7 @@ function BubbleFile({
   senderProfileHref,
   senderTitleLabel,
   senderTitleRank,
+  senderLevel,
   onOpenMenu,
 }: {
   mine: boolean;
@@ -694,6 +717,7 @@ function BubbleFile({
   senderProfileHref: string;
   senderTitleLabel?: string | null;
   senderTitleRank?: TitleRank;
+  senderLevel?: number | null;
   onOpenMenu?: (point: MenuPoint) => void;
 }) {
   const label = mime?.includes("pdf") ? "PDF" : "FILE";
@@ -711,6 +735,7 @@ function BubbleFile({
           senderName={senderName}
           senderTitleLabel={senderTitleLabel}
           senderTitleRank={senderTitleRank}
+          senderLevel={senderLevel}
         />
       }
       meta={
@@ -795,6 +820,7 @@ export default function DmChatClient({
   const selfProfileHref = "/profile";
   const selfTitleLabel = selfSeedMessage?.sender_title_label ?? null;
   const selfTitleRank = selfSeedMessage?.sender_title_rank ?? null;
+  const selfLevel = selfSeedMessage?.sender_level ?? 1;
 
   const previewMessage = (message: Message) => {
     if (message.unsent_at) return "送信を取り消しました";
@@ -996,6 +1022,7 @@ export default function DmChatClient({
             sender_name: selfName,
             sender_avatar_url: selfAvatarUrl,
             sender_profile_href: selfProfileHref,
+            sender_level: selfLevel,
             created_at: (json.createdAt as string | null) ?? new Date().toISOString(),
             type: messageType,
             signedUrl,
@@ -1236,6 +1263,7 @@ export default function DmChatClient({
                   (mine ? "/profile" : `/users/${encodeURIComponent(m.sender_id)}`);
                 const senderTitleLabel = m.sender_title_label ?? null;
                 const senderTitleRank = m.sender_title_rank ?? null;
+                const senderLevel = m.sender_level ?? 1;
                 if (m.unsent_at) {
                   return (
                     <BubbleUnsent
@@ -1247,6 +1275,7 @@ export default function DmChatClient({
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
+                      senderLevel={senderLevel}
                     />
                   );
                 }
@@ -1268,6 +1297,7 @@ export default function DmChatClient({
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
+                      senderLevel={senderLevel}
                       onOpenMenu={(point) => openMessageMenu(m, point)}
                     />
                   );
@@ -1290,6 +1320,7 @@ export default function DmChatClient({
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
+                      senderLevel={senderLevel}
                       onOpenMenu={(point) => openMessageMenu(m, point)}
                     />
                   );
@@ -1314,6 +1345,7 @@ export default function DmChatClient({
                       senderProfileHref={senderProfileHref}
                       senderTitleLabel={senderTitleLabel}
                       senderTitleRank={senderTitleRank}
+                      senderLevel={senderLevel}
                       onOpenMenu={(point) => openMessageMenu(m, point)}
                     />
                   );
@@ -1333,6 +1365,7 @@ export default function DmChatClient({
                     senderProfileHref={senderProfileHref}
                     senderTitleLabel={senderTitleLabel}
                     senderTitleRank={senderTitleRank}
+                    senderLevel={senderLevel}
                     onOpenMenu={(point) => openMessageMenu(m, point)}
                   />
                 );
@@ -1356,6 +1389,7 @@ export default function DmChatClient({
                       senderProfileHref={u.sender_profile_href}
                       senderTitleLabel={selfTitleLabel}
                       senderTitleRank={selfTitleRank}
+                      senderLevel={u.sender_level}
                     />
                   );
                 }
@@ -1375,6 +1409,7 @@ export default function DmChatClient({
                       senderProfileHref={u.sender_profile_href}
                       senderTitleLabel={selfTitleLabel}
                       senderTitleRank={selfTitleRank}
+                      senderLevel={u.sender_level}
                     />
                   );
                 }
@@ -1395,6 +1430,7 @@ export default function DmChatClient({
                     senderProfileHref={u.sender_profile_href}
                     senderTitleLabel={selfTitleLabel}
                     senderTitleRank={selfTitleRank}
+                    senderLevel={u.sender_level}
                   />
                 );
                 })}

@@ -11,6 +11,7 @@ import {
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import { formatJst } from "@/lib/time";
+import LevelBadge from "@/app/components/LevelBadge";
 
 export type ResultCommentItem = {
   id: string;
@@ -18,6 +19,7 @@ export type ResultCommentItem = {
   user_name: string;
   user_avatar_url: string | null;
   user_profile_href: string;
+  user_level?: number | null;
   body: string;
   created_at: string;
   reply_to_comment_id: string | null;
@@ -364,6 +366,7 @@ export default function ResultCommentsClient({
                         >
                           {comment.user_name}
                         </Link>
+                        <LevelBadge level={comment.user_level} compact />
                         <span className="text-xs text-muted-foreground tabular-nums">
                           {formatJst(comment.created_at)}
                         </span>

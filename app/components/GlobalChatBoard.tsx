@@ -24,6 +24,7 @@ import { formatJstStartLabel } from "@/lib/time";
 import Button from "@/app/components/ui/Button";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
+import LevelBadge from "@/app/components/LevelBadge";
 
 type ChatItem = {
   id: string;
@@ -32,6 +33,7 @@ type ChatItem = {
   user_avatar_url?: string | null;
   user_title_label?: string | null;
   user_title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  user_level?: number | null;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -166,6 +168,7 @@ function NameLine({
   myUserId,
   titleLabel,
   titleRank,
+  level,
 }: {
   mine: boolean;
   userId: string;
@@ -173,6 +176,7 @@ function NameLine({
   myUserId: string;
   titleLabel?: string | null;
   titleRank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  level?: number | null;
 }) {
   const href = profileHref(userId, myUserId);
 
@@ -198,6 +202,8 @@ function NameLine({
           />
         </div>
       ) : null}
+
+      <LevelBadge level={level} compact />
     </div>
   );
 }
@@ -228,6 +234,7 @@ function MessageHeader({
         myUserId={myUserId}
         titleLabel={item.user_title_label}
         titleRank={item.user_title_rank}
+        level={item.user_level}
       />
     </div>
   );

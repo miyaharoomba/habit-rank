@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatJst } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
+import LevelBadge from "@/app/components/LevelBadge";
 import {
   MainLink,
   PageHeader,
@@ -22,12 +23,14 @@ type ThreadRow = {
   avatar_path?: string | null;
   title_label?: string | null;
   title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  level?: number | null;
 };
 
 type ProfileRow = {
   id: string;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  level: number | null;
 };
 
 type BadgeLiteRow = {
@@ -76,11 +79,12 @@ export default async function DmListPage() {
 
   const avatarMap = new Map<string, string | null>();
   const titleBadgeIdMap = new Map<string, string | null>();
+  const levelMap = new Map<string, number | null>();
 
   if (userIds.length > 0) {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path, current_title_badge_id")
+      .select("id, avatar_path, current_title_badge_id, level")
       .in("id", userIds);
 
     if (profilesErr) {
@@ -90,6 +94,7 @@ export default async function DmListPage() {
     ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
+      levelMap.set(row.id, row.level ?? 1);
     });
   }
 
@@ -123,6 +128,7 @@ export default async function DmListPage() {
       avatar_path: avatarMap.get(t.other_user_id) ?? null,
       title_label: badge?.title_label?.trim() || null,
       title_rank: badge?.badge_rank ?? null,
+      level: levelMap.get(t.other_user_id) ?? 1,
     };
   });
 
@@ -192,6 +198,8 @@ export default async function DmListPage() {
                                   <div className="min-w-0 text-sm font-semibold break-words">
                                     {t.other_display_name}
                                   </div>
+
+                                  <LevelBadge level={t.level} compact />
 
                                   <div className="min-w-0 max-w-[150px] sm:max-w-[220px]">
                                     <TitleBadge

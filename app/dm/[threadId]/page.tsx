@@ -14,6 +14,7 @@ import { redirect } from "next/navigation";
 import DmBackButton from "./DmBackButton";
 import DmChatClient from "./DmChatClient";
 import { DmLink, RankingLink } from "@/app/components/AppPageHeader";
+import LevelBadge from "@/app/components/LevelBadge";
 
 type MessageRow = {
   id: string;
@@ -37,6 +38,7 @@ type ProfileRow = {
   display_name: string | null;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  level: number | null;
 };
 
 type BadgeLiteRow = {
@@ -53,6 +55,7 @@ type MessageForClient = {
   sender_profile_href: string;
   sender_title_label?: string | null;
   sender_title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  sender_level?: number | null;
   body: string;
   created_at: string;
   message_type?: "text" | "image" | "video" | "file";
@@ -193,7 +196,7 @@ export default async function DmThreadPage({
   const userIds = [user.id, otherUserId];
   const { data: profiles, error: profilesErr } = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_path, current_title_badge_id")
+    .select("id, display_name, avatar_path, current_title_badge_id, level")
     .in("id", userIds);
 
   if (profilesErr) {
@@ -285,6 +288,7 @@ export default async function DmThreadPage({
           : `/users/${encodeURIComponent(m.sender_id)}`,
       sender_title_label: currentBadge?.title_label?.trim() || null,
       sender_title_rank: currentBadge?.badge_rank ?? null,
+      sender_level: senderProfile?.level ?? 1,
       body: m.body,
       created_at: m.created_at,
       message_type: m.message_type,
@@ -338,6 +342,7 @@ export default async function DmThreadPage({
   const reportStatus = typeof sp.report === "string" ? sp.report : "";
   const otherProfileHref = `/users/${encodeURIComponent(otherUserId)}`;
   const otherInitial = otherName.trim().slice(0, 1) || "?";
+  const otherLevel = profileMap.get(otherUserId)?.level ?? 1;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -353,8 +358,11 @@ export default async function DmThreadPage({
               {otherInitial}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-base font-bold leading-tight sm:text-lg">
-                {otherName}
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="truncate text-base font-bold leading-tight sm:text-lg">
+                  {otherName}
+                </div>
+                <LevelBadge level={otherLevel} compact />
               </div>
               <div className="hidden text-xs text-muted-foreground sm:block">DM</div>
             </div>

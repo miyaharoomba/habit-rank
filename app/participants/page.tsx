@@ -20,12 +20,14 @@ type Participant = {
   avatar_path?: string | null;
   title_label?: string | null;
   title_rank?: "platinum" | "gold" | "silver" | "bronze" | null;
+  level?: number | null;
 };
 
 type ProfileRow = {
   id: string;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  level: number | null;
 };
 
 type BadgeLiteRow = {
@@ -76,11 +78,12 @@ export default async function ParticipantsPage() {
 
   const avatarMap = new Map<string, string | null>();
   const titleBadgeIdMap = new Map<string, string | null>();
+  const levelMap = new Map<string, number | null>();
 
   if (userIds.length > 0) {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path, current_title_badge_id")
+      .select("id, avatar_path, current_title_badge_id, level")
       .in("id", userIds);
 
     if (profilesErr) {
@@ -90,6 +93,7 @@ export default async function ParticipantsPage() {
     ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
+      levelMap.set(row.id, row.level ?? 1);
     });
   }
 
@@ -123,6 +127,7 @@ export default async function ParticipantsPage() {
       avatar_path: avatarMap.get(p.user_id) ?? null,
       title_label: badge?.title_label?.trim() || null,
       title_rank: badge?.badge_rank ?? null,
+      level: levelMap.get(p.user_id) ?? 1,
     };
   });
 
