@@ -302,7 +302,7 @@ export default async function UserProfilePage({
                     />
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
-                    継続1分ごとに1XP。終了済みの過去記録も含まれます。
+                    長く継続するほど1分あたりのXPが増えます。終了済みの過去記録も含まれます。
                   </div>
                 </div>
 

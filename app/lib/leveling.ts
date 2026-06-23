@@ -2,7 +2,7 @@ export const XP_PER_LEVEL_STEP = 100;
 
 export function normalizeXp(value: number | null | undefined) {
   if (!Number.isFinite(Number(value))) return 0;
-  return Math.max(0, Math.floor(Number(value)));
+  return Math.max(0, Math.round(Number(value) * 10) / 10);
 }
 
 export function normalizeLevel(value: number | null | undefined) {
