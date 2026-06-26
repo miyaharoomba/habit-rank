@@ -67,9 +67,17 @@ async function suppressStreakEndNotification(sessionId: string, userId: string) 
   }
 }
 
-/**
- * 継続開始
- */
+async function refreshProfileLevel(userId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("refresh_profile_level", {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    console.error("refresh_profile_level failed:", error);
+  }
+}
+
 export async function startSession() {
   const supabase = await createClient();
 
@@ -79,7 +87,7 @@ export async function startSession() {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    throw new Error("ログイン情報が取れません");
+    throw new Error("login required");
   }
 
   const { error } = await supabase.from("streak_sessions").insert({
@@ -97,14 +105,6 @@ export async function startSession() {
   revalidatePath("/app");
 }
 
-/**
- * 継続終了
- * - mode=restart: 終了して次を開始
- * - mode=stop: 完全に終了
- *
- * 管理者が profiles.suppress_global_streak_end_notification = true のときは
- * デバッグ扱いとして通知も称号判定も走らせない
- */
 export async function finishSession(formData: FormData) {
   const supabase = await createClient();
 
@@ -114,21 +114,18 @@ export async function finishSession(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    throw new Error("ログイン情報が取れません");
+    throw new Error("login required");
   }
 
   const allReasons = formData
     .getAll("end_reason")
     .map((v) => String(v ?? "").trim());
-
   const lastNonEmpty =
     [...allReasons].reverse().find((v) => v.length > 0) ?? "";
   const reason = lastNonEmpty.slice(0, 200) || "finished";
 
   const mode = String(formData.get("mode") ?? "restart").trim();
   const autoRestart = mode !== "stop";
-
-  // 管理者デバッグ設定確認
   let suppressAllNotificationsForDebug = false;
 
   try {
@@ -159,7 +156,9 @@ export async function finishSession(formData: FormData) {
     throw new Error(error.message);
   }
 
-  const finishedSessionId = data?.[0]?.finished_session_id as string | undefined;
+  const finishedSessionId = data?.[0]?.finished_session_id as
+    | string
+    | undefined;
 
   if (!finishedSessionId) {
     console.error("finishSession RPC data:", data);
@@ -170,7 +169,8 @@ export async function finishSession(formData: FormData) {
     await suppressStreakEndNotification(finishedSessionId, user.id);
   }
 
-  // 称号判定（管理者デバッグ時はスキップ）
+  await refreshProfileLevel(user.id);
+
   if (!suppressAllNotificationsForDebug) {
     try {
       await checkAndAwardBadges(user.id);
@@ -195,9 +195,6 @@ export async function finishSession(formData: FormData) {
   redirect(`/results/${finishedSessionId}`);
 }
 
-/**
- * 表示名保存
- */
 export async function setDisplayName(formData: FormData) {
   const supabase = await createClient();
 
@@ -207,14 +204,16 @@ export async function setDisplayName(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    throw new Error("ログイン情報が取れません");
+    throw new Error("login required");
   }
 
   const raw = String(formData.get("displayName") ?? "");
   const name = raw.trim();
 
-  if (!name) throw new Error("名前が空です");
-  if (name.length > 20) throw new Error("名前が長すぎます（20文字以内）");
+  if (!name) throw new Error("display name is required");
+  if (name.length > 20) {
+    throw new Error("display name must be 20 characters or fewer");
+  }
 
   const { error } = await supabase
     .from("profiles")

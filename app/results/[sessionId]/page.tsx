@@ -38,12 +38,6 @@ type CommentProfileRow = {
   level: number | null;
 };
 
-type ResultOwnerProfileRow = {
-  display_name: string | null;
-  xp_total: number | string | null;
-  level: number | null;
-};
-
 type XpSessionRow = {
   id: number | string;
   started_at: string;
@@ -113,16 +107,11 @@ export default async function ResultPage({
 
   const { data: prof } = await supabase
     .from("profiles")
-    .select("display_name, xp_total, level")
+    .select("display_name")
     .eq("id", sess.user_id)
     .maybeSingle();
 
-  const ownerProfile = prof as ResultOwnerProfileRow | null;
-  const name = (ownerProfile?.display_name ?? "").trim() || "NoName";
-  const currentOwnerLevel = levelFromProfileXp(
-    ownerProfile?.xp_total,
-    ownerProfile?.level
-  );
+  const name = (prof?.display_name ?? "").trim() || "NoName";
   const reason = (sess.end_reason ?? "").trim() || "finished";
   const isOwner = sess.user_id === user.id;
   const sessionXp = streakSessionXp(sess.started_at, sess.ended_at);
@@ -320,7 +309,7 @@ export default async function ResultPage({
             </div>
           </CardHeader>
           <CardBody>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
                 <div className="text-xs text-muted-foreground">今回</div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
@@ -329,18 +318,11 @@ export default async function ResultPage({
               </div>
 
               <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
-                <div className="text-xs text-muted-foreground">終了時Lv</div>
+                <div className="text-xs text-muted-foreground">レベル</div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
                   {levelBefore === levelAfter
                     ? `Lv ${levelAfter}`
                     : `Lv ${levelBefore} → Lv ${levelAfter}`}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-4">
-                <div className="text-xs text-primary">現在Lv</div>
-                <div className="mt-1 text-2xl font-bold tabular-nums">
-                  Lv {currentOwnerLevel}
                 </div>
               </div>
 
