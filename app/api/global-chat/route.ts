@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 import { levelFromProfileXp } from "@/app/lib/leveling";
+import { loadReactionMap } from "@/app/lib/reactionServer";
 
 type ChatRow = {
   id: string;
@@ -137,6 +138,12 @@ export async function GET(request: Request) {
 
   const rows = (data ?? []) as ChatRow[];
   const rowMap = new Map(rows.map((r) => [r.id, r]));
+  const reactionMap = await loadReactionMap({
+    admin: getAdminClient(),
+    targetType: "global_chat_message",
+    targetIds: rows.map((row) => row.id),
+    myUserId: user.id,
+  });
 
   const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
   const profileMap = new Map<string, ProfileRow>();
@@ -204,6 +211,7 @@ export async function GET(request: Request) {
       file_size: r.file_size,
       edited_at: r.edited_at,
       reply_to_message_id: r.reply_to_message_id,
+      reactions: reactionMap.get(r.id) ?? [],
       reply_to: r.reply_to_message_id
         ? (() => {
             const reply = rowMap.get(r.reply_to_message_id);

@@ -13,6 +13,7 @@ import {
   PageHeader,
   RankingLink,
 } from "@/app/components/AppPageHeader";
+import ReactionBar from "@/app/components/ReactionBar";
 import {
   formatXp,
   levelFromProfileXp,
@@ -21,6 +22,10 @@ import {
   normalizeXp,
   streakSessionXp,
 } from "@/app/lib/leveling";
+import {
+  getReactionAdminClient,
+  loadReactionMap,
+} from "@/app/lib/reactionServer";
 
 type ResultCommentRow = {
   id: string;
@@ -115,6 +120,13 @@ export default async function ResultPage({
   const reason = (sess.end_reason ?? "").trim() || "finished";
   const isOwner = sess.user_id === user.id;
   const sessionXp = streakSessionXp(sess.started_at, sess.ended_at);
+  const resultReactionMap = await loadReactionMap({
+    admin: getReactionAdminClient(),
+    targetType: "streak_session",
+    targetIds: [sess.id],
+    myUserId: user.id,
+  });
+  const resultReactions = resultReactionMap.get(String(sess.id)) ?? [];
 
   const { data: xpRows, error: xpErr } = await supabase
     .from("streak_sessions")
@@ -367,6 +379,21 @@ export default async function ResultPage({
             <div className="rounded-xl border border-border bg-background/60 px-4 py-4 text-sm break-words whitespace-pre-wrap">
               {reason}
             </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold">リアクション</h2>
+          </CardHeader>
+          <CardBody>
+            <ReactionBar
+              targetType="streak_session"
+              targetId={sess.id}
+              initialReactions={resultReactions}
+              align="center"
+              size="normal"
+            />
           </CardBody>
         </Card>
 

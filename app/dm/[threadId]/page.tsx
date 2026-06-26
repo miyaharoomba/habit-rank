@@ -16,6 +16,11 @@ import DmChatClient from "./DmChatClient";
 import { DmLink, RankingLink } from "@/app/components/AppPageHeader";
 import LevelBadge from "@/app/components/LevelBadge";
 import { levelFromProfileXp } from "@/app/lib/leveling";
+import {
+  getReactionAdminClient,
+  loadReactionMap,
+} from "@/app/lib/reactionServer";
+import type { ReactionSummary } from "@/app/lib/reactions";
 
 type MessageRow = {
   id: string;
@@ -77,6 +82,7 @@ type MessageForClient = {
     body: string;
   } | null;
   unsent_at?: string | null;
+  reactions?: ReactionSummary[];
 };
 
 function messagePreview(row: MessageRow) {
@@ -269,6 +275,17 @@ export default async function DmThreadPage({
 
   const rows = (msgs ?? []) as MessageRow[];
   const messageMap = new Map(rows.map((m) => [m.id, m]));
+  const reactionMap =
+    rows.length > 0
+      ? await loadReactionMap({
+          admin: getReactionAdminClient(),
+          targetType: "dm_message",
+          targetIds: rows
+            .filter((message) => !message.unsent_at)
+            .map((message) => message.id),
+          myUserId: user.id,
+        })
+      : new Map<string, ReactionSummary[]>();
 
   // 5) fixed proxy URL + 送信者プロフィール情報 + 称号を返す
   const messages: MessageForClient[] = rows.map((m) => {
@@ -307,6 +324,7 @@ export default async function DmThreadPage({
       reply_to_message_id: m.reply_to_message_id ?? undefined,
       reply_to: null,
       unsent_at: m.unsent_at ?? undefined,
+      reactions: m.unsent_at ? [] : reactionMap.get(m.id) ?? [],
     };
 
     if (m.reply_to_message_id) {

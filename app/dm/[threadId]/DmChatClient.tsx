@@ -21,6 +21,8 @@ import { formatJst } from "@/lib/time";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
+import ReactionBar from "@/app/components/ReactionBar";
+import type { ReactionSummary } from "@/app/lib/reactions";
 
 type TitleRank = "platinum" | "gold" | "silver" | "bronze" | null;
 
@@ -46,6 +48,7 @@ type Message = {
   reply_to_message_id?: string | null;
   reply_to?: ReplyPreview | null;
   unsent_at?: string | null;
+  reactions?: ReactionSummary[];
 };
 
 type ReplyPreview = {
@@ -240,27 +243,41 @@ function ReadReceipt({
 
 function MessageMeta({
   mine,
+  messageId,
   createdAt,
   readAt,
   editedAt,
+  reactions,
 }: {
   mine: boolean;
+  messageId?: string;
   createdAt: string;
   readAt?: string | null;
   editedAt?: string | null;
+  reactions?: ReactionSummary[];
 }) {
   return (
     <div
       className={[
-        "mt-1 flex items-center gap-2 px-1",
-        mine ? "justify-end" : "justify-start",
+        "mt-1 flex flex-col gap-1 px-1",
+        mine ? "items-end" : "items-start",
       ].join(" ")}
     >
-      <ReadReceipt mine={mine} readAt={readAt} />
-      {editedAt ? (
-        <span className="text-[10px] text-muted-foreground">編集済み</span>
+      <div className="flex items-center gap-2">
+        <ReadReceipt mine={mine} readAt={readAt} />
+        {editedAt ? (
+          <span className="text-[10px] text-muted-foreground">編集済み</span>
+        ) : null}
+        <BubbleMeta createdAt={createdAt} />
+      </div>
+      {messageId ? (
+        <ReactionBar
+          targetType="dm_message"
+          targetId={messageId}
+          initialReactions={reactions}
+          align={mine ? "end" : "start"}
+        />
       ) : null}
-      <BubbleMeta createdAt={createdAt} />
     </div>
   );
 }
@@ -379,10 +396,12 @@ function BubbleFrame({
 
 function BubbleText({
   mine,
+  messageId,
   body,
   createdAt,
   readAt,
   editedAt,
+  reactions,
   replyTo,
   senderName,
   senderAvatarUrl,
@@ -393,10 +412,12 @@ function BubbleText({
   onOpenMenu,
 }: {
   mine: boolean;
+  messageId?: string;
   body: string;
   createdAt: string;
   readAt?: string | null;
   editedAt?: string | null;
+  reactions?: ReactionSummary[];
   replyTo?: ReplyPreview | null;
   senderName: string;
   senderAvatarUrl: string | null;
@@ -425,9 +446,11 @@ function BubbleText({
       meta={
         <MessageMeta
           mine={mine}
+          messageId={messageId}
           createdAt={createdAt}
           readAt={readAt}
           editedAt={editedAt}
+          reactions={reactions}
         />
       }
       onOpenMenu={onOpenMenu}
@@ -503,11 +526,13 @@ function BubbleUnsent({
 
 function BubbleImage({
   mine,
+  messageId,
   url,
   caption,
   createdAt,
   readAt,
   editedAt,
+  reactions,
   replyTo,
   onOpen,
   senderName,
@@ -519,11 +544,13 @@ function BubbleImage({
   onOpenMenu,
 }: {
   mine: boolean;
+  messageId?: string;
   url: string;
   caption?: string;
   createdAt: string;
   readAt?: string | null;
   editedAt?: string | null;
+  reactions?: ReactionSummary[];
   replyTo?: ReplyPreview | null;
   onOpen: (kind: "image" | "video", url: string) => void;
   senderName: string;
@@ -553,9 +580,11 @@ function BubbleImage({
       meta={
         <MessageMeta
           mine={mine}
+          messageId={messageId}
           createdAt={createdAt}
           readAt={readAt}
           editedAt={editedAt}
+          reactions={reactions}
         />
       }
       onOpenMenu={onOpenMenu}
@@ -599,11 +628,13 @@ function BubbleImage({
 
 function BubbleVideo({
   mine,
+  messageId,
   url,
   caption,
   createdAt,
   readAt,
   editedAt,
+  reactions,
   replyTo,
   onOpen,
   senderName,
@@ -615,11 +646,13 @@ function BubbleVideo({
   onOpenMenu,
 }: {
   mine: boolean;
+  messageId?: string;
   url: string;
   caption?: string;
   createdAt: string;
   readAt?: string | null;
   editedAt?: string | null;
+  reactions?: ReactionSummary[];
   replyTo?: ReplyPreview | null;
   onOpen: (kind: "image" | "video", url: string) => void;
   senderName: string;
@@ -649,9 +682,11 @@ function BubbleVideo({
       meta={
         <MessageMeta
           mine={mine}
+          messageId={messageId}
           createdAt={createdAt}
           readAt={readAt}
           editedAt={editedAt}
+          reactions={reactions}
         />
       }
       onOpenMenu={onOpenMenu}
@@ -693,6 +728,7 @@ function BubbleVideo({
 
 function BubbleFile({
   mine,
+  messageId,
   url,
   fileName,
   mime,
@@ -701,6 +737,7 @@ function BubbleFile({
   createdAt,
   readAt,
   editedAt,
+  reactions,
   replyTo,
   senderName,
   senderAvatarUrl,
@@ -711,6 +748,7 @@ function BubbleFile({
   onOpenMenu,
 }: {
   mine: boolean;
+  messageId?: string;
   url: string;
   fileName: string;
   mime: string;
@@ -719,6 +757,7 @@ function BubbleFile({
   createdAt: string;
   readAt?: string | null;
   editedAt?: string | null;
+  reactions?: ReactionSummary[];
   replyTo?: ReplyPreview | null;
   senderName: string;
   senderAvatarUrl: string | null;
@@ -749,9 +788,11 @@ function BubbleFile({
       meta={
         <MessageMeta
           mine={mine}
+          messageId={messageId}
           createdAt={createdAt}
           readAt={readAt}
           editedAt={editedAt}
+          reactions={reactions}
         />
       }
       onOpenMenu={onOpenMenu}
@@ -1299,11 +1340,13 @@ export default function DmChatClient({
                     <BubbleImage
                       key={m.id}
                       mine={mine}
+                      messageId={m.id}
                       url={m.image_url}
                       caption={m.body}
                       createdAt={m.created_at}
                       readAt={m.read_at}
                       editedAt={m.edited_at}
+                      reactions={m.reactions}
                       replyTo={m.reply_to}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
@@ -1322,11 +1365,13 @@ export default function DmChatClient({
                     <BubbleVideo
                       key={m.id}
                       mine={mine}
+                      messageId={m.id}
                       url={m.file_url}
                       caption={m.body}
                       createdAt={m.created_at}
                       readAt={m.read_at}
                       editedAt={m.edited_at}
+                      reactions={m.reactions}
                       replyTo={m.reply_to}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
@@ -1345,6 +1390,7 @@ export default function DmChatClient({
                     <BubbleFile
                       key={m.id}
                       mine={mine}
+                      messageId={m.id}
                       url={m.file_url}
                       fileName={m.file_name || "file"}
                       mime={m.file_mime || "application/octet-stream"}
@@ -1353,6 +1399,7 @@ export default function DmChatClient({
                       createdAt={m.created_at}
                       readAt={m.read_at}
                       editedAt={m.edited_at}
+                      reactions={m.reactions}
                       replyTo={m.reply_to}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
@@ -1369,10 +1416,12 @@ export default function DmChatClient({
                   <BubbleText
                     key={m.id}
                     mine={mine}
+                    messageId={m.id}
                     body={m.body}
                     createdAt={m.created_at}
                     readAt={m.read_at}
                     editedAt={m.edited_at}
+                    reactions={m.reactions}
                     replyTo={m.reply_to}
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}

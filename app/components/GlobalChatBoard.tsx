@@ -25,6 +25,8 @@ import Button from "@/app/components/ui/Button";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
+import ReactionBar from "@/app/components/ReactionBar";
+import type { ReactionSummary } from "@/app/lib/reactions";
 
 type ChatItem = {
   id: string;
@@ -45,6 +47,7 @@ type ChatItem = {
   edited_at?: string | null;
   reply_to_message_id?: string | null;
   reply_to?: ReplyPreview | null;
+  reactions?: ReactionSummary[];
 };
 
 type ReplyPreview = {
@@ -250,14 +253,22 @@ function MessageMeta({
   return (
     <div
       className={[
-        "mt-1 flex items-center gap-2 px-1",
-        mine ? "justify-end" : "justify-start",
+        "mt-1 flex flex-col gap-1 px-1",
+        mine ? "items-end" : "items-start",
       ].join(" ")}
     >
+      <div className="flex items-center gap-2">
       {item.edited_at ? (
         <span className="text-[10px] text-muted-foreground">編集済み</span>
       ) : null}
       <ChatMeta createdAt={item.created_at} />
+      </div>
+      <ReactionBar
+        targetType="global_chat_message"
+        targetId={item.id}
+        initialReactions={item.reactions}
+        align={mine ? "end" : "start"}
+      />
     </div>
   );
 }
