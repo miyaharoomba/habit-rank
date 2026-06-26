@@ -24,7 +24,7 @@ type ProfileRow = {
   status_message: string | null;
   updated_at: string | null;
   current_title_badge_id: string | null;
-  xp_total: number | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 

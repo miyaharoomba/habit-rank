@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { formatJst } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
+import { levelFromProfileXp } from "@/app/lib/leveling";
 import {
   MainLink,
   PageHeader,
@@ -30,6 +31,7 @@ type ProfileRow = {
   id: string;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 
@@ -84,7 +86,7 @@ export default async function DmListPage() {
   if (userIds.length > 0) {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path, current_title_badge_id, level")
+      .select("id, avatar_path, current_title_badge_id, xp_total, level")
       .in("id", userIds);
 
     if (profilesErr) {
@@ -94,7 +96,7 @@ export default async function DmListPage() {
     ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
-      levelMap.set(row.id, row.level ?? 1);
+      levelMap.set(row.id, levelFromProfileXp(row.xp_total, row.level));
     });
   }
 

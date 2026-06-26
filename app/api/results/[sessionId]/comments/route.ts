@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
+import { levelFromProfileXp } from "@/app/lib/leveling";
 
 type CommentRow = {
   id: string;
@@ -16,6 +17,7 @@ type ProfileRow = {
   id: string;
   display_name: string | null;
   avatar_path: string | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 
@@ -113,7 +115,7 @@ async function loadCommentItems({
   if (userIds.length > 0) {
     const { data: profiles, error: profileErr } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_path, level")
+      .select("id, display_name, avatar_path, xp_total, level")
       .in("id", userIds);
 
     if (profileErr) throw new Error(profileErr.message);
@@ -133,7 +135,7 @@ async function loadCommentItems({
       user_name: userName,
       user_avatar_url: avatarUrl(profile?.avatar_path ?? null),
       user_profile_href: toProfileHref(comment.user_id, currentUserId),
-      user_level: profile?.level ?? 1,
+      user_level: levelFromProfileXp(profile?.xp_total, profile?.level),
       body: comment.body,
       created_at: comment.created_at,
       reply_to_comment_id: comment.reply_to_comment_id,

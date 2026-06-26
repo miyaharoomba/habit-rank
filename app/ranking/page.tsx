@@ -13,7 +13,7 @@ import { formatJstStartLabel } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
-import { formatXp, levelProgress } from "@/app/lib/leveling";
+import { formatXp, levelFromProfileXp, levelProgress } from "@/app/lib/leveling";
 
 type BestRow = {
   rank_no: number;
@@ -34,7 +34,7 @@ type XpRow = {
   rank_no: number;
   user_id: string;
   display_name: string;
-  xp_total: number;
+  xp_total: number | string;
   level: number;
 };
 
@@ -42,6 +42,7 @@ type ProfileRow = {
   id: string;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 
@@ -184,8 +185,8 @@ export default async function RankingPage({
     rank_no: index + 1,
     user_id: row.id,
     display_name: (row.display_name ?? "").trim() || "NoName",
-    xp_total: Number(row.xp_total ?? 0),
-    level: Number(row.level ?? 1),
+    xp_total: row.xp_total ?? 0,
+    level: levelFromProfileXp(row.xp_total, row.level),
   })) satisfies XpRow[];
 
   const rawRows =
@@ -235,7 +236,7 @@ export default async function RankingPage({
   if (targetUserIds.length > 0) {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path, current_title_badge_id, level")
+      .select("id, avatar_path, current_title_badge_id, xp_total, level")
       .in("id", targetUserIds);
 
     if (profilesErr) {
@@ -245,7 +246,7 @@ export default async function RankingPage({
     ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
-      levelMap.set(row.id, row.level ?? 1);
+      levelMap.set(row.id, levelFromProfileXp(row.xp_total, row.level));
     });
   }
 

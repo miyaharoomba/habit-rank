@@ -10,6 +10,7 @@ import {
   PageHeader,
   RankingLink,
 } from "@/app/components/AppPageHeader";
+import { levelFromProfileXp } from "@/app/lib/leveling";
 
 type Participant = {
   user_id: string;
@@ -27,6 +28,7 @@ type ProfileRow = {
   id: string;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 
@@ -83,7 +85,7 @@ export default async function ParticipantsPage() {
   if (userIds.length > 0) {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, avatar_path, current_title_badge_id, level")
+      .select("id, avatar_path, current_title_badge_id, xp_total, level")
       .in("id", userIds);
 
     if (profilesErr) {
@@ -93,7 +95,7 @@ export default async function ParticipantsPage() {
     ((profiles ?? []) as ProfileRow[]).forEach((row) => {
       avatarMap.set(row.id, row.avatar_path ?? null);
       titleBadgeIdMap.set(row.id, row.current_title_badge_id ?? null);
-      levelMap.set(row.id, row.level ?? 1);
+      levelMap.set(row.id, levelFromProfileXp(row.xp_total, row.level));
     });
   }
 

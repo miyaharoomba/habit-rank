@@ -81,6 +81,14 @@ type LocalUpload = {
   fingerprint: string;
 };
 
+type MyProfile = {
+  name: string;
+  avatarUrl: string | null;
+  titleLabel?: string | null;
+  titleRank?: TitleRank;
+  level: number | null;
+};
+
 const DM_REFRESH_MS = 10000;
 const MIN_REFRESH_GAP_MS = 3000;
 
@@ -782,10 +790,12 @@ export default function DmChatClient({
   threadId,
   myUserId,
   messages,
+  myProfile,
 }: {
   threadId: string;
   myUserId: string;
   messages: Message[];
+  myProfile?: MyProfile;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
@@ -815,12 +825,16 @@ export default function DmChatClient({
   const textAction = useMemo(() => sendDm.bind(null, threadId), [threadId]);
 
   const selfSeedMessage = messages.find((m) => m.sender_id === myUserId);
-  const selfName = (selfSeedMessage?.sender_name ?? "").trim() || "あなた";
-  const selfAvatarUrl = selfSeedMessage?.sender_avatar_url ?? null;
+  const selfName =
+    (selfSeedMessage?.sender_name ?? "").trim() || myProfile?.name || "あなた";
+  const selfAvatarUrl =
+    selfSeedMessage?.sender_avatar_url ?? myProfile?.avatarUrl ?? null;
   const selfProfileHref = "/profile";
-  const selfTitleLabel = selfSeedMessage?.sender_title_label ?? null;
-  const selfTitleRank = selfSeedMessage?.sender_title_rank ?? null;
-  const selfLevel = selfSeedMessage?.sender_level ?? 1;
+  const selfTitleLabel =
+    selfSeedMessage?.sender_title_label ?? myProfile?.titleLabel ?? null;
+  const selfTitleRank =
+    selfSeedMessage?.sender_title_rank ?? myProfile?.titleRank ?? null;
+  const selfLevel = selfSeedMessage?.sender_level ?? myProfile?.level ?? 1;
 
   const previewMessage = (message: Message) => {
     if (message.unsent_at) return "送信を取り消しました";

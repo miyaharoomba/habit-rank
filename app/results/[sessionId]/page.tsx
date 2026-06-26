@@ -15,6 +15,7 @@ import {
 } from "@/app/components/AppPageHeader";
 import {
   formatXp,
+  levelFromProfileXp,
   levelFromXp,
   levelProgress,
   normalizeXp,
@@ -33,6 +34,13 @@ type CommentProfileRow = {
   id: string;
   display_name: string | null;
   avatar_path: string | null;
+  xp_total: number | string | null;
+  level: number | null;
+};
+
+type ResultOwnerProfileRow = {
+  display_name: string | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 
@@ -105,11 +113,16 @@ export default async function ResultPage({
 
   const { data: prof } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, xp_total, level")
     .eq("id", sess.user_id)
     .maybeSingle();
 
-  const name = (prof?.display_name ?? "").trim() || "NoName";
+  const ownerProfile = prof as ResultOwnerProfileRow | null;
+  const name = (ownerProfile?.display_name ?? "").trim() || "NoName";
+  const currentOwnerLevel = levelFromProfileXp(
+    ownerProfile?.xp_total,
+    ownerProfile?.level
+  );
   const reason = (sess.end_reason ?? "").trim() || "finished";
   const isOwner = sess.user_id === user.id;
   const sessionXp = streakSessionXp(sess.started_at, sess.ended_at);
@@ -181,7 +194,7 @@ export default async function ResultPage({
   if (commentUserIds.length > 0) {
     const { data: commentProfiles, error: commentProfileErr } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_path, level")
+      .select("id, display_name, avatar_path, xp_total, level")
       .in("id", commentUserIds);
 
     if (commentProfileErr) {
@@ -206,7 +219,7 @@ export default async function ResultPage({
         comment.user_id === user.id
           ? "/profile"
           : `/users/${encodeURIComponent(comment.user_id)}`,
-      user_level: profile?.level ?? 1,
+      user_level: levelFromProfileXp(profile?.xp_total, profile?.level),
       body: comment.body,
       created_at: comment.created_at,
       reply_to_comment_id: comment.reply_to_comment_id,
@@ -307,7 +320,7 @@ export default async function ResultPage({
             </div>
           </CardHeader>
           <CardBody>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
                 <div className="text-xs text-muted-foreground">今回</div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
@@ -316,11 +329,18 @@ export default async function ResultPage({
               </div>
 
               <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
-                <div className="text-xs text-muted-foreground">レベル</div>
+                <div className="text-xs text-muted-foreground">終了時Lv</div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
                   {levelBefore === levelAfter
                     ? `Lv ${levelAfter}`
                     : `Lv ${levelBefore} → Lv ${levelAfter}`}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-4">
+                <div className="text-xs text-primary">現在Lv</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">
+                  Lv {currentOwnerLevel}
                 </div>
               </div>
 

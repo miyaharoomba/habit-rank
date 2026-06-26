@@ -15,6 +15,7 @@ import DmBackButton from "./DmBackButton";
 import DmChatClient from "./DmChatClient";
 import { DmLink, RankingLink } from "@/app/components/AppPageHeader";
 import LevelBadge from "@/app/components/LevelBadge";
+import { levelFromProfileXp } from "@/app/lib/leveling";
 
 type MessageRow = {
   id: string;
@@ -38,6 +39,7 @@ type ProfileRow = {
   display_name: string | null;
   avatar_path: string | null;
   current_title_badge_id: string | null;
+  xp_total: number | string | null;
   level: number | null;
 };
 
@@ -196,7 +198,7 @@ export default async function DmThreadPage({
   const userIds = [user.id, otherUserId];
   const { data: profiles, error: profilesErr } = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_path, current_title_badge_id, level")
+    .select("id, display_name, avatar_path, current_title_badge_id, xp_total, level")
     .in("id", userIds);
 
   if (profilesErr) {
@@ -288,7 +290,10 @@ export default async function DmThreadPage({
           : `/users/${encodeURIComponent(m.sender_id)}`,
       sender_title_label: currentBadge?.title_label?.trim() || null,
       sender_title_rank: currentBadge?.badge_rank ?? null,
-      sender_level: senderProfile?.level ?? 1,
+      sender_level: levelFromProfileXp(
+        senderProfile?.xp_total,
+        senderProfile?.level
+      ),
       body: m.body,
       created_at: m.created_at,
       message_type: m.message_type,
@@ -342,7 +347,16 @@ export default async function DmThreadPage({
   const reportStatus = typeof sp.report === "string" ? sp.report : "";
   const otherProfileHref = `/users/${encodeURIComponent(otherUserId)}`;
   const otherInitial = otherName.trim().slice(0, 1) || "?";
-  const otherLevel = profileMap.get(otherUserId)?.level ?? 1;
+  const otherProfile = profileMap.get(otherUserId);
+  const otherLevel = levelFromProfileXp(
+    otherProfile?.xp_total,
+    otherProfile?.level
+  );
+  const selfProfile = profileMap.get(user.id);
+  const selfBadge =
+    selfProfile?.current_title_badge_id
+      ? badgeMap.get(selfProfile.current_title_badge_id)
+      : null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -459,6 +473,13 @@ export default async function DmThreadPage({
           threadId={threadId}
           myUserId={user.id}
           messages={messages}
+          myProfile={{
+            name: selfProfile?.display_name?.trim() || "あなた",
+            avatarUrl: avatarProxyUrl(selfProfile?.avatar_path ?? null),
+            titleLabel: selfBadge?.title_label?.trim() || null,
+            titleRank: selfBadge?.badge_rank ?? null,
+            level: levelFromProfileXp(selfProfile?.xp_total, selfProfile?.level),
+          }}
         />
       </main>
     </div>
