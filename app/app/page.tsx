@@ -13,6 +13,7 @@ import {
   PageHeader,
   ProfileLink,
   RankingLink,
+  ReportsLink,
   SettingsLink,
   SupportLink,
 } from "@/app/components/AppPageHeader";
@@ -90,6 +91,7 @@ export default async function AppPage() {
           <HeaderLink href="/calendar" icon={CalendarDays}>
             カレンダー
           </HeaderLink>
+          <ReportsLink />
           <HistoryLink />
           <BadgesLink />
           <SupportLink />

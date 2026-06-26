@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Award,
   CalendarDays,
+  ChartColumnIncreasing,
   History,
   LifeBuoy,
   Menu,
@@ -39,6 +40,7 @@ export default function MobileAppMenu({
 
   const quickLinks = [
     { href: "/calendar", label: "カレンダー", desc: "継続終了日を可視化", icon: CalendarDays },
+    { href: "/reports", label: "レポート", desc: "週間・月間の集計", icon: ChartColumnIncreasing },
     { href: "/badges", label: "トロフィー", desc: "獲得したバッジ一覧", icon: Award },
     { href: "/history", label: "履歴", desc: "終了済み記録", icon: History },
     { href: "/participants", label: "参加者", desc: "他ユーザーを見る", icon: Users },

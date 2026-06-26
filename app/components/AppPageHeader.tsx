@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode } from "react";
 import {
   Award,
   CalendarDays,
+  ChartColumnIncreasing,
   History,
   Home,
   LifeBuoy,
@@ -158,6 +159,14 @@ export function CalendarLink() {
   return (
     <HeaderLink href="/calendar" icon={CalendarDays}>
       カレンダー
+    </HeaderLink>
+  );
+}
+
+export function ReportsLink() {
+  return (
+    <HeaderLink href="/reports" icon={ChartColumnIncreasing}>
+      レポート
     </HeaderLink>
   );
 }

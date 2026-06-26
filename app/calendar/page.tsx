@@ -142,6 +142,7 @@ export default async function CalendarPage({
         description="継続が終了した日付を確認できます。"
         topLinks={[
           { href: "/app", label: "メイン" },
+          { href: "/reports", label: "レポート" },
           { href: "/history", label: "履歴" },
         ]}
         basePath="/calendar"

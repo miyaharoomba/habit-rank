@@ -9,6 +9,7 @@ import {
   PageHeader,
   ParticipantsLink,
   RankingLink,
+  ReportsLink,
 } from "@/app/components/AppPageHeader";
 
 function formatDuration(ms: number) {
@@ -74,6 +75,7 @@ export default async function HistoryPage() {
         actions={
           <>
             <MainLink />
+            <ReportsLink />
             <RankingLink />
             <ParticipantsLink />
           </>
