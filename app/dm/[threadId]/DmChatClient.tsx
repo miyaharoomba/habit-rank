@@ -21,7 +21,7 @@ import { formatJst } from "@/lib/time";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
-import ReactionBar from "@/app/components/ReactionBar";
+import ReactionBar, { ReactionPicker } from "@/app/components/ReactionBar";
 import type { ReactionSummary } from "@/app/lib/reactions";
 
 type TitleRank = "platinum" | "gold" | "silver" | "bronze" | null;
@@ -852,6 +852,9 @@ export default function DmChatClient({
   const [messageMenu, setMessageMenu] = useState<MessageMenuState | null>(null);
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [reactionOverrides, setReactionOverrides] = useState<
+    Record<string, ReactionSummary[]>
+  >({});
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const listContentRef = useRef<HTMLDivElement | null>(null);
@@ -887,9 +890,29 @@ export default function DmChatClient({
     return "メッセージ";
   };
 
+  const getMessageReactions = (message: Message) =>
+    reactionOverrides[message.id] ?? message.reactions;
+
+  const updateMessageReactions = (
+    messageId: string,
+    reactions: ReactionSummary[]
+  ) => {
+    setReactionOverrides((prev) => ({ ...prev, [messageId]: reactions }));
+    setMessageMenu((prev) => {
+      if (!prev || prev.message.id !== messageId) return prev;
+      return {
+        ...prev,
+        message: {
+          ...prev.message,
+          reactions,
+        },
+      };
+    });
+  };
+
   const openMessageMenu = (message: Message, point: MenuPoint) => {
-    const width = 192;
-    const height = message.sender_id === myUserId ? 152 : 56;
+    const width = 224;
+    const height = message.sender_id === myUserId ? 208 : 112;
     const viewportWidth =
       typeof window !== "undefined" ? window.innerWidth : point.x + width;
     const viewportHeight =
@@ -1216,13 +1239,23 @@ export default function DmChatClient({
       {messageMenu ? (
         <div className="fixed inset-0 z-[80]" onClick={() => setMessageMenu(null)}>
           <div
-            className="fixed w-48 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-glow"
+            className="fixed w-56 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-glow"
             style={{
               left: messageMenu.point.x,
               top: messageMenu.point.y,
             }}
             onClick={(event) => event.stopPropagation()}
           >
+            <ReactionPicker
+              targetType="dm_message"
+              targetId={messageMenu.message.id}
+              initialReactions={getMessageReactions(messageMenu.message)}
+              onChange={(items) =>
+                updateMessageReactions(messageMenu.message.id, items)
+              }
+              className="border-b border-border px-3 pb-2 pt-2"
+            />
+
             <button
               type="button"
               onClick={() => startReply(messageMenu.message)}
@@ -1346,7 +1379,7 @@ export default function DmChatClient({
                       createdAt={m.created_at}
                       readAt={m.read_at}
                       editedAt={m.edited_at}
-                      reactions={m.reactions}
+                      reactions={getMessageReactions(m)}
                       replyTo={m.reply_to}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
@@ -1371,7 +1404,7 @@ export default function DmChatClient({
                       createdAt={m.created_at}
                       readAt={m.read_at}
                       editedAt={m.edited_at}
-                      reactions={m.reactions}
+                      reactions={getMessageReactions(m)}
                       replyTo={m.reply_to}
                       onOpen={(kind, url) => setModal({ kind, url })}
                       senderName={senderName}
@@ -1399,7 +1432,7 @@ export default function DmChatClient({
                       createdAt={m.created_at}
                       readAt={m.read_at}
                       editedAt={m.edited_at}
-                      reactions={m.reactions}
+                      reactions={getMessageReactions(m)}
                       replyTo={m.reply_to}
                       senderName={senderName}
                       senderAvatarUrl={senderAvatarUrl}
@@ -1421,7 +1454,7 @@ export default function DmChatClient({
                     createdAt={m.created_at}
                     readAt={m.read_at}
                     editedAt={m.edited_at}
-                    reactions={m.reactions}
+                    reactions={getMessageReactions(m)}
                     replyTo={m.reply_to}
                     senderName={senderName}
                     senderAvatarUrl={senderAvatarUrl}

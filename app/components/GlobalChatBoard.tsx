@@ -25,7 +25,7 @@ import Button from "@/app/components/ui/Button";
 import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
-import ReactionBar from "@/app/components/ReactionBar";
+import ReactionBar, { ReactionPicker } from "@/app/components/ReactionBar";
 import type { ReactionSummary } from "@/app/lib/reactions";
 
 type ChatItem = {
@@ -620,8 +620,8 @@ export default function GlobalChatBoard({
 
   const openMessageMenu = (item: ChatItem, point: MenuPoint) => {
     const mine = item.user_id === myUserId;
-    const width = 192;
-    const height = mine || canModerate ? 152 : 56;
+    const width = 224;
+    const height = mine || canModerate ? 208 : 112;
     const viewportWidth =
       typeof window !== "undefined" ? window.innerWidth : point.x + width;
     const viewportHeight =
@@ -633,6 +633,32 @@ export default function GlobalChatBoard({
         x: Math.min(Math.max(12, point.x), Math.max(12, viewportWidth - width - 12)),
         y: Math.min(Math.max(12, point.y), Math.max(12, viewportHeight - height - 12)),
       },
+    });
+  };
+
+  const updateItemReactions = (
+    itemId: string,
+    reactions: ReactionSummary[]
+  ) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              reactions,
+            }
+          : item
+      )
+    );
+    setMessageMenu((prev) => {
+      if (!prev || prev.item.id !== itemId) return prev;
+      return {
+        ...prev,
+        item: {
+          ...prev.item,
+          reactions,
+        },
+      };
     });
   };
 
@@ -927,13 +953,21 @@ export default function GlobalChatBoard({
       {messageMenu ? (
         <div className="fixed inset-0 z-[120]" onClick={() => setMessageMenu(null)}>
           <div
-            className="fixed w-48 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-glow"
+            className="fixed w-56 overflow-hidden rounded-xl border border-border bg-card py-1 text-sm shadow-glow"
             style={{
               left: messageMenu.point.x,
               top: messageMenu.point.y,
             }}
             onClick={(event) => event.stopPropagation()}
           >
+            <ReactionPicker
+              targetType="global_chat_message"
+              targetId={messageMenu.item.id}
+              initialReactions={messageMenu.item.reactions}
+              onChange={(items) => updateItemReactions(messageMenu.item.id, items)}
+              className="border-b border-border px-3 pb-2 pt-2"
+            />
+
             <button
               type="button"
               onClick={() => startReply(messageMenu.item)}

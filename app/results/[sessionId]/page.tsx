@@ -13,7 +13,7 @@ import {
   PageHeader,
   RankingLink,
 } from "@/app/components/AppPageHeader";
-import ReactionBar from "@/app/components/ReactionBar";
+import { ReactionPanel } from "@/app/components/ReactionBar";
 import {
   formatXp,
   levelFromProfileXp,
@@ -387,7 +387,7 @@ export default async function ResultPage({
             <h2 className="font-semibold">リアクション</h2>
           </CardHeader>
           <CardBody>
-            <ReactionBar
+            <ReactionPanel
               targetType="streak_session"
               targetId={sess.id}
               initialReactions={resultReactions}
