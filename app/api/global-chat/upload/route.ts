@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 
 type MessageType = "image" | "video" | "file";
 
@@ -14,6 +16,57 @@ type GlobalChatMessageInsert = {
   file_url: string | null;
   reply_to_message_id: string | null;
 };
+
+function mustEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env: ${name}`);
+  return value;
+}
+
+function getAdminClient() {
+  return createAdminClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
+}
+
+async function createGlobalChatReplyNotification({
+  recipientId,
+  actorId,
+  preview,
+}: {
+  recipientId: string | null;
+  actorId: string;
+  preview: string;
+}) {
+  if (!recipientId || recipientId === actorId) return;
+
+  try {
+    const admin = getAdminClient();
+    const { error } = await admin.from("notifications").insert({
+      recipient_id: recipientId,
+      actor_id: actorId,
+      type: "global_chat",
+      thread_id: null,
+      session_id: null,
+      announcement_id: null,
+      support_thread_id: null,
+      message_preview: preview.slice(0, 200),
+    });
+
+    if (error) {
+      console.error("global chat upload notification insert failed:", error.message);
+      return;
+    }
+
+    await triggerPushDispatchBestEffort("globalChatUploadReply");
+  } catch (error) {
+    console.error("global chat upload notification failed:", error);
+  }
+}
 
 // Nodeでも動く簡易UUID
 function uuidLike() {
@@ -60,10 +113,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "caption is too long" }, { status: 400 });
   }
 
+  let replyOwnerId: string | null = null;
+
   if (replyToMessageId) {
     const { data: replyTarget, error: replyErr } = await supabase
       .from("global_chat_messages")
-      .select("id")
+      .select("id, user_id")
       .eq("id", replyToMessageId)
       .maybeSingle();
 
@@ -77,6 +132,8 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    replyOwnerId = String(replyTarget.user_id ?? "");
   }
 
   // 種別判定（image / video / file）
@@ -135,6 +192,20 @@ export async function POST(req: Request) {
   }
 
   // 3) 表示用 signed URL を返す
+  const preview =
+    caption ||
+    (messageType === "image"
+      ? "画像"
+      : messageType === "video"
+      ? "動画"
+      : file.name || "ファイル");
+
+  await createGlobalChatReplyNotification({
+    recipientId: replyOwnerId,
+    actorId: user.id,
+    preview,
+  });
+
   const { data: signed, error: sErr } = await supabase.storage
     .from("dm-media")
     .createSignedUrl(objectPath, 60 * 60);

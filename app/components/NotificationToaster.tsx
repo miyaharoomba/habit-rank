@@ -44,7 +44,8 @@ function isToastTarget(n: NotifItem) {
     n.type === "admin_broadcast" ||
     n.type === "streak_end" ||
     n.type === "trophy_unlock" ||
-    n.type === "result_comment"
+    n.type === "result_comment" ||
+    n.type === "global_chat"
   );
 }
 
@@ -55,6 +56,7 @@ function routeFor(n: NotifItem) {
   if (n.type === "result_comment" && n.session_id) {
     return `/results/${n.session_id}`;
   }
+  if (n.type === "global_chat") return "/app";
   if (n.type === "admin_broadcast" && n.announcement_id) {
     return `/announcements/${n.announcement_id}`;
   }
@@ -68,6 +70,9 @@ function routeFor(n: NotifItem) {
 }
 
 function titleFor(n: NotifItem) {
+  if (n.type === "global_chat") {
+    return `${n.actor_name ?? "誰か"} が掲示板で返信`;
+  }
   if (n.type === "result_comment") {
     return `${n.actor_name ?? "誰か"} がリザルトにコメント`;
   }
@@ -87,6 +92,10 @@ function titleFor(n: NotifItem) {
 
 function bodyFor(n: NotifItem) {
   const txt = (n.message_preview ?? "").trim();
+
+  if (n.type === "global_chat") {
+    return txt || "掲示板に返信が届きました";
+  }
 
   if (n.type === "result_comment") {
     return txt || "コメントが届きました";
@@ -112,6 +121,7 @@ function bodyFor(n: NotifItem) {
 }
 
 function iconFor(n: NotifItem) {
+  if (n.type === "global_chat") return "💬";
   if (n.type === "result_comment") return "💬";
   if (n.type === "trophy_unlock") {
     const text = (n.message_preview ?? "").toLowerCase();

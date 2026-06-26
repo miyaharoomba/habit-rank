@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 import { levelFromProfileXp } from "@/app/lib/leveling";
 
 type ChatRow = {
@@ -36,6 +38,22 @@ function mediaProxyUrl(path: string) {
   return `/api/media/dm?path=${encodeURIComponent(path)}`;
 }
 
+function mustEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env: ${name}`);
+  return value;
+}
+
+function getAdminClient() {
+  return createAdminClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
+}
+
 function avatarProxyUrl(path: string | null) {
   if (!path) return null;
   return `/api/profile/avatar?path=${encodeURIComponent(path)}`;
@@ -48,6 +66,41 @@ function messagePreview(row: ChatRow) {
   if (row.message_type === "video") return "動画";
   if (row.message_type === "file") return row.file_name || "ファイル";
   return "メッセージ";
+}
+
+async function createGlobalChatReplyNotification({
+  recipientId,
+  actorId,
+  body,
+}: {
+  recipientId: string | null;
+  actorId: string;
+  body: string;
+}) {
+  if (!recipientId || recipientId === actorId) return;
+
+  try {
+    const admin = getAdminClient();
+    const { error } = await admin.from("notifications").insert({
+      recipient_id: recipientId,
+      actor_id: actorId,
+      type: "global_chat",
+      thread_id: null,
+      session_id: null,
+      announcement_id: null,
+      support_thread_id: null,
+      message_preview: body.slice(0, 200),
+    });
+
+    if (error) {
+      console.error("global chat notification insert failed:", error.message);
+      return;
+    }
+
+    await triggerPushDispatchBestEffort("globalChatReply");
+  } catch (error) {
+    console.error("global chat notification failed:", error);
+  }
 }
 
 export async function GET(request: Request) {
@@ -202,10 +255,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "本文は200文字以内です。" }, { status: 400 });
   }
 
+  let replyOwnerId: string | null = null;
+
   if (replyToMessageId) {
     const { data: replyTarget, error: replyErr } = await supabase
       .from("global_chat_messages")
-      .select("id")
+      .select("id, user_id")
       .eq("id", replyToMessageId)
       .maybeSingle();
 
@@ -219,6 +274,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    replyOwnerId = String(replyTarget.user_id ?? "");
   }
 
   const { data, error } = await supabase
@@ -240,6 +297,12 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await createGlobalChatReplyNotification({
+    recipientId: replyOwnerId,
+    actorId: user.id,
+    body,
+  });
 
   return NextResponse.json({ ok: true, item: data });
 }

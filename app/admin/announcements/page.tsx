@@ -3,6 +3,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { formatJst } from "@/lib/time";
 import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 import {
@@ -29,6 +30,22 @@ function bodyPreview(text: string, max = 120) {
   const t = (text ?? "").trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max)}…`;
+}
+
+function mustEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env: ${name}`);
+  return value;
+}
+
+function getAdminClient() {
+  return createAdminClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
+  );
 }
 
 export default async function AdminAnnouncementsPage() {
@@ -97,7 +114,9 @@ export default async function AdminAnnouncementsPage() {
     }
 
     // 3) push配信用に全ユーザー分の outbox を作る
-    const { data: recipients, error: recErr } = await supabase
+    const adminClient = getAdminClient();
+
+    const { data: recipients, error: recErr } = await adminClient
       .from("profiles")
       .select("id");
 
@@ -109,8 +128,30 @@ export default async function AdminAnnouncementsPage() {
       .map((r) => r.id)
       .filter((id): id is string => Boolean(id));
 
+    let disabledUserIds = new Set<string>();
     if (allUserIds.length > 0) {
-      const outboxRows = allUserIds.map((recipientId) => ({
+      const { data: disabledPrefs, error: prefErr } = await adminClient
+        .from("notification_preferences")
+        .select("user_id")
+        .eq("notification_type", "admin_broadcast")
+        .eq("enabled", false)
+        .in("user_id", allUserIds);
+
+      if (prefErr) {
+        console.error("notification preference fetch failed:", prefErr.message);
+      } else {
+        disabledUserIds = new Set(
+          ((disabledPrefs ?? []) as Array<{ user_id: string | null }>)
+            .map((row) => row.user_id)
+            .filter((id): id is string => Boolean(id))
+        );
+      }
+    }
+
+    const enabledUserIds = allUserIds.filter((id) => !disabledUserIds.has(id));
+
+    if (enabledUserIds.length > 0) {
+      const outboxRows = enabledUserIds.map((recipientId) => ({
         notification_id: notif.id,
         recipient_id: recipientId,
         payload: {
@@ -121,7 +162,7 @@ export default async function AdminAnnouncementsPage() {
         attempts: 0,
       }));
 
-      const { error: outboxErr } = await supabase
+      const { error: outboxErr } = await adminClient
         .from("push_outbox")
         .insert(outboxRows);
 
@@ -141,7 +182,7 @@ export default async function AdminAnnouncementsPage() {
       details: {
         announcement_id: announcement.id,
         title,
-        recipient_count: allUserIds.length,
+        recipient_count: enabledUserIds.length,
       },
     });
 

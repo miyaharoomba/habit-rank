@@ -18,8 +18,12 @@ type OutboxRow = {
   id: number;
   notification_id: string;
   recipient_id: string | null;
-  payload: any;
+  payload: unknown;
   attempts: number;
+};
+
+type NotificationIdRow = {
+  id: string;
 };
 
 type SubRow = {
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: nErr.message }, { status: 500 });
     }
 
-    const notifIds = (notifs ?? []).map((x: any) => x.id);
+    const notifIds = ((notifs ?? []) as NotificationIdRow[]).map((x) => x.id);
 
     // ✅ ここが重要：
     // outboxがトリガーで作られるのを少し待つ（最大2秒）
@@ -116,6 +120,25 @@ export async function POST(req: Request) {
         continue;
       }
 
+      const { data: disabledDm } = await supabase
+        .from("notification_preferences")
+        .select("enabled")
+        .eq("user_id", row.recipient_id)
+        .eq("notification_type", "dm")
+        .eq("enabled", false)
+        .maybeSingle();
+
+      if (disabledDm) {
+        await supabase
+          .from("push_outbox")
+          .update({
+            sent_at: new Date().toISOString(),
+            last_error: "notification disabled by user",
+          })
+          .eq("id", row.id);
+        continue;
+      }
+
       const { data: subs, error: sErr } = await supabase
         .from("push_subscriptions")
         .select("endpoint, p256dh, auth")
@@ -154,13 +177,21 @@ export async function POST(req: Request) {
             {
               endpoint: sub.endpoint,
               keys: { p256dh: sub.p256dh, auth: sub.auth },
-            } as any,
+            } as Parameters<typeof webpush.sendNotification>[0],
             payload
           );
           anySent = true;
-        } catch (e: any) {
-          lastErr = e?.body || e?.message || String(e);
-          const statusCode = e?.statusCode;
+        } catch (e: unknown) {
+          const maybe =
+            e && typeof e === "object"
+              ? (e as { body?: unknown; message?: unknown; statusCode?: unknown })
+              : null;
+          lastErr =
+            (typeof maybe?.body === "string" && maybe.body) ||
+            (typeof maybe?.message === "string" && maybe.message) ||
+            String(e);
+          const statusCode =
+            typeof maybe?.statusCode === "number" ? maybe.statusCode : null;
 
           if (statusCode === 404 || statusCode === 410) {
             await supabase
@@ -188,7 +219,10 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, processed, sent, failed });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : String(e) },
+      { status: 500 }
+    );
   }
 }

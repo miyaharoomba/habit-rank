@@ -12,7 +12,8 @@ type NotifItem = {
     | "admin_broadcast"
     | "support_reply"
     | "trophy_unlock"
-    | "result_comment";
+    | "result_comment"
+    | "global_chat";
   created_at: string;
   message_preview: string;
   thread_id: string | null;
@@ -49,6 +50,7 @@ function bellIcon(className = "h-5 w-5") {
 }
 
 function iconFor(n: NotifItem) {
+  if (n.type === "global_chat") return "💬";
   if (n.type === "result_comment") return "💬";
   if (n.type === "trophy_unlock") return "🏆";
   if (n.type === "streak_end") return "⏱️";
@@ -217,6 +219,7 @@ export default function NotificationBell({
     if (n.type === "result_comment" && n.session_id) {
       return `/results/${n.session_id}`;
     }
+    if (n.type === "global_chat") return "/app";
     if (n.type === "dm" && n.thread_id) return `/dm/${n.thread_id}`;
     if (n.type === "admin_broadcast" && n.announcement_id) {
       return `/announcements/${n.announcement_id}`;
@@ -231,6 +234,9 @@ export default function NotificationBell({
   };
 
   const titleFor = (n: NotifItem) => {
+    if (n.type === "global_chat") {
+      return `${n.actor_name ?? "誰か"} が掲示板で返信`;
+    }
     if (n.type === "result_comment") {
       return `${n.actor_name ?? "誰か"} がリザルトにコメント`;
     }
@@ -243,6 +249,9 @@ export default function NotificationBell({
   };
 
   const bodyFor = (n: NotifItem) => {
+    if (n.type === "global_chat") {
+      return n.message_preview || "掲示板に返信が届きました";
+    }
     if (n.type === "result_comment") {
       return n.message_preview || "コメントが届きました";
     }

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  resolveNotificationPreferences,
+  shouldShowNotificationType,
+  type NotificationPreferenceRow,
+} from "@/app/lib/notificationPreferences";
 
 type NotificationRow = {
   id: string;
@@ -43,6 +48,14 @@ export async function GET(request: Request) {
 
   const fetchLimit = Math.max(limit * 3, 40);
 
+  const { data: preferenceRows } = await supabase
+    .from("notification_preferences")
+    .select("notification_type, enabled")
+    .eq("user_id", user.id);
+  const notificationPreferences = resolveNotificationPreferences(
+    preferenceRows as NotificationPreferenceRow[] | null
+  );
+
   let notificationQuery = supabase
     .from("notifications")
     .select(
@@ -61,7 +74,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: nErr.message }, { status: 500 });
   }
 
-  const notifications = (notifs ?? []) as NotificationRow[];
+  const notifications = ((notifs ?? []) as NotificationRow[]).filter((n) =>
+    shouldShowNotificationType(notificationPreferences, n.type)
+  );
 
   // streak_end の重複整理
   const deduped: NotificationRow[] = [];

@@ -14,6 +14,11 @@ import {
 
 import PushEnableCard from "@/app/components/PushEnableCard";
 import SettingsSessionControls from "./SettingsSessionControls";
+import NotificationPreferencesCard from "./NotificationPreferencesCard";
+import {
+  resolveNotificationPreferences,
+  type NotificationPreferenceRow,
+} from "@/app/lib/notificationPreferences";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -35,6 +40,14 @@ export default async function SettingsPage() {
 
   const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
   const admin = !adminErr && Boolean(isAdmin);
+
+  const { data: notificationPreferenceRows } = await supabase
+    .from("notification_preferences")
+    .select("notification_type, enabled")
+    .eq("user_id", user.id);
+  const notificationPreferences = resolveNotificationPreferences(
+    notificationPreferenceRows as NotificationPreferenceRow[] | null
+  );
 
   return (
     <Container>
@@ -69,6 +82,8 @@ export default async function SettingsPage() {
         </Card>
 
         <PushEnableCard />
+
+        <NotificationPreferencesCard initialPreferences={notificationPreferences} />
 
         {admin && (
           <>

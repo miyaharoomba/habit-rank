@@ -21,6 +21,12 @@ type NotificationRow = {
   message_preview: string | null;
 };
 
+type NotificationPreferenceRow = {
+  user_id: string | null;
+  notification_type: string | null;
+  enabled: boolean | null;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -48,7 +54,7 @@ export type PushDispatchSummary = {
   error?: string;
 };
 
-export const PUSH_DISPATCH_VERSION = "dispatch_v2026_06_19_direct";
+export const PUSH_DISPATCH_VERSION = "dispatch_v2026_06_26_preferences";
 
 function mustEnv(name: string) {
   const v = process.env[name];
@@ -101,6 +107,96 @@ function payloadObject(value: unknown): PushPayload {
     body: textOr(maybe.body, "新しい通知があります"),
     url: textOr(maybe.url, "/app"),
   };
+}
+
+async function filterRowsByNotificationPreferences(
+  supabase: SupabaseClient,
+  rows: OutboxRow[]
+) {
+  const notificationIds = Array.from(
+    new Set(rows.map((row) => row.notification_id).filter(Boolean))
+  );
+  const recipientIds = Array.from(
+    new Set(rows.map((row) => row.recipient_id).filter(Boolean))
+  ) as string[];
+
+  if (notificationIds.length === 0 || recipientIds.length === 0) {
+    return { rows, skipped: 0 };
+  }
+
+  const { data: notifications, error: nErr } = await supabase
+    .from("notifications")
+    .select("id, type")
+    .in("id", notificationIds);
+
+  if (nErr) {
+    console.error("notification preference filter skipped:", nErr.message);
+    return { rows, skipped: 0 };
+  }
+
+  const typeMap = new Map(
+    ((notifications ?? []) as Array<{ id: string; type: string }>).map((n) => [
+      n.id,
+      n.type,
+    ])
+  );
+  const notificationTypes = Array.from(new Set(typeMap.values()));
+  if (notificationTypes.length === 0) {
+    return { rows, skipped: 0 };
+  }
+
+  const { data: preferences, error: pErr } = await supabase
+    .from("notification_preferences")
+    .select("user_id, notification_type, enabled")
+    .in("user_id", recipientIds)
+    .in("notification_type", notificationTypes)
+    .eq("enabled", false);
+
+  if (pErr) {
+    console.error("notification preference fetch failed:", pErr.message);
+    return { rows, skipped: 0 };
+  }
+
+  const disabledSet = new Set(
+    ((preferences ?? []) as NotificationPreferenceRow[])
+      .filter((p) => p.user_id && p.notification_type && p.enabled === false)
+      .map((p) => `${p.user_id}:${p.notification_type}`)
+  );
+
+  if (disabledSet.size === 0) {
+    return { rows, skipped: 0 };
+  }
+
+  const skippedRows: OutboxRow[] = [];
+  const sendableRows: OutboxRow[] = [];
+
+  for (const row of rows) {
+    const type = typeMap.get(row.notification_id);
+    if (row.recipient_id && type && disabledSet.has(`${row.recipient_id}:${type}`)) {
+      skippedRows.push(row);
+    } else {
+      sendableRows.push(row);
+    }
+  }
+
+  if (skippedRows.length > 0) {
+    const { error } = await supabase
+      .from("push_outbox")
+      .update({
+        sent_at: new Date().toISOString(),
+        last_error: "notification disabled by user",
+      })
+      .in(
+        "id",
+        skippedRows.map((row) => row.id)
+      );
+
+    if (error) {
+      console.error("disabled notification outbox update failed:", error.message);
+    }
+  }
+
+  return { rows: sendableRows, skipped: skippedRows.length };
 }
 
 async function buildPayloadMap(
@@ -182,6 +278,16 @@ async function buildPayloadMap(
       continue;
     }
 
+    if (notification.type === "global_chat") {
+      map.set(row.id, {
+        ...base,
+        title: `${actorName} が掲示板で返信`,
+        body: preview || "掲示板に返信が届きました",
+        url: "/app",
+      });
+      continue;
+    }
+
     if (notification.type === "streak_end" && notification.session_id !== null) {
       map.set(row.id, {
         ...base,
@@ -247,13 +353,15 @@ export async function dispatchPendingPush({
     };
   }
 
-  const payloadMap = await buildPayloadMap(supabase, rows);
+  const filtered = await filterRowsByNotificationPreferences(supabase, rows);
+  const rowsToSend = filtered.rows;
+  const payloadMap = await buildPayloadMap(supabase, rowsToSend);
 
-  let processed = 0;
+  let processed = filtered.skipped;
   let sent = 0;
   let failed = 0;
 
-  for (const row of rows) {
+  for (const row of rowsToSend) {
     processed++;
 
     if (!row.recipient_id) {
