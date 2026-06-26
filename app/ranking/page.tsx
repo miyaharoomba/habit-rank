@@ -13,6 +13,7 @@ import { formatJstStartLabel } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
+import { formatXp, levelProgress } from "@/app/lib/leveling";
 
 type BestRow = {
   rank_no: number;
@@ -27,6 +28,14 @@ type CurrentRow = {
   display_name: string;
   current_seconds: number;
   started_at: string;
+};
+
+type XpRow = {
+  rank_no: number;
+  user_id: string;
+  display_name: string;
+  xp_total: number;
+  level: number;
 };
 
 type ProfileRow = {
@@ -72,6 +81,10 @@ function rerankCurrentRows(rows: CurrentRow[]) {
   return rows.map((row, index) => ({ ...row, rank_no: index + 1 }));
 }
 
+function rerankXpRows(rows: XpRow[]) {
+  return rows.map((row, index) => ({ ...row, rank_no: index + 1 }));
+}
+
 function Avatar({
   href,
   avatar,
@@ -106,7 +119,7 @@ export default async function RankingPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const activeTab = tab === "current" ? "current" : "best";
+  const activeTab = tab === "current" || tab === "xp" ? tab : "best";
 
   const supabase = await createClient();
 
@@ -129,7 +142,17 @@ export default async function RankingPage({
       ? await supabase.rpc("get_current_leaderboard", { limit_count })
       : { data: null, error: null };
 
-  const error = bestRes.error ?? currentRes.error;
+  const xpRes =
+    activeTab === "xp"
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, xp_total, level")
+          .order("xp_total", { ascending: false })
+          .order("level", { ascending: false })
+          .limit(limit_count)
+      : { data: null, error: null };
+
+  const error = bestRes.error ?? currentRes.error ?? xpRes.error;
 
   if (error) {
     return (
@@ -152,8 +175,25 @@ export default async function RankingPage({
 
   const rawBestRows = (bestRes.data ?? []) as BestRow[];
   const rawCurrentRows = (currentRes.data ?? []) as CurrentRow[];
+  const rawXpRows = ((xpRes.data ?? []) as Array<{
+    id: string;
+    display_name: string | null;
+    xp_total: number | string | null;
+    level: number | null;
+  }>).map((row, index) => ({
+    rank_no: index + 1,
+    user_id: row.id,
+    display_name: (row.display_name ?? "").trim() || "NoName",
+    xp_total: Number(row.xp_total ?? 0),
+    level: Number(row.level ?? 1),
+  })) satisfies XpRow[];
 
-  const rawRows = activeTab === "best" ? rawBestRows : rawCurrentRows;
+  const rawRows =
+    activeTab === "best"
+      ? rawBestRows
+      : activeTab === "current"
+        ? rawCurrentRows
+        : rawXpRows;
   const rawUserIds = Array.from(new Set(rawRows.map((r) => r.user_id)));
   const bannedUserIds = await getActiveBannedUserIds(rawUserIds);
 
@@ -172,7 +212,20 @@ export default async function RankingPage({
         ).slice(0, displayLimit)
       : [];
 
-  const targetRows = activeTab === "best" ? bestRows : currentRows;
+  const xpRows =
+    activeTab === "xp"
+      ? rerankXpRows(rawXpRows.filter((r) => !bannedUserIds.has(r.user_id))).slice(
+          0,
+          displayLimit
+        )
+      : [];
+
+  const targetRows =
+    activeTab === "best"
+      ? bestRows
+      : activeTab === "current"
+        ? currentRows
+        : xpRows;
   const targetUserIds = Array.from(new Set(targetRows.map((r) => r.user_id)));
 
   const avatarMap = new Map<string, string | null>();
@@ -223,7 +276,11 @@ export default async function RankingPage({
         title="ランキング"
         description={
           <>
-            {activeTab === "best" ? "ベスト（過去最高）順" : "継続中（現在経過）順"}
+            {activeTab === "best"
+              ? "ベスト（過去最高）順"
+              : activeTab === "current"
+                ? "継続中（現在経過）順"
+                : "累計XP・レベル順"}
           </>
         }
         actions={
@@ -259,13 +316,33 @@ export default async function RankingPage({
         >
           継続中
         </Link>
+
+        <Link
+          href="/ranking?tab=xp"
+          className={[
+            "inline-flex rounded-lg border px-4 py-2 text-sm font-semibold transition",
+            activeTab === "xp"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background hover:bg-secondary/40",
+          ].join(" ")}
+        >
+          経験値
+        </Link>
       </div>
 
       <div className="mt-6">
         <Card>
           <CardHeader>
             <h2 className="font-semibold">
-              TOP {Math.min(50, activeTab === "best" ? bestRows.length : currentRows.length)}
+              TOP{" "}
+              {Math.min(
+                50,
+                activeTab === "best"
+                  ? bestRows.length
+                  : activeTab === "current"
+                    ? currentRows.length
+                    : xpRows.length
+              )}
             </h2>
           </CardHeader>
 
@@ -334,19 +411,88 @@ export default async function RankingPage({
                   })}
                 </ul>
               )
-            ) : currentRows.length === 0 ? (
+            ) : activeTab === "current" ? (
+              currentRows.length === 0 ? (
               <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
                 継続中の人がいません（誰も継続中状態ではない）。
               </div>
+              ) : (
+                <ul className="space-y-3">
+                  {currentRows.map((r) => {
+                    const isMe = r.user_id === user.id;
+                    const href = profileHref(r.user_id, user.id);
+                    const avatar = avatarUrl(avatarMap.get(r.user_id));
+                    const badgeId = titleBadgeIdMap.get(r.user_id) ?? null;
+                    const title = badgeId ? badgeMap.get(badgeId) ?? null : null;
+                    const level = levelMap.get(r.user_id) ?? 1;
+
+                    return (
+                      <li
+                        key={`${r.rank_no}-${r.user_id}`}
+                        className="rounded-xl border border-border bg-background/60 px-4 py-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="shrink-0 text-lg font-bold tabular-nums w-8 text-center">
+                            {r.rank_no}
+                          </div>
+
+                          <Avatar
+                            href={href}
+                            avatar={avatar}
+                            displayName={r.display_name}
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Link
+                                href={href}
+                                className="text-sm font-semibold hover:underline break-all"
+                              >
+                                {r.display_name}
+                                {isMe ? "（あなた）" : ""}
+                              </Link>
+
+                              <LevelBadge level={level} compact />
+
+                              <TitleBadge
+                                label={title?.title_label ?? null}
+                                rank={title?.badge_rank ?? null}
+                                compact
+                              />
+
+                              <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                                継続中
+                              </span>
+                            </div>
+
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              開始：{formatJstStartLabel(r.started_at)}
+                            </div>
+
+                            <div className="mt-1 text-base font-bold tabular-nums">
+                              {formatTime(Number(r.current_seconds))}
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : xpRows.length === 0 ? (
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground">
+                まだ経験値ランキングに表示できるユーザーがいません。
+              </div>
             ) : (
               <ul className="space-y-3">
-                {currentRows.map((r) => {
+                {xpRows.map((r) => {
                   const isMe = r.user_id === user.id;
                   const href = profileHref(r.user_id, user.id);
                   const avatar = avatarUrl(avatarMap.get(r.user_id));
                   const badgeId = titleBadgeIdMap.get(r.user_id) ?? null;
                   const title = badgeId ? badgeMap.get(badgeId) ?? null : null;
-                  const level = levelMap.get(r.user_id) ?? 1;
+                  const level = levelMap.get(r.user_id) ?? r.level;
+                  const progress = levelProgress(r.xp_total, level);
 
                   return (
                     <li
@@ -381,18 +527,39 @@ export default async function RankingPage({
                               rank={title?.badge_rank ?? null}
                               compact
                             />
-
-                            <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                              継続中
-                            </span>
                           </div>
 
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            開始：{formatJstStartLabel(r.started_at)}
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                            <div>
+                              <div className="text-xs text-muted-foreground">
+                                累計経験値
+                              </div>
+                              <div className="mt-1 text-base font-bold tabular-nums">
+                                {formatXp(r.xp_total)} XP
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground sm:text-right">
+                              次のLv {level + 1}まで{" "}
+                              <span className="font-semibold text-foreground tabular-nums">
+                                {formatXp(progress.remaining)} XP
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="mt-1 text-base font-bold tabular-nums">
-                            {formatTime(Number(r.current_seconds))}
+                          <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+                            <div
+                              className="h-full rounded-full bg-primary"
+                              style={{
+                                width: `${
+                                  progress.ratio > 0
+                                    ? Math.max(
+                                        3,
+                                        Math.round(progress.ratio * 100)
+                                      )
+                                    : 0
+                                }%`,
+                              }}
+                            />
                           </div>
                         </div>
                       </div>
