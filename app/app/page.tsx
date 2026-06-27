@@ -1,5 +1,6 @@
 import LiveTimer from "@/app/components/LiveTimer";
 import GlobalChatDrawer from "@/app/components/GlobalChatDrawer";
+import ResultTimelineDrawer from "@/app/components/ResultTimelineDrawer";
 import MobileAppMenu from "@/app/components/MobileAppMenu";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody } from "@/app/components/ui/Card";
@@ -70,6 +71,7 @@ export default async function AppPage() {
           mobileActionsInline={true}
           actions={
             <>
+              <ResultTimelineDrawer myUserId={user.id} />
               <GlobalChatDrawer myUserId={user.id} />
               <NotificationBell />
               <MobileAppMenu

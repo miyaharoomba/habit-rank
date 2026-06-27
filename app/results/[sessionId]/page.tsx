@@ -423,11 +423,13 @@ export default async function ResultPage({
           </CardBody>
         </Card>
 
-        <ResultCommentsClient
-          sessionId={sessionId}
-          resultOwnerName={name}
-          initialComments={initialComments}
-        />
+        <div id="comments" className="scroll-mt-4">
+          <ResultCommentsClient
+            sessionId={sessionId}
+            resultOwnerName={name}
+            initialComments={initialComments}
+          />
+        </div>
         {isOwner ? (
           <CorrectionSheet
             session={{
