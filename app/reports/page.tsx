@@ -12,6 +12,7 @@ import {
 import { formatXp, streakSessionXp } from "@/app/lib/leveling";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
+import ReportLineChart from "./ReportLineChart";
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -200,7 +201,8 @@ function summarize(
 function buildDayBreakdown(
   sessions: ReportSession[],
   start: Date,
-  days: number
+  days: number,
+  labelMode: "weekday" | "day" = "weekday"
 ): BreakdownItem[] {
   return Array.from({ length: days }, (_, index) => {
     const dayStart = addDays(start, index);
@@ -211,52 +213,19 @@ function buildDayBreakdown(
     });
 
     return {
-      label: new Intl.DateTimeFormat("ja-JP", {
-        timeZone: "Asia/Tokyo",
-        weekday: "short",
-      }).format(dayStart),
+      label:
+        labelMode === "weekday"
+          ? new Intl.DateTimeFormat("ja-JP", {
+              timeZone: "Asia/Tokyo",
+              weekday: "short",
+            }).format(dayStart)
+          : `${jstParts(dayStart).day}日`,
       caption: formatJstDate(dayStart),
       totalMs: rows.reduce((sum, row) => sum + row.durationMs, 0),
       xp: rows.reduce((sum, row) => sum + row.xp, 0),
       count: rows.length,
     };
   });
-}
-
-function buildMonthBreakdown(
-  sessions: ReportSession[],
-  monthStart: Date,
-  monthEnd: Date
-): BreakdownItem[] {
-  const blocks: BreakdownItem[] = [];
-  let cursor = monthStart;
-
-  while (cursor.getTime() < monthEnd.getTime()) {
-    const next = new Date(Math.min(addDays(cursor, 7).getTime(), monthEnd.getTime()));
-    const rows = sessions.filter((row) => {
-      const ended = new Date(row.ended_at).getTime();
-      return ended >= cursor.getTime() && ended < next.getTime();
-    });
-    const startParts = jstParts(cursor);
-    const endParts = jstParts(new Date(next.getTime() - 1));
-
-    blocks.push({
-      label:
-        startParts.day === endParts.day
-          ? `${startParts.day}日`
-          : `${startParts.day}-${endParts.day}日`,
-      caption: `${formatJstDate(cursor)} - ${formatJstDate(
-        new Date(next.getTime() - 1)
-      )}`,
-      totalMs: rows.reduce((sum, row) => sum + row.durationMs, 0),
-      xp: rows.reduce((sum, row) => sum + row.xp, 0),
-      count: rows.length,
-    });
-
-    cursor = next;
-  }
-
-  return blocks;
 }
 
 function rangeHref({
@@ -322,41 +291,6 @@ function PeriodNav({
           次へ
         </Link>
       </div>
-    </div>
-  );
-}
-
-function Breakdown({ items }: { items: BreakdownItem[] }) {
-  const maxMs = Math.max(1, ...items.map((item) => item.totalMs));
-
-  return (
-    <div className="space-y-3">
-      {items.map((item) => {
-        const ratio = item.totalMs / maxMs;
-        const width =
-          item.totalMs > 0 ? Math.max(4, Math.round(ratio * 100)) : 0;
-
-        return (
-          <div key={item.caption} className="grid gap-2 sm:grid-cols-[6.5rem_1fr_9rem] sm:items-center">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold">{item.label}</div>
-              <div className="text-[11px] text-muted-foreground">{item.caption}</div>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-secondary/50">
-              <div
-                className="h-full rounded-full bg-primary"
-                style={{ width: `${width}%` }}
-              />
-            </div>
-            <div className="text-xs text-muted-foreground sm:text-right">
-              <span className="font-semibold text-foreground">
-                {formatDuration(item.totalMs)}
-              </span>{" "}
-              / {item.count}回 / {formatXp(item.xp)} XP
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -454,12 +388,12 @@ function ReportCard({
         <div className="mt-6 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">内訳</h3>
+              <h3 className="text-sm font-semibold">継続時間の推移</h3>
               <span className="text-xs text-muted-foreground">
-                終了日時ベース
+                点を選択して詳細を表示
               </span>
             </div>
-            <Breakdown items={breakdown} />
+            <ReportLineChart items={breakdown} />
           </section>
 
           <section className="min-w-0">
@@ -524,7 +458,15 @@ export default async function ReportsPage({
   const weekSummary = summarize(sessions, weekStart, weekEnd);
   const monthSummary = summarize(sessions, monthStart, monthEnd);
   const weekBreakdown = buildDayBreakdown(sessions, weekStart, 7);
-  const monthBreakdown = buildMonthBreakdown(sessions, monthStart, monthEnd);
+  const monthDays = Math.round(
+    (monthEnd.getTime() - monthStart.getTime()) / DAY_MS
+  );
+  const monthBreakdown = buildDayBreakdown(
+    sessions,
+    monthStart,
+    monthDays,
+    "day"
+  );
 
   return (
     <Container>
