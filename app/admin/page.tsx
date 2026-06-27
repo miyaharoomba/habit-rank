@@ -6,13 +6,10 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import {
   Activity,
   Award,
-  Ban,
   BellRing,
   CircleAlert,
-  Clock3,
   Flag,
   Gauge,
-  Inbox,
   Megaphone,
   MessageSquareText,
   ScrollText,
@@ -26,15 +23,6 @@ import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
 
 type IconType = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-
-type AuditRow = {
-  id: number;
-  actor_id: string | null;
-  action: string;
-  target_user_id: string | null;
-  target_thread_id: string | null;
-  created_at: string;
-};
 
 type BanRow = {
   user_id: string;
@@ -55,7 +43,6 @@ type SupportRow = {
   id: string;
   user_id: string;
   subject: string;
-  status: "open";
   last_message_at: string;
 };
 
@@ -68,23 +55,8 @@ type FailedPushRow = {
   created_at: string;
 };
 
-type ProfileRow = {
-  id: string;
-  display_name: string | null;
-};
-
-type DebugProfileRow = {
-  suppress_global_streak_end_notification: boolean | null;
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  BAN_USER: "ユーザーをBAN",
-  UNBAN_USER: "BANを解除",
-  DELETE_USER: "アカウントを削除",
-  RESET_PASSWORD: "パスワードリセットを送信",
-  REVIEW_REPORT: "通報を更新",
-  UPDATE_ADMIN_DEBUG_SETTINGS: "デバッグ設定を変更",
-};
+type ProfileRow = { id: string; display_name: string | null };
+type DebugProfileRow = { suppress_global_streak_end_notification: boolean | null };
 
 const NOTIFICATION_LABELS: Record<string, string> = {
   dm: "DM",
@@ -111,8 +83,7 @@ function getAdminClient() {
 }
 
 function maskId(id: string | null) {
-  if (!id) return "-";
-  return `${id.slice(0, 8)}…`;
+  return id ? `${id.slice(0, 8)}…` : "-";
 }
 
 function shortText(value: string | null, max = 80) {
@@ -144,7 +115,6 @@ function ToneBadge({
     success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     neutral: "border-border bg-secondary/40 text-muted-foreground",
   };
-
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold ${styles[tone]}`}>
       {children}
@@ -152,41 +122,32 @@ function ToneBadge({
   );
 }
 
-function MetricTile({
+function SummaryItem({
   label,
   value,
-  helper,
   href,
-  icon: Icon,
-  tone = "neutral",
+  alert = false,
 }: {
   label: string;
   value: string;
-  helper: string;
   href?: string;
-  icon: IconType;
-  tone?: "danger" | "warning" | "success" | "neutral";
+  alert?: boolean;
 }) {
-  const iconStyles = {
-    danger: "bg-red-500/10 text-red-600 dark:text-red-300",
-    warning: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    neutral: "bg-secondary text-muted-foreground",
-  };
   const content = (
-    <div className="flex h-full min-h-28 items-start justify-between gap-3 rounded-lg border border-border bg-card px-4 py-4 transition hover:border-primary/40 hover:bg-secondary/20">
-      <div className="min-w-0">
-        <div className="text-xs font-semibold text-muted-foreground">{label}</div>
-        <div className="mt-2 text-2xl font-bold tabular-nums">{value}</div>
-        <div className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</div>
-      </div>
-      <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconStyles[tone]}`}>
-        <Icon className="size-4" aria-hidden={true} />
+    <div className="min-w-0 px-3 py-3 sm:px-4">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+      <div className={`mt-1 text-xl font-bold tabular-nums ${alert ? "text-red-600 dark:text-red-300" : ""}`}>
+        {value}
       </div>
     </div>
   );
-
-  return href ? <Link href={href}>{content}</Link> : content;
+  return href ? (
+    <Link href={href} className="block transition hover:bg-secondary/30">
+      {content}
+    </Link>
+  ) : (
+    content
+  );
 }
 
 function SectionTitle({
@@ -206,10 +167,22 @@ function SectionTitle({
       </div>
       {href ? (
         <Link href={href} className="shrink-0 text-sm font-semibold text-primary hover:underline">
-          すべて見る
+          一覧へ
         </Link>
       ) : null}
     </div>
+  );
+}
+
+function QuickLink({ href, label, icon: Icon }: { href: string; label: string; icon: IconType }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold transition hover:bg-secondary/40"
+    >
+      <Icon className="size-4 text-muted-foreground" aria-hidden={true} />
+      <span>{label}</span>
+    </Link>
   );
 }
 
@@ -217,32 +190,11 @@ function EmptyRow({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
-function QuickLink({
-  href,
-  label,
-  icon: Icon,
-}: {
-  href: string;
-  label: string;
-  icon: IconType;
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-background/50 px-2 py-3 text-center text-xs font-semibold transition hover:border-primary/40 hover:bg-secondary/40"
-    >
-      <Icon className="size-5 text-muted-foreground" aria-hidden={true} />
-      <span>{label}</span>
-    </Link>
-  );
-}
-
 export default async function AdminPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) redirect("/auth/sign-in");
 
   const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
@@ -250,7 +202,6 @@ export default async function AdminPage() {
 
   async function setSuppressGlobalStreakEndNotification(formData: FormData) {
     "use server";
-
     const supabase = await createClient();
     const {
       data: { user },
@@ -274,7 +225,6 @@ export default async function AdminPage() {
       target_user_id: user.id,
       details: { suppress_global_streak_end_notification: enabled },
     });
-
     revalidatePath("/admin");
     revalidatePath("/settings");
     redirect("/admin");
@@ -290,7 +240,6 @@ export default async function AdminPage() {
     bansRes,
     reportsRes,
     supportRes,
-    auditRes,
     debugProfileRes,
     pendingPushRes,
     failedPushRes,
@@ -315,18 +264,13 @@ export default async function AdminPage() {
       .select("id, reporter_id, reason, status, created_at", { count: "exact" })
       .in("status", ["open", "reviewing"])
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(4),
     admin
       .from("support_threads")
-      .select("id, user_id, subject, status, last_message_at", { count: "exact" })
+      .select("id, user_id, subject, last_message_at", { count: "exact" })
       .eq("status", "open")
       .order("last_message_at", { ascending: false })
-      .limit(5),
-    admin
-      .from("admin_audit_logs")
-      .select("id, actor_id, action, target_user_id, target_thread_id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(4),
     admin
       .from("profiles")
       .select("suppress_global_streak_end_notification")
@@ -339,13 +283,11 @@ export default async function AdminPage() {
       .lt("attempts", 8),
     admin
       .from("push_outbox")
-      .select("id, notification_id, recipient_id, attempts, last_error, created_at", {
-        count: "exact",
-      })
+      .select("id, notification_id, recipient_id, attempts, last_error, created_at", { count: "exact" })
       .is("sent_at", null)
       .not("last_error", "is", null)
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(3),
     admin
       .from("push_outbox")
       .select("sent_at", { count: "exact" })
@@ -380,12 +322,11 @@ export default async function AdminPage() {
       .gte("created_at", since24Hours),
   ]);
 
-  const warnings = [
+  const queryErrors = [
     usersRes.error,
     bansRes.error,
     reportsRes.error,
     supportRes.error,
-    auditRes.error,
     debugProfileRes.error,
     pendingPushRes.error,
     failedPushRes.error,
@@ -399,26 +340,22 @@ export default async function AdminPage() {
     notifications24Res.error,
   ].filter(Boolean);
 
-  const activeBans = ((bansRes.data ?? []) as BanRow[]).filter((row) =>
-    isActiveBan(row, now)
-  );
+  const activeBans = ((bansRes.data ?? []) as BanRow[]).filter((row) => isActiveBan(row, now));
   const reportRows = (reportsRes.data ?? []) as ReportRow[];
   const supportRows = (supportRes.data ?? []) as SupportRow[];
   const failedPushRows = (failedPushRes.data ?? []) as FailedPushRow[];
-  const auditRows = (auditRes.data ?? []) as AuditRow[];
   const debugProfile = debugProfileRes.data as DebugProfileRow | null;
   const suppressGlobalStreakEndNotification =
     debugProfile?.suppress_global_streak_end_notification ?? false;
 
-  const failedNotificationIds = failedPushRows.map((row) => row.notification_id);
-  const failedNotificationTypes = new Map<string, string>();
-  if (failedNotificationIds.length > 0) {
+  const failedTypes = new Map<string, string>();
+  if (failedPushRows.length > 0) {
     const { data } = await admin
       .from("notifications")
       .select("id, type")
-      .in("id", failedNotificationIds);
+      .in("id", failedPushRows.map((row) => row.notification_id));
     ((data ?? []) as Array<{ id: string; type: string }>).forEach((row) => {
-      failedNotificationTypes.set(row.id, row.type);
+      failedTypes.set(row.id, row.type);
     });
   }
 
@@ -429,46 +366,33 @@ export default async function AdminPage() {
         ...reportRows.map((row) => row.reporter_id),
         ...supportRows.map((row) => row.user_id),
         ...failedPushRows.map((row) => row.recipient_id),
-        ...auditRows.map((row) => row.actor_id),
       ].filter((id): id is string => Boolean(id))
     )
   );
   const nameMap = new Map<string, string>();
   if (profileIds.length > 0) {
-    const { data } = await admin
-      .from("profiles")
-      .select("id, display_name")
-      .in("id", profileIds);
+    const { data } = await admin.from("profiles").select("id, display_name").in("id", profileIds);
     ((data ?? []) as ProfileRow[]).forEach((row) => {
       nameMap.set(row.id, row.display_name?.trim() || "NoName");
     });
   }
 
   const failedCount = failedPushRes.count ?? 0;
-  const pendingCount = pendingPushRes.count ?? 0;
-  const sent24Count = sentPush24Res.count ?? 0;
-  const created24Count = createdPush24Res.count ?? 0;
   const openReportCount = reportsRes.count ?? 0;
   const openSupportCount = supportRes.count ?? 0;
+  const sent24Count = sentPush24Res.count ?? 0;
+  const created24Count = createdPush24Res.count ?? 0;
   const attentionCount = failedCount + openReportCount + openSupportCount;
-  const deliveryRate =
-    created24Count > 0 ? Math.round((sent24Count / created24Count) * 100) : 100;
-  const lastSentAt = (sentPush24Res.data?.[0] as { sent_at?: string } | undefined)
-    ?.sent_at;
+  const deliveryRate = created24Count > 0 ? Math.round((sent24Count / created24Count) * 100) : 100;
+  const lastSentAt = (sentPush24Res.data?.[0] as { sent_at?: string } | undefined)?.sent_at;
   const statusTone = failedCount > 0 ? "danger" : attentionCount > 0 ? "warning" : "success";
-  const statusText =
-    failedCount > 0
-      ? "通知エラーあり"
-      : attentionCount > 0
-      ? "対応待ちあり"
-      : "正常稼働";
 
   return (
     <Container size="wide">
       <PageHeader
         eyebrow="Operations"
         title="管理者ダッシュボード"
-        description="通知、ユーザー対応、問い合わせ、利用状況を一画面で確認します。"
+        description="要対応項目とアプリの稼働状況を確認します。"
         actions={
           <>
             <MainLink />
@@ -484,377 +408,172 @@ export default async function AdminPage() {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">運用ステータス</span>
-              <ToneBadge tone={statusTone}>{statusText}</ToneBadge>
+              <span className="font-semibold">要対応 {number(attentionCount)}件</span>
+              <ToneBadge tone={statusTone}>
+                {failedCount > 0 ? "通知エラーあり" : attentionCount > 0 ? "対応待ちあり" : "正常稼働"}
+              </ToneBadge>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              要対応 {number(attentionCount)}件 / 直近24時間の通知配信率 {deliveryRate}%
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">直近24時間の端末通知配信率 {deliveryRate}%</p>
           </div>
         </div>
         <div className="text-xs text-muted-foreground">
-          {lastSentAt ? `最終端末通知: ${formatJst(lastSentAt)}` : "直近24時間の端末通知なし"}
+          {lastSentAt ? `最終送信: ${formatJst(lastSentAt)}` : "直近24時間の送信なし"}
         </div>
       </div>
 
-      {warnings.length > 0 ? (
+      {queryErrors.length > 0 ? (
         <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden={true} />
-          <div>
-            一部の指標を取得できませんでした。表示されている0件には未取得が含まれる可能性があります。
-          </div>
+          <span>一部の指標を取得できませんでした。0件表示には未取得が含まれる場合があります。</span>
         </div>
       ) : null}
 
-      <section aria-label="運用サマリー" className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <MetricTile
-          label="失敗通知"
-          value={number(failedCount)}
-          helper="未送信でエラーあり"
-          href="#push-status"
-          icon={CircleAlert}
-          tone={failedCount > 0 ? "danger" : "success"}
-        />
-        <MetricTile
-          label="未対応通報"
-          value={number(openReportCount)}
-          helper="open・reviewing"
-          href="/admin/reports"
-          icon={Flag}
-          tone={openReportCount > 0 ? "warning" : "success"}
-        />
-        <MetricTile
-          label="対応中問い合わせ"
-          value={number(openSupportCount)}
-          helper="openスレッド"
-          href="/admin/support"
-          icon={Inbox}
-          tone={openSupportCount > 0 ? "warning" : "success"}
-        />
-        <MetricTile
-          label="BAN中"
-          value={number(activeBans.length)}
-          helper="期限内・無期限"
-          href="/admin/users"
-          icon={Ban}
-          tone={activeBans.length > 0 ? "warning" : "neutral"}
-        />
-        <MetricTile
-          label="登録ユーザー"
-          value={number(usersRes.count)}
-          helper="プロフィール総数"
-          href="/admin/users"
-          icon={Users}
-        />
-        <MetricTile
-          label="継続中"
-          value={number(activeSessionsRes.count)}
-          helper="現在進行中のセッション"
-          icon={Activity}
-          tone="success"
-        />
-      </section>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <QuickLink href="/admin/users" label="ユーザー" icon={Users} />
+        <QuickLink href="/admin/sessions" label="継続中" icon={Activity} />
+        <QuickLink href="/admin/reports" label="通報" icon={Flag} />
+        <QuickLink href="/admin/support" label="問い合わせ" icon={MessageSquareText} />
+        <QuickLink href="/admin/announcements" label="お知らせ" icon={Megaphone} />
+        <QuickLink href="/admin/badges" label="トロフィー" icon={Award} />
+        <QuickLink href="/admin/audit" label="監査ログ" icon={ScrollText} />
+      </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_0.55fr]">
+      <div className="mt-4 overflow-hidden rounded-lg border border-border bg-card">
+        <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
+          <SummaryItem label="失敗通知" value={number(failedCount)} href="#push-status" alert={failedCount > 0} />
+          <SummaryItem label="通報" value={number(openReportCount)} href="/admin/reports" />
+          <SummaryItem label="問い合わせ" value={number(openSupportCount)} href="/admin/support" />
+          <SummaryItem label="継続中" value={number(activeSessionsRes.count)} href="/admin/sessions" />
+          <SummaryItem label="BAN中" value={number(activeBans.length)} href="/admin/users" />
+          <SummaryItem label="ユーザー" value={number(usersRes.count)} href="/admin/users" />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Card>
           <div id="push-status" />
           <CardHeader>
             <SectionTitle
-              title="端末通知の送信状況"
-              description="送信待ちは再試行対象です。8回失敗した通知はエラーとして残ります。"
+              title="端末通知"
+              description="送信待ちは再試行対象。8回失敗した通知はエラーとして残ります。"
             />
           </CardHeader>
           <CardBody>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="border-l-2 border-emerald-500 pl-3">
-                <div className="text-xs text-muted-foreground">24時間の送信済み</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{number(sent24Count)}</div>
-              </div>
-              <div className="border-l-2 border-primary pl-3">
-                <div className="text-xs text-muted-foreground">配信率</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{deliveryRate}%</div>
-              </div>
-              <div className="border-l-2 border-amber-500 pl-3">
-                <div className="text-xs text-muted-foreground">送信待ち</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{number(pendingCount)}</div>
-              </div>
-              <div className="border-l-2 border-red-500 pl-3">
-                <div className="text-xs text-muted-foreground">エラーあり</div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{number(failedCount)}</div>
-              </div>
+            <div className="grid grid-cols-3 divide-x divide-border border-b border-border pb-4 text-center">
+              <div><div className="text-xs text-muted-foreground">24時間送信</div><div className="mt-1 text-lg font-bold">{number(sent24Count)}</div></div>
+              <div><div className="text-xs text-muted-foreground">送信待ち</div><div className="mt-1 text-lg font-bold">{number(pendingPushRes.count)}</div></div>
+              <div><div className="text-xs text-muted-foreground">配信率</div><div className="mt-1 text-lg font-bold">{deliveryRate}%</div></div>
             </div>
-
-            <div className="mt-5 border-t border-border pt-4">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">最近の失敗通知</h3>
-                <span className="text-xs text-muted-foreground">最大5件</span>
-              </div>
-              {failedPushRows.length === 0 ? (
-                <EmptyRow>失敗中の通知はありません。</EmptyRow>
-              ) : (
-                <div className="divide-y divide-border">
-                  {failedPushRows.map((row) => {
-                    const type = failedNotificationTypes.get(row.notification_id);
-                    const recipient = row.recipient_id
-                      ? nameMap.get(row.recipient_id) ?? "NoName"
-                      : "受信者なし";
-                    return (
-                      <div key={row.id} className="grid gap-2 py-3 sm:grid-cols-[1fr_auto] sm:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                            <span>{type ? NOTIFICATION_LABELS[type] ?? type : "通知"}</span>
-                            <ToneBadge tone="danger">{row.attempts}回失敗</ToneBadge>
-                          </div>
-                          <p className="mt-1 break-words text-xs text-red-600 dark:text-red-300">
-                            {shortText(row.last_error, 120)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            宛先: {recipient}（{maskId(row.recipient_id)}）
-                          </p>
-                        </div>
-                        <time className="text-xs tabular-nums text-muted-foreground">
-                          {formatJst(row.created_at)}
-                        </time>
+            {failedPushRows.length === 0 ? (
+              <EmptyRow>失敗通知はありません。</EmptyRow>
+            ) : (
+              <div className="divide-y divide-border">
+                {failedPushRows.map((row) => {
+                  const type = failedTypes.get(row.notification_id);
+                  return (
+                    <div key={row.id} className="py-3">
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                        <span>{type ? NOTIFICATION_LABELS[type] ?? type : "通知"}</span>
+                        <ToneBadge tone="danger">{row.attempts}回失敗</ToneBadge>
+                        <time className="ml-auto text-xs font-normal text-muted-foreground">{formatJst(row.created_at)}</time>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      <p className="mt-1 break-words text-xs text-red-600 dark:text-red-300">{shortText(row.last_error, 110)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        宛先: {row.recipient_id ? nameMap.get(row.recipient_id) ?? "NoName" : "なし"}（{maskId(row.recipient_id)}）
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader>
-            <SectionTitle title="管理メニュー" description="よく使う管理機能へ移動" />
+            <SectionTitle title="対応待ち" description="未完了の通報と問い合わせ" />
           </CardHeader>
           <CardBody>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
-              <QuickLink href="/admin/users" label="ユーザー" icon={Users} />
-              <QuickLink href="/admin/reports" label="通報" icon={Flag} />
-              <QuickLink href="/admin/support" label="問い合わせ" icon={MessageSquareText} />
-              <QuickLink href="/admin/announcements" label="お知らせ" icon={Megaphone} />
-              <QuickLink href="/admin/badges" label="トロフィー" icon={Award} />
-              <QuickLink href="/admin/audit" label="監査ログ" icon={ScrollText} />
-            </div>
+            <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">通報</h3><Link href="/admin/reports" className="text-xs font-semibold text-primary hover:underline">一覧へ</Link></div>
+            {reportRows.length === 0 ? <EmptyRow>対応待ちの通報はありません。</EmptyRow> : (
+              <div className="mt-1 divide-y divide-border">
+                {reportRows.slice(0, 2).map((row) => (
+                  <Link key={row.id} href={`/admin/reports/${row.id}`} className="block py-3 hover:bg-secondary/20">
+                    <div className="flex items-center gap-2"><span className="text-sm font-semibold">通報 #{row.id}</span><ToneBadge tone={row.status === "open" ? "danger" : "warning"}>{row.status === "open" ? "未対応" : "確認中"}</ToneBadge></div>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{nameMap.get(row.reporter_id) ?? "NoName"}: {shortText(row.reason)}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex items-center justify-between border-t border-border pt-4"><h3 className="text-sm font-semibold">問い合わせ</h3><Link href="/admin/support" className="text-xs font-semibold text-primary hover:underline">一覧へ</Link></div>
+            {supportRows.length === 0 ? <EmptyRow>対応中の問い合わせはありません。</EmptyRow> : (
+              <div className="mt-1 divide-y divide-border">
+                {supportRows.slice(0, 2).map((row) => (
+                  <Link key={row.id} href={`/admin/support/${row.id}`} className="block py-3 hover:bg-secondary/20">
+                    <div className="flex items-center gap-2"><span className="min-w-0 truncate text-sm font-semibold">{row.subject}</span><ToneBadge tone="warning">対応中</ToneBadge></div>
+                    <p className="mt-1 text-xs text-muted-foreground">{nameMap.get(row.user_id) ?? "NoName"} / {formatJst(row.last_message_at)}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
           </CardBody>
         </Card>
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Card>
-          <CardHeader>
-            <SectionTitle
-              title="対応キュー"
-              description="未完了の通報と問い合わせを更新順で確認"
-            />
-          </CardHeader>
+          <CardHeader><SectionTitle title="BAN中ユーザー" description="現在有効なBAN" href="/admin/users" /></CardHeader>
           <CardBody>
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">通報</h3>
-              <Link href="/admin/reports" className="text-xs font-semibold text-primary hover:underline">
-                一覧へ
-              </Link>
-            </div>
-            {reportRows.length === 0 ? (
-              <EmptyRow>対応待ちの通報はありません。</EmptyRow>
-            ) : (
-              <div className="mt-2 divide-y divide-border">
-                {reportRows.slice(0, 3).map((row) => (
-                  <Link key={row.id} href={`/admin/reports/${row.id}`} className="block py-3 hover:bg-secondary/20">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 text-sm font-semibold">通報 #{row.id}</div>
-                      <ToneBadge tone={row.status === "open" ? "danger" : "warning"}>
-                        {row.status === "open" ? "未対応" : "確認中"}
-                      </ToneBadge>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                      {nameMap.get(row.reporter_id) ?? "NoName"}: {shortText(row.reason)}
-                    </p>
-                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">{formatJst(row.created_at)}</p>
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
-              <h3 className="text-sm font-semibold">問い合わせ</h3>
-              <Link href="/admin/support" className="text-xs font-semibold text-primary hover:underline">
-                一覧へ
-              </Link>
-            </div>
-            {supportRows.length === 0 ? (
-              <EmptyRow>対応中の問い合わせはありません。</EmptyRow>
-            ) : (
-              <div className="mt-2 divide-y divide-border">
-                {supportRows.slice(0, 3).map((row) => (
-                  <Link key={row.id} href={`/admin/support/${row.id}`} className="block py-3 hover:bg-secondary/20">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 truncate text-sm font-semibold">{row.subject}</div>
-                      <ToneBadge tone="warning">対応中</ToneBadge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {nameMap.get(row.user_id) ?? "NoName"}（{maskId(row.user_id)}）
-                    </p>
-                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                      最終更新: {formatJst(row.last_message_at)}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <SectionTitle
-              title="BAN中ユーザー"
-              description="期限切れを除いた現在有効なBAN"
-              href="/admin/users"
-            />
-          </CardHeader>
-          <CardBody>
-            {activeBans.length === 0 ? (
-              <EmptyRow>BAN中のユーザーはいません。</EmptyRow>
-            ) : (
+            {activeBans.length === 0 ? <EmptyRow>BAN中のユーザーはいません。</EmptyRow> : (
               <div className="divide-y divide-border">
-                {activeBans.slice(0, 5).map((row) => (
-                  <div key={row.user_id} className="grid gap-2 py-3 sm:grid-cols-[1fr_auto] sm:items-start">
+                {activeBans.slice(0, 4).map((row) => (
+                  <div key={row.user_id} className="flex items-start justify-between gap-3 py-3">
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link href={`/users/${row.user_id}`} className="text-sm font-semibold hover:underline">
-                          {nameMap.get(row.user_id) ?? "NoName"}
-                        </Link>
-                        <ToneBadge tone="danger">BAN中</ToneBadge>
-                      </div>
-                      <p className="mt-1 break-words text-xs text-muted-foreground">
-                        理由: {row.ban_reason || "理由未設定"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        期限: {row.banned_until ? formatJst(row.banned_until) : "無期限"}
-                      </p>
+                      <div className="flex items-center gap-2"><Link href={`/users/${row.user_id}`} className="truncate text-sm font-semibold hover:underline">{nameMap.get(row.user_id) ?? "NoName"}</Link><ToneBadge tone="danger">BAN</ToneBadge></div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{row.ban_reason || "理由未設定"}</p>
                     </div>
-                    <time className="text-xs tabular-nums text-muted-foreground">
-                      更新 {formatJst(row.updated_at)}
-                    </time>
+                    <span className="shrink-0 text-xs text-muted-foreground">{row.banned_until ? formatJst(row.banned_until) : "無期限"}</span>
                   </div>
                 ))}
               </div>
             )}
           </CardBody>
         </Card>
-      </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader>
-            <SectionTitle
-              title="アプリ利用量"
-              description="Supabase内の主要レコードと直近アクティビティ"
-            />
-          </CardHeader>
+          <CardHeader><SectionTitle title="利用状況" description="Supabase内の主要レコード" /></CardHeader>
           <CardBody>
-            <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-x-5">
               {[
-                ["登録ユーザー", number(usersRes.count), "全期間"],
                 ["終了セッション", number(endedSessionsRes.count), "全期間"],
-                ["終了セッション", number(endedSessions7Res.count), "直近7日"],
+                ["終了セッション", number(endedSessions7Res.count), "7日間"],
                 ["生成通知", number(notificationsRes.count), "全期間"],
-                ["生成通知", number(notifications24Res.count), "直近24時間"],
-                ["有効な端末購読", number(activeSubscriptionsRes.count), "現在"],
+                ["生成通知", number(notifications24Res.count), "24時間"],
+                ["端末購読", number(activeSubscriptionsRes.count), "有効"],
+                ["登録ユーザー", number(usersRes.count), "現在"],
               ].map(([label, value, period]) => (
-                <div key={`${label}-${period}`} className="flex items-center justify-between gap-4 border-b border-border py-3">
-                  <div>
-                    <div className="text-xs text-muted-foreground">{label}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{period}</div>
-                  </div>
-                  <div className="text-lg font-bold tabular-nums">{value}</div>
+                <div key={`${label}-${period}`} className="flex items-center justify-between gap-3 border-b border-border py-3">
+                  <div><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-[11px] text-muted-foreground">{period}</div></div>
+                  <div className="font-bold tabular-nums">{value}</div>
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-              <Gauge className="mt-0.5 size-4 shrink-0" aria-hidden={true} />
-              <span>契約上のEgress・StorageクォータはSupabase Usage画面で確認してください。</span>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <SectionTitle
-              title="最近の管理操作"
-              description="直近5件の監査ログ"
-              href="/admin/audit"
-            />
-          </CardHeader>
-          <CardBody>
-            {auditRows.length === 0 ? (
-              <EmptyRow>監査ログはまだありません。</EmptyRow>
-            ) : (
-              <div className="divide-y divide-border">
-                {auditRows.map((row) => (
-                  <div key={row.id} className="flex items-start gap-3 py-3">
-                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary">
-                      <Clock3 className="size-4 text-muted-foreground" aria-hidden={true} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold">
-                        {ACTION_LABELS[row.action] ?? row.action}
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {row.actor_id ? nameMap.get(row.actor_id) ?? "NoName" : "system"} / 対象 {maskId(row.target_user_id ?? row.target_thread_id)}
-                      </p>
-                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                        {formatJst(row.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted-foreground"><Gauge className="mt-0.5 size-4 shrink-0" aria-hidden={true} /><span>Egress・StorageクォータはSupabase Usage画面で確認します。</span></div>
           </CardBody>
         </Card>
       </div>
 
-      <div className="mt-5">
-        <Card>
-          <CardHeader>
-            <SectionTitle
-              title="管理者デバッグ設定"
-              description="この管理者アカウントで継続終了をテストする際の通知制御"
-            />
-          </CardHeader>
-          <CardBody>
-            <form
-              action={setSuppressGlobalStreakEndNotification}
-              className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <input
-                type="hidden"
-                name="enabled"
-                value={suppressGlobalStreakEndNotification ? "false" : "true"}
-              />
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
-                  <BellRing className="size-4" aria-hidden={true} />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold">継続終了の全体通知</div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    現在: {suppressGlobalStreakEndNotification ? "通知しない" : "通知する"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="submit"
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold transition hover:bg-secondary/40"
-              >
-                {suppressGlobalStreakEndNotification ? "通知を有効にする" : "通知を抑制する"}
-              </button>
-            </form>
-          </CardBody>
-        </Card>
+      <div className="mt-5 rounded-lg border border-border bg-card px-4 py-4 sm:px-5">
+        <form action={setSuppressGlobalStreakEndNotification} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <input type="hidden" name="enabled" value={suppressGlobalStreakEndNotification ? "false" : "true"} />
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary"><BellRing className="size-4" aria-hidden={true} /></div>
+            <div><div className="text-sm font-semibold">デバッグ時の継続終了通知</div><p className="mt-1 text-xs text-muted-foreground">現在: {suppressGlobalStreakEndNotification ? "通知しない" : "通知する"}</p></div>
+          </div>
+          <button type="submit" className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold hover:bg-secondary/40">
+            {suppressGlobalStreakEndNotification ? "通知を有効にする" : "通知を抑制する"}
+          </button>
+        </form>
       </div>
     </Container>
   );
