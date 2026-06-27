@@ -1,5 +1,6 @@
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
@@ -83,7 +84,7 @@ export default async function ResultPage({
 
   const { data: sess, error } = await supabase
     .from("streak_sessions")
-    .select("id, user_id, started_at, ended_at, end_reason")
+    .select("id, user_id, started_at, ended_at, end_reason, result_photo_path, result_photo_captured_at")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -101,6 +102,7 @@ export default async function ResultPage({
             </div>
           </CardBody>
         </Card>
+
       </Container>
     );
   }
@@ -308,6 +310,30 @@ export default async function ResultPage({
             </div>
           </CardBody>
         </Card>
+
+        {sess.result_photo_path ? (
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">終了時の写真</h2>
+            </CardHeader>
+            <CardBody>
+              <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-border bg-black">
+                <Image
+                  src={`/api/media/streak-result?sessionId=${encodeURIComponent(sessionId)}&v=${encodeURIComponent(sess.result_photo_captured_at ?? "")}`}
+                  alt={`${name}の継続終了時の写真`}
+                  fill
+                  unoptimized
+                  className="object-contain"
+                />
+              </div>
+              {sess.result_photo_captured_at ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  撮影: {formatJst(sess.result_photo_captured_at)}
+                </p>
+              ) : null}
+            </CardBody>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>

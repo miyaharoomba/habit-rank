@@ -78,6 +78,46 @@ async function refreshProfileLevel(userId: string) {
   }
 }
 
+async function discardStaleResultPhoto(userId: string) {
+  const admin = getAdminClient();
+  const { data: session, error } = await admin
+    .from("streak_sessions")
+    .select("id, result_photo_path, result_photo_captured_at")
+    .eq("user_id", userId)
+    .is("ended_at", null)
+    .maybeSingle();
+
+  if (error) {
+    console.error("streak result photo freshness check failed:", error.message);
+    return;
+  }
+  if (!session?.result_photo_path || !session.result_photo_captured_at) return;
+
+  const capturedAt = new Date(session.result_photo_captured_at).getTime();
+  const isStale =
+    !Number.isFinite(capturedAt) || Date.now() - capturedAt > 10 * 60 * 1000;
+  if (!isStale) return;
+
+  const { error: clearError } = await admin
+    .from("streak_sessions")
+    .update({ result_photo_path: null, result_photo_captured_at: null })
+    .eq("id", session.id)
+    .eq("user_id", userId)
+    .is("ended_at", null);
+
+  if (clearError) {
+    console.error("stale streak result photo clear failed:", clearError.message);
+    return;
+  }
+
+  const { error: removeError } = await admin.storage
+    .from("dm-media")
+    .remove([session.result_photo_path]);
+  if (removeError) {
+    console.error("stale streak result photo cleanup failed:", removeError.message);
+  }
+}
+
 export async function startSession() {
   const supabase = await createClient();
 
@@ -127,6 +167,8 @@ export async function finishSession(formData: FormData) {
   const mode = String(formData.get("mode") ?? "restart").trim();
   const autoRestart = mode !== "stop";
   let suppressAllNotificationsForDebug = false;
+
+  await discardStaleResultPhoto(user.id);
 
   try {
     const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");

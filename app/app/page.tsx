@@ -22,7 +22,7 @@ import { startSession, finishSession } from "./actions";
 import { redirect } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { formatJstStartLabel } from "@/lib/time";
-import FinishSessionButtons from "./FinishSessionButtons";
+import FinishSessionControls from "./FinishSessionControls";
 
 export default async function AppPage() {
   const supabase = await createClient();
@@ -58,7 +58,8 @@ export default async function AppPage() {
     .maybeSingle();
 
   const startedAt = active?.started_at ?? null;
-  const isRunning = Boolean(startedAt);
+  const activeSessionId = active?.id != null ? String(active.id) : null;
+  const isRunning = Boolean(startedAt && activeSessionId);
 
   return (
     <>
@@ -161,7 +162,7 @@ export default async function AppPage() {
                         />
                       </div>
 
-                      <FinishSessionButtons />
+                      <FinishSessionControls sessionId={activeSessionId ?? ""} />
                     </form>
                   </div>
                 )}
