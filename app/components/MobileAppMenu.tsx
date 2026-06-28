@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Award,
   CalendarDays,
   ChartColumnIncreasing,
   History,
+  Gamepad2,
   LifeBuoy,
   Menu,
   MessageCircle,
@@ -39,6 +41,7 @@ export default function MobileAppMenu({
   const status = (statusMessage ?? "").trim();
 
   const quickLinks = [
+    { href: "/games/stack", label: "Stack Tower", desc: "積み上げゲームでスコアを競う", icon: Gamepad2 },
     { href: "/calendar", label: "カレンダー", desc: "継続終了日を可視化", icon: CalendarDays },
     { href: "/reports", label: "レポート", desc: "週間・月間の集計", icon: ChartColumnIncreasing },
     { href: "/badges", label: "トロフィー", desc: "獲得したバッジ一覧", icon: Award },
@@ -116,9 +119,12 @@ export default function MobileAppMenu({
           <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4">
             <div className="flex min-w-0 items-start gap-3">
               {avatar ? (
-                <img
+                <Image
                   src={avatar}
                   alt={displayName || "avatar"}
+                  width={48}
+                  height={48}
+                  unoptimized
                   className="h-12 w-12 shrink-0 rounded-full border border-border object-cover"
                 />
               ) : (

@@ -21,9 +21,10 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { startSession, finishSession } from "./actions";
 import { redirect } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Gamepad2 } from "lucide-react";
 import { formatJstStartLabel } from "@/lib/time";
 import FinishSessionControls from "./FinishSessionControls";
+import Link from "next/link";
 
 export default async function AppPage() {
   const supabase = await createClient();
@@ -66,6 +67,14 @@ export default async function AppPage() {
     <>
       <Container>
         <header className="flex items-center justify-end gap-2">
+          <Link
+            href="/games/stack"
+            className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/90 shadow-md backdrop-blur transition hover:bg-secondary/50"
+            aria-label="Stack Towerをプレイ"
+            title="Stack Tower"
+          >
+            <Gamepad2 className="h-5 w-5" aria-hidden="true" />
+          </Link>
           <ResultTimelineDrawer myUserId={user.id} />
           <GlobalChatDrawer myUserId={user.id} />
           <NotificationBell />
@@ -83,6 +92,9 @@ export default async function AppPage() {
           </div>
 
           <ProfileLink />
+          <HeaderLink href="/games/stack" icon={Gamepad2}>
+            Stack Tower
+          </HeaderLink>
           <ParticipantsLink />
           <DmLink />
           <HeaderLink href="/calendar" icon={CalendarDays}>

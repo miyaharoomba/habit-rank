@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleHelp,
   GalleryVerticalEnd,
+  Gamepad2,
   MessageCircle,
   MessageSquareText,
   Play,
@@ -104,6 +105,16 @@ const STEPS: TutorialStep[] = [
       "履歴とカレンダーで過去の記録を確認",
       "週間・月間レポートで継続時間や獲得XPを比較",
       "折れ線グラフから日ごとの変化を把握できる",
+    ],
+  },
+  {
+    title: "Stack Towerでひと休み",
+    description: "短いミニゲームで息抜きしながら、みんなとスコアを競えます。",
+    icon: Gamepad2,
+    points: [
+      "流れてくるブロックをタップして高く積み上げる",
+      "今日・今週・歴代ランキングでほかのユーザーと競争",
+      "1日3回までXPを獲得でき、ゲーム限定称号も解放できる",
     ],
   },
   {
