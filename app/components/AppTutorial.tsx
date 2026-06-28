@@ -1,13 +1,18 @@
 "use client";
 
 import {
+  Award,
   Bell,
+  Camera,
   ChartColumnIncreasing,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
   GalleryVerticalEnd,
+  MessageCircle,
+  MessageSquareText,
   Play,
+  Trophy,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -22,49 +27,99 @@ type TutorialStep = {
 
 const STEPS: TutorialStep[] = [
   {
-    title: "継続を記録する",
-    description: "メイン画面のタイマーが、HabitBaseの中心です。",
+    title: "継続チャレンジを始める",
+    description: "メイン画面のタイマーで、現在の継続時間を記録します。",
     icon: Play,
     points: [
       "開始ボタンで継続チャレンジを始める",
-      "終了時は理由や、その場で撮った写真を残せる",
-      "継続時間に応じてXPとレベルが上がる",
+      "進行中はアプリを閉じても継続時間が保持される",
+      "終了後はそのまま次のチャレンジを開始できる",
+    ],
+  },
+  {
+    title: "終了リザルトを残す",
+    description: "継続を終えた瞬間を、あとから振り返れる記録にします。",
+    icon: Camera,
+    points: [
+      "終了理由と、その場で撮影した写真を記録できる",
+      "継続時間に応じたXPとレベルアップ結果を確認",
+      "リザルトにはコメント、返信、リアクションを送れる",
     ],
   },
   {
     title: "みんなの記録を見る",
-    description: "新しいリザルトや交流は、上部の専用ボタンから開けます。",
+    description: "複数ユーザーの新しいリザルトを、ひとつの画面で確認できます。",
     icon: GalleryVerticalEnd,
     points: [
-      "みんなの記録で複数ユーザーの成果を一覧表示",
-      "リザルトにリアクションやコメントを送れる",
-      "掲示板では全員と気軽に会話できる",
+      "継続時間、獲得XP、写真、終了理由を一覧表示",
+      "名前から相手のプロフィールや過去の記録へ移動",
+      "気になった記録にはその場でリアクションできる",
     ],
   },
   {
-    title: "通知とDMを使う",
-    description: "新しい反応やメッセージを見逃さずに確認できます。",
-    icon: Bell,
+    title: "公開チャットで話す",
+    description: "掲示板は、参加者全員が読めるオープンな交流場所です。",
+    icon: MessageSquareText,
     points: [
-      "通知ベルから未読のお知らせを確認",
-      "プロフィールから相手とのDMを開始",
-      "通知の種類は設定画面で個別に変更できる",
+      "文章、画像、動画、ファイルを投稿できる",
+      "メッセージへの返信、編集、削除、リアクションに対応",
+      "メイン画面上部の掲示板ボタンからすぐに開ける",
     ],
   },
   {
-    title: "成長を振り返る",
-    description: "履歴、レポート、ランキングから積み重ねを確認できます。",
+    title: "DMで個別に話す",
+    description: "特定の相手とは、公開されない1対1のチャットが使えます。",
+    icon: MessageCircle,
+    points: [
+      "相手のプロフィールからDMを開始できる",
+      "既読、返信、編集、削除、リアクションに対応",
+      "画像やファイルの送信、問題がある会話の通報もできる",
+    ],
+  },
+  {
+    title: "レベルと称号を育てる",
+    description: "継続の積み重ねが、プロフィール上の成長として残ります。",
+    icon: Award,
+    points: [
+      "長く継続するほど1分あたりの獲得XPが増える",
+      "条件を達成するとトロフィーや称号を獲得",
+      "選んだ称号とレベルはDMや掲示板にも表示される",
+    ],
+  },
+  {
+    title: "ランキングで比較する",
+    description: "継続の強さと成長を、参加者同士で比較できます。",
+    icon: Trophy,
+    points: [
+      "現在進行中の継続時間ランキング",
+      "過去最高の継続時間ランキング",
+      "累計XPとレベルの成長ランキング",
+    ],
+  },
+  {
+    title: "記録を振り返る",
+    description: "時間の変化を、一覧・カレンダー・グラフで確認できます。",
     icon: ChartColumnIncreasing,
     points: [
       "履歴とカレンダーで過去の記録を確認",
-      "週間・月間レポートで変化を比較",
-      "ランキング、トロフィー、称号で成長を楽しむ",
+      "週間・月間レポートで継続時間や獲得XPを比較",
+      "折れ線グラフから日ごとの変化を把握できる",
+    ],
+  },
+  {
+    title: "通知と設定を整える",
+    description: "必要な情報だけを受け取り、自分に合った状態で使えます。",
+    icon: Bell,
+    points: [
+      "通知ベル、トースト、端末通知で新着を確認",
+      "DM、継続終了、コメントなどを種類別にオン・オフ",
+      "テーマ変更、問い合わせ、ログアウト、アカウント削除にも対応",
     ],
   },
 ];
 
 function storageKey(userId: string) {
-  return `habitbase:tutorial:v1:${userId}`;
+  return `habitbase:tutorial:v2:${userId}`;
 }
 
 export default function AppTutorial({ userId }: { userId: string }) {
