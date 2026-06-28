@@ -5,13 +5,13 @@ import MobileAppMenu from "@/app/components/MobileAppMenu";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody } from "@/app/components/ui/Card";
 import NotificationBell from "@/app/components/NotificationBell";
+import AppTutorial from "@/app/components/AppTutorial";
 import {
   BadgesLink,
   DmLink,
   HeaderLink,
   HistoryLink,
   ParticipantsLink,
-  PageHeader,
   ProfileLink,
   RankingLink,
   ReportsLink,
@@ -65,23 +65,17 @@ export default async function AppPage() {
   return (
     <>
       <Container>
-        <PageHeader
-          title="継続チャレンジ"
-          description="今の継続状態を見ながら、そのまま開始・終了・再開できます。"
-          mobileActionsInline={true}
-          actions={
-            <>
-              <ResultTimelineDrawer myUserId={user.id} />
-              <GlobalChatDrawer myUserId={user.id} />
-              <NotificationBell />
-              <MobileAppMenu
-                displayName={displayName}
-                avatarPath={avatarPath}
-                statusMessage={statusMessage}
-              />
-            </>
-          }
-        />
+        <header className="flex items-center justify-end gap-2">
+          <ResultTimelineDrawer myUserId={user.id} />
+          <GlobalChatDrawer myUserId={user.id} />
+          <NotificationBell />
+          <AppTutorial userId={user.id} />
+          <MobileAppMenu
+            displayName={displayName}
+            avatarPath={avatarPath}
+            statusMessage={statusMessage}
+          />
+        </header>
 
         <div className="mt-4 hidden flex-wrap items-center gap-2 sm:flex">
           <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 text-sm font-semibold">
