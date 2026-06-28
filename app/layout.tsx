@@ -6,6 +6,7 @@ import "./globals.css";
 
 import NotificationToaster from "@/app/components/NotificationToaster";
 import PwaServiceWorker from "@/app/components/PwaServiceWorker";
+import RouteScrollReset from "@/app/components/RouteScrollReset";
 
 const defaultUrl =
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
@@ -60,6 +61,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Suspense fallback={null}>
+            <RouteScrollReset />
             <NotificationToaster />
           </Suspense>
           <PwaServiceWorker />

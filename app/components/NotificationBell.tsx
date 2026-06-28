@@ -201,6 +201,7 @@ export default function NotificationBell({
 
   useEffect(() => {
     if (!open) return;
+    if (window.matchMedia("(min-width: 640px)").matches) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
