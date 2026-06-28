@@ -40,10 +40,6 @@ function monthParamToDate(raw?: string) {
   return new Date(year, monthIndex, 1);
 }
 
-function ymd(date: Date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-}
-
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
@@ -58,34 +54,6 @@ function jstDayKey(value: string) {
   return `${jst.getUTCFullYear()}-${pad2(jst.getUTCMonth() + 1)}-${pad2(
     jst.getUTCDate()
   )}`;
-}
-
-function buildCalendarCells(baseMonth: Date) {
-  const first = startOfMonth(baseMonth);
-  const startWeekday = first.getDay();
-  const daysInMonth = new Date(
-    baseMonth.getFullYear(),
-    baseMonth.getMonth() + 1,
-    0
-  ).getDate();
-
-  const cells: Array<{ date: Date | null }> = [];
-
-  for (let i = 0; i < startWeekday; i++) {
-    cells.push({ date: null });
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    cells.push({
-      date: new Date(baseMonth.getFullYear(), baseMonth.getMonth(), day),
-    });
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push({ date: null });
-  }
-
-  return cells;
 }
 
 export default async function UserCalendarPage({
@@ -174,14 +142,10 @@ export default async function UserCalendarPage({
     grouped[key] = grouped[key] ? [...grouped[key], row] : [row];
   }
 
-  const cells = buildCalendarCells(monthDate);
-
   const selectedDay =
     sp.day && grouped[sp.day]
       ? sp.day
-      : cells.find((c) => c.date && grouped[ymd(c.date)])?.date
-      ? ymd(cells.find((c) => c.date && grouped[ymd(c.date)])!.date as Date)
-      : null;
+      : Object.keys(grouped).sort().at(-1) ?? null;
 
   const selectedSessions = selectedDay ? grouped[selectedDay] ?? [] : [];
 
