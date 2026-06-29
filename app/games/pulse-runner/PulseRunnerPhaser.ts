@@ -61,6 +61,8 @@ export async function mountPulseRunner({
     private coins = 0;
     private ended = false;
     private started = false;
+    private orientationPaused = false;
+    private orientationPausedAt = 0;
     private beatFlash!: import("phaser").GameObjects.Rectangle;
     private modeLabel!: import("phaser").GameObjects.Text;
 
@@ -97,18 +99,18 @@ export async function mountPulseRunner({
     }
 
     update(time: number) {
-      if (!this.started || this.ended || !this.player?.body) return;
+      if (!this.started || this.ended || this.orientationPaused || !this.player?.body) return;
       const body = this.player.body as ArcadeBody;
       body.setVelocityX(RUN_SPEED);
 
       if (this.mode === "cube") {
-        body.setAccelerationY(1900);
+        body.setAccelerationY(2800);
         body.setMaxVelocity(RUN_SPEED, 900);
         const grounded = body.blocked.down || body.touching.down;
         if (grounded) {
           this.player.setAngle(Math.round(this.player.angle / 90) * 90);
-          if (time <= this.jumpQueuedUntil) {
-            body.setVelocityY(-720);
+          if (this.pressed || time <= this.jumpQueuedUntil) {
+            body.setVelocityY(-760);
             this.jumpQueuedUntil = 0;
           }
         } else {
@@ -185,8 +187,24 @@ export async function mountPulseRunner({
       if (this.started || this.ended) return;
       this.started = true;
       this.startedAt = performance.now();
-      this.physics.resume();
+      if (!this.orientationPaused) this.physics.resume();
       (this.player.body as ArcadeBody).setVelocityX(RUN_SPEED);
+    }
+
+    setOrientationPaused(paused: boolean) {
+      if (this.orientationPaused === paused) return;
+      this.orientationPaused = paused;
+      if (paused) {
+        this.pressed = false;
+        if (this.started && !this.ended) this.orientationPausedAt = performance.now();
+        this.physics.pause();
+      } else if (this.started && !this.ended) {
+        if (this.orientationPausedAt > 0) {
+          this.startedAt += performance.now() - this.orientationPausedAt;
+          this.orientationPausedAt = 0;
+        }
+        this.physics.resume();
+      }
     }
 
     private verifyRenderedPixels() {
@@ -284,13 +302,13 @@ export async function mountPulseRunner({
 
     private bindInput() {
       const down = () => {
-        if (!this.started || this.ended) return;
+        if (!this.started || this.ended || this.orientationPaused || this.pressed) return;
         this.pressed = true;
         this.inputs.push({ atMs: Math.round(performance.now() - this.startedAt), action: "down" });
         if (this.mode === "cube") this.jumpQueuedUntil = this.time.now + 120;
       };
       const up = () => {
-        if (!this.started || this.ended) return;
+        if (!this.started || this.ended || this.orientationPaused || !this.pressed) return;
         this.pressed = false;
         this.inputs.push({ atMs: Math.round(performance.now() - this.startedAt), action: "up" });
       };
@@ -304,7 +322,6 @@ export async function mountPulseRunner({
 
     private switchMode(next: PulseMode) {
       this.mode = next;
-      this.pressed = false;
       const body = this.player.body as ArcadeBody;
       if (next === "ship") {
         this.player.setTexture("pulse-ship").setPosition(this.player.x, 300).setAngle(0);
@@ -369,6 +386,10 @@ export async function mountPulseRunner({
     begin() {
       const scene = game.scene.getScene("pulse-runner") as PulseRunnerScene;
       scene.beginRun();
+    },
+    setPaused(paused: boolean) {
+      const scene = game.scene.getScene("pulse-runner") as PulseRunnerScene;
+      scene.setOrientationPaused(paused);
     },
     destroy() {
       game.destroy(true);

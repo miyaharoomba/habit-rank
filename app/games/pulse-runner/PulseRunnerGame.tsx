@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RotateCcw, Trophy, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mountPulseRunner, type PulseRunSummary } from "./PulseRunnerPhaser";
 import type { PulseMode } from "./level";
@@ -37,7 +37,11 @@ export default function PulseRunnerGame({
   const router = useRouter();
   const mountRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const controllerRef = useRef<{ begin(): void; destroy(): void } | null>(null);
+  const controllerRef = useRef<{
+    begin(): void;
+    setPaused(paused: boolean): void;
+    destroy(): void;
+  } | null>(null);
   const runIdRef = useRef<string | null>(null);
   const startTokenRef = useRef(0);
 
@@ -45,6 +49,7 @@ export default function PulseRunnerGame({
   const [progress, setProgress] = useState(0);
   const [runnerMode, setRunnerMode] = useState<PulseMode>("cube");
   const [muted, setMuted] = useState(false);
+  const [needsLandscape, setNeedsLandscape] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [bestProgress, setBestProgress] = useState(initialBestProgress);
   const [rewardedToday, setRewardedToday] = useState(rewardedRunsToday);
@@ -108,7 +113,12 @@ export default function PulseRunnerGame({
   );
 
   const startGame = useCallback(async () => {
-    if (screen === "starting" || screen === "playing" || screen === "saving") return;
+    if (
+      needsLandscape ||
+      screen === "starting" ||
+      screen === "playing" ||
+      screen === "saving"
+    ) return;
     const parent = mountRef.current;
     if (!parent) return;
 
@@ -150,10 +160,10 @@ export default function PulseRunnerGame({
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setScreen("idle");
     }
-  }, [saveRun, screen]);
+  }, [needsLandscape, saveRun, screen]);
 
   const beginGame = useCallback(() => {
-    if (screen !== "ready") return;
+    if (screen !== "ready" || needsLandscape) return;
     const music = audioRef.current;
     if (music) {
       music.currentTime = 0;
@@ -163,7 +173,38 @@ export default function PulseRunnerGame({
     controllerRef.current?.begin();
     setAttempts((value) => value + 1);
     setScreen("playing");
-  }, [muted, screen]);
+  }, [muted, needsLandscape, screen]);
+
+  useEffect(() => {
+    const portraitQuery = window.matchMedia("(orientation: portrait)");
+    const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+    const updateOrientation = () => {
+      setNeedsLandscape(
+        portraitQuery.matches && (coarsePointerQuery.matches || navigator.maxTouchPoints > 0)
+      );
+    };
+
+    updateOrientation();
+    portraitQuery.addEventListener("change", updateOrientation);
+    coarsePointerQuery.addEventListener("change", updateOrientation);
+    window.addEventListener("resize", updateOrientation);
+    return () => {
+      portraitQuery.removeEventListener("change", updateOrientation);
+      coarsePointerQuery.removeEventListener("change", updateOrientation);
+      window.removeEventListener("resize", updateOrientation);
+    };
+  }, []);
+
+  useEffect(() => {
+    controllerRef.current?.setPaused(needsLandscape);
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (needsLandscape) {
+      audio.pause();
+    } else if (screen === "playing") {
+      void audio.play().catch(() => undefined);
+    }
+  }, [needsLandscape, screen]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -340,6 +381,21 @@ export default function PulseRunnerGame({
               <Trophy className="h-4 w-4" aria-hidden="true" />
               ランキングを見る
             </a>
+          </div>
+        </div>
+      ) : null}
+
+      {needsLandscape ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#090d18] px-6 text-center">
+          <div className="max-w-sm">
+            <Smartphone
+              className="mx-auto h-16 w-16 rotate-90 text-[#62d8ff]"
+              aria-hidden="true"
+            />
+            <h2 className="mt-6 text-2xl font-black">画面を横向きにしてください</h2>
+            <p className="mt-3 text-sm leading-6 text-white/60">
+              Pulse Runnerは横画面専用です。スマホを横向きにするとゲームへ戻ります。
+            </p>
           </div>
         </div>
       ) : null}
