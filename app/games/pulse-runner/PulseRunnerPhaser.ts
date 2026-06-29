@@ -6,6 +6,7 @@ import {
   LEVEL_END_X,
   LEVEL_START_X,
   PULSE_COINS,
+  pulseModeAtX,
   RUN_SPEED,
   SHIP_END_BEAT,
   SHIP_HAZARDS,
@@ -134,11 +135,8 @@ export async function mountPulseRunner({
         }
       }
 
-      if (this.mode === "cube" && this.player.x >= beatX(SHIP_START_BEAT)) {
-        this.switchMode("ship");
-      } else if (this.mode === "ship" && this.player.x >= beatX(SHIP_END_BEAT)) {
-        this.switchMode("cube");
-      }
+      const expectedMode = pulseModeAtX(this.player.x);
+      if (expectedMode !== this.mode) this.switchMode(expectedMode);
 
       if (this.player.y < 30 || this.player.y > 525) this.finish(false);
       if (this.player.x >= LEVEL_END_X) this.finish(true);

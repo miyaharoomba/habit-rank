@@ -18,6 +18,10 @@ export function beatX(beat: number) {
   return LEVEL_START_X + beat * PX_PER_BEAT;
 }
 
+export function pulseModeAtX(x: number): PulseMode {
+  return x >= beatX(SHIP_START_BEAT) && x < beatX(SHIP_END_BEAT) ? "ship" : "cube";
+}
+
 export const CUBE_SPIKE_BEATS = [
   4, 6, 8, 9, 12, 14, 16, 18,
   39, 41, 43, 44, 47, 50, 52, 53, 56, 58, 60, 62,
