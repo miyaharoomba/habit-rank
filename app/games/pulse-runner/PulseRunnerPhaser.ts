@@ -312,12 +312,26 @@ export async function mountPulseRunner({
         this.pressed = false;
         this.inputs.push({ atMs: Math.round(performance.now() - this.startedAt), action: "up" });
       };
+      const keyDown = (event: KeyboardEvent) => {
+        if (event.code !== "Space") return;
+        event.preventDefault();
+        down();
+      };
+      const keyUp = (event: KeyboardEvent) => {
+        if (event.code !== "Space") return;
+        event.preventDefault();
+        up();
+      };
       this.input.on("pointerdown", down);
       this.input.on("pointerup", up);
-      this.input.keyboard?.on("keydown-SPACE", down);
-      this.input.keyboard?.on("keyup-SPACE", up);
-      this.input.keyboard?.on("keydown-ENTER", down);
-      this.input.keyboard?.on("keyup-ENTER", up);
+      window.addEventListener("keydown", keyDown);
+      window.addEventListener("keyup", keyUp);
+      window.addEventListener("blur", up);
+      this.events.once("shutdown", () => {
+        window.removeEventListener("keydown", keyDown);
+        window.removeEventListener("keyup", keyUp);
+        window.removeEventListener("blur", up);
+      });
     }
 
     private switchMode(next: PulseMode) {
