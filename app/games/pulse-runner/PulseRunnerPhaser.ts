@@ -338,10 +338,14 @@ export async function mountPulseRunner({
       this.mode = next;
       const body = this.player.body as ArcadeBody;
       if (next === "ship") {
+        this.ground.setVisible(false);
+        (this.ground.body as import("phaser").Physics.Arcade.StaticBody).enable = false;
         this.player.setTexture("pulse-ship").setPosition(this.player.x, 300).setAngle(0);
         body.setSize(52, 28).setOffset(5, 4).setVelocityY(-80);
         this.modeLabel.setText("ROCKET MODE").setColor("#ff8b98");
       } else {
+        this.ground.setVisible(true);
+        (this.ground.body as import("phaser").Physics.Arcade.StaticBody).enable = true;
         this.player.setTexture("pulse-cube").setPosition(this.player.x, FLOOR_Y - 28).setAngle(0);
         body.setSize(42, 42).setOffset(3, 3).setVelocityY(0);
         this.modeLabel.setText("CUBE MODE").setColor("#8ce6ff");
