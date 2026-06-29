@@ -3,6 +3,10 @@ export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
 export const RUN_SPEED = PX_PER_BEAT / (BEAT_MS / 1000);
+export const CUBE_GRAVITY = 2800;
+export const CUBE_BODY_SIZE = 42;
+export const CUBE_MAX_VERTICAL_SPEED = 1500;
+export const BOUNCE_PAD_WIDTH = 76;
 export const LEVEL_BEATS = 176;
 export const LEVEL_DISTANCE_METERS = LEVEL_BEATS * 10;
 export const LEVEL_START_X = 320;
@@ -77,9 +81,9 @@ export const CUBE_PLATFORMS = [
 ] as const;
 
 export const BOUNCE_PADS = [
-  { beat: 26, power: 1120 },
+  { beat: 26, power: 1350 },
   { beat: 68, power: 1200 },
-  { beat: 98, power: 1120 },
+  { beat: 98, power: 1350 },
   { beat: 158.5, power: 1180 },
 ] as const;
 

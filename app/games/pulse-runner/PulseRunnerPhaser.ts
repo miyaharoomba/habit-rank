@@ -1,10 +1,14 @@
 import {
   BEAT_MS,
   beatX,
+  BOUNCE_PAD_WIDTH,
   BOUNCE_PADS,
   CEILING_SPIKES,
   CEILING_Y,
   CUBE_PLATFORMS,
+  CUBE_BODY_SIZE,
+  CUBE_GRAVITY,
+  CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
   FLOOR_Y,
   LEVEL_END_X,
@@ -69,6 +73,7 @@ export async function mountPulseRunner({
     private gravityDirection: PulseGravity = 1;
     private pressed = false;
     private jumpQueuedUntil = 0;
+    private bounceLockedUntil = 0;
     private startedAt = 0;
     private lastProgressAt = 0;
     private inputs: PulseInput[] = [];
@@ -118,6 +123,8 @@ export async function mountPulseRunner({
         ) return;
         const body = this.player.body as ArcadeBody;
         pad.setData("used", true).setFillStyle(0x7bf1a8, 0.45);
+        this.jumpQueuedUntil = 0;
+        this.bounceLockedUntil = this.time.now + 240;
         body.setVelocityY(-Number(pad.getData("power")));
         this.cameras.main.flash(120, 123, 241, 168, false);
       });
@@ -146,15 +153,15 @@ export async function mountPulseRunner({
       if (expectedGravity !== this.gravityDirection) this.switchGravity(expectedGravity);
 
       if (this.mode === "cube") {
-        body.setAccelerationY(2800 * this.gravityDirection);
-        body.setMaxVelocity(RUN_SPEED, 900);
+        body.setAccelerationY(CUBE_GRAVITY * this.gravityDirection);
+        body.setMaxVelocity(RUN_SPEED, CUBE_MAX_VERTICAL_SPEED);
         const grounded =
           this.gravityDirection === 1
             ? body.blocked.down || body.touching.down
             : body.blocked.up || body.touching.up;
         if (grounded) {
           this.player.setAngle(Math.round(this.player.angle / 90) * 90);
-          if (this.pressed || time <= this.jumpQueuedUntil) {
+          if (time >= this.bounceLockedUntil && (this.pressed || time <= this.jumpQueuedUntil)) {
             body.setVelocityY(-760 * this.gravityDirection);
             this.jumpQueuedUntil = 0;
           }
@@ -348,7 +355,14 @@ export async function mountPulseRunner({
       }
 
       for (const item of BOUNCE_PADS) {
-        const pad = this.add.rectangle(beatX(item.beat), FLOOR_Y - 6, 76, 12, 0x7bf1a8, 0.9);
+        const pad = this.add.rectangle(
+          beatX(item.beat),
+          FLOOR_Y - 6,
+          BOUNCE_PAD_WIDTH,
+          12,
+          0x7bf1a8,
+          0.9
+        );
         pad.setStrokeStyle(2, 0xffffff, 0.85).setData("power", item.power).setData("used", false);
         this.physics.add.existing(pad, true);
         this.bouncePads.add(pad);
@@ -398,7 +412,7 @@ export async function mountPulseRunner({
     private createPlayer() {
       this.player = this.physics.add.sprite(LEVEL_START_X, FLOOR_Y - 26, "pulse-cube") as ArcadeSprite;
       this.player.setDepth(10).setCollideWorldBounds(false);
-      this.player.body.setSize(42, 42).setOffset(3, 3);
+      this.player.body.setSize(CUBE_BODY_SIZE, CUBE_BODY_SIZE).setOffset(3, 3);
       this.player.body.setVelocityX(RUN_SPEED);
     }
 
@@ -451,7 +465,7 @@ export async function mountPulseRunner({
         this.syncSurfaces();
         this.player.setTexture("pulse-cube").setPosition(this.player.x, FLOOR_Y - 28).setAngle(0);
         this.player.setFlipY(this.gravityDirection === -1);
-        body.setSize(42, 42).setOffset(3, 3).setVelocityY(0);
+        body.setSize(CUBE_BODY_SIZE, CUBE_BODY_SIZE).setOffset(3, 3).setVelocityY(0);
         this.modeLabel
           .setText(this.gravityDirection === -1 ? "CUBE // INVERTED" : "CUBE MODE")
           .setColor(this.gravityDirection === -1 ? "#d9b8ff" : "#8ce6ff");

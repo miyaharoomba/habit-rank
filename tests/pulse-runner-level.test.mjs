@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   BOUNCE_PADS,
+  BOUNCE_PAD_WIDTH,
   BEAT_MS,
   beatX,
   CUBE_PLATFORMS,
+  CUBE_BODY_SIZE,
+  CUBE_GRAVITY,
+  CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
   LEVEL_BEATS,
   LEVEL_DISTANCE_METERS,
@@ -98,17 +102,21 @@ test("safe bounce pads clear the leading wall and land on their high platform", 
     const pad = BOUNCE_PADS.find((item) => item.beat === platform.bouncePadBeat);
     assert.ok(pad);
 
+    assert.ok(pad.power < CUBE_MAX_VERTICAL_SPEED, "bounce power must not be velocity-capped");
+    const contactOffsetBeats = (BOUNCE_PAD_WIDTH / 2 + CUBE_BODY_SIZE / 2) / 190;
+    const launchBeat = pad.beat - contactOffsetBeats;
     const leadingBeat = platform.beat - platform.widthBeats / 2;
-    const secondsToWall = (leadingBeat - pad.beat) * (BEAT_MS / 1000);
-    const displacementAtWall = -pad.power * secondsToWall + 1400 * secondsToWall ** 2;
+    const secondsToWall = (leadingBeat - launchBeat) * (BEAT_MS / 1000);
+    const displacementAtWall =
+      -pad.power * secondsToWall + (CUBE_GRAVITY / 2) * secondsToWall ** 2;
     const playerBottomAtWall = 440 + displacementAtWall;
     const platformTop = 440 - platform.height;
     assert.ok(playerBottomAtWall < platformTop, "bounce must clear the platform wall");
 
-    const discriminant = pad.power ** 2 - 2 * 2800 * platform.height;
+    const discriminant = pad.power ** 2 - 2 * CUBE_GRAVITY * platform.height;
     assert.ok(discriminant > 0, "bounce must rise above the platform");
-    const landingSeconds = (pad.power + Math.sqrt(discriminant)) / 2800;
-    const landingBeat = pad.beat + landingSeconds / (BEAT_MS / 1000);
+    const landingSeconds = (pad.power + Math.sqrt(discriminant)) / CUBE_GRAVITY;
+    const landingBeat = launchBeat + landingSeconds / (BEAT_MS / 1000);
     const trailingBeat = platform.beat + platform.widthBeats / 2;
     assert.ok(landingBeat >= leadingBeat && landingBeat <= trailingBeat);
   }
