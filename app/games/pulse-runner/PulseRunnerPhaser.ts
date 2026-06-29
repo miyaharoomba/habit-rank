@@ -8,6 +8,7 @@ import {
   CUBE_PLATFORMS,
   CUBE_BODY_SIZE,
   CUBE_GRAVITY,
+  CUBE_JUMP_SPEED,
   CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
   FLOOR_Y,
@@ -162,7 +163,7 @@ export async function mountPulseRunner({
         if (grounded) {
           this.player.setAngle(Math.round(this.player.angle / 90) * 90);
           if (time >= this.bounceLockedUntil && (this.pressed || time <= this.jumpQueuedUntil)) {
-            body.setVelocityY(-760 * this.gravityDirection);
+            body.setVelocityY(-CUBE_JUMP_SPEED * this.gravityDirection);
             this.jumpQueuedUntil = 0;
           }
         } else {

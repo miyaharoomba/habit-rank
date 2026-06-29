@@ -8,6 +8,7 @@ import {
   CUBE_PLATFORMS,
   CUBE_BODY_SIZE,
   CUBE_GRAVITY,
+  CUBE_JUMP_SPEED,
   CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
   LEVEL_BEATS,
@@ -119,5 +120,33 @@ test("safe bounce pads clear the leading wall and land on their high platform", 
     const landingBeat = launchBeat + landingSeconds / (BEAT_MS / 1000);
     const trailingBeat = platform.beat + platform.widthBeats / 2;
     assert.ok(landingBeat >= leadingBeat && landingBeat <= trailingBeat);
+  }
+});
+
+test("normal jump cadence matches one beat and lands on each rising stair", () => {
+  const airtimeMs = (2 * CUBE_JUMP_SPEED * 1000) / CUBE_GRAVITY;
+  assert.ok(Math.abs(airtimeMs - BEAT_MS) < 1, "normal jump must stay synchronized to one beat");
+
+  const risingStairPairs = CUBE_PLATFORMS.slice(0, -1)
+    .map((platform, index) => [platform, CUBE_PLATFORMS[index + 1]])
+    .filter(
+      ([current, next]) =>
+        next.beat - current.beat <= 1 &&
+        next.height > current.height &&
+        next.height - current.height <= 40
+    );
+
+  for (const [current, next] of risingStairPairs) {
+    const rise = next.height - current.height;
+    const discriminant = CUBE_JUMP_SPEED ** 2 - 2 * CUBE_GRAVITY * rise;
+    assert.ok(discriminant > 0);
+    const landingSeconds = (CUBE_JUMP_SPEED + Math.sqrt(discriminant)) / CUBE_GRAVITY;
+    const landingBeat = current.beat + landingSeconds / (BEAT_MS / 1000);
+    const nextLeadingBeat = next.beat - next.widthBeats / 2;
+    const nextTrailingBeat = next.beat + next.widthBeats / 2;
+    assert.ok(
+      landingBeat >= nextLeadingBeat && landingBeat <= nextTrailingBeat,
+      `jump from ${current.beat} must land on stair ${next.beat}`
+    );
   }
 });
