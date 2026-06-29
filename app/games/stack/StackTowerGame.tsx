@@ -107,6 +107,9 @@ export default function StackTowerGame({
   const runIdRef = useRef<string | null>(null);
   const seedRef = useRef(0);
   const placementLockedRef = useRef(false);
+  const placementUnlockTimerRef = useRef<number | null>(null);
+  const interruptedRunRef = useRef(false);
+  const recoveryReloadingRef = useRef(false);
   const cameraTargetYRef = useRef(1.7);
 
   const [mode, setMode] = useState<GameMode>("idle");
@@ -122,6 +125,12 @@ export default function StackTowerGame({
   const setGameMode = useCallback((next: GameMode) => {
     gameModeRef.current = next;
     setMode(next);
+  }, []);
+
+  const reloadGamePage = useCallback(() => {
+    if (recoveryReloadingRef.current) return;
+    recoveryReloadingRef.current = true;
+    window.location.reload();
   }, []);
 
   const clearGameObjects = useCallback(() => {
@@ -161,6 +170,35 @@ export default function StackTowerGame({
     movingMeshRef.current = mesh;
     stageStartedAtRef.current = performance.now();
   }, []);
+
+  const clearPlacementUnlockTimer = useCallback(() => {
+    if (placementUnlockTimerRef.current === null) return;
+    window.clearTimeout(placementUnlockTimerRef.current);
+    placementUnlockTimerRef.current = null;
+  }, []);
+
+  const resetInterruptedGame = useCallback(() => {
+    clearPlacementUnlockTimer();
+    clearGameObjects();
+    stackRef.current = initialStack();
+    tapsRef.current = [];
+    scoreRef.current = 0;
+    comboRef.current = 0;
+    perfectsRef.current = 0;
+    runIdRef.current = null;
+    seedRef.current = 0;
+    placementLockedRef.current = false;
+    interruptedRunRef.current = false;
+    cameraTargetYRef.current = 1.7;
+    setScore(0);
+    setBlocks(0);
+    setCombo(0);
+    setFeedback(null);
+    setResult(null);
+    setError(null);
+    addFoundation();
+    setGameMode("idle");
+  }, [addFoundation, clearGameObjects, clearPlacementUnlockTimer, setGameMode]);
 
   const addFallingPiece = useCallback(
     (cut: StackCut, stage: number, existingMesh?: THREE.Mesh | null) => {
@@ -213,7 +251,13 @@ export default function StackTowerGame({
   }, [router, setGameMode]);
 
   const placeCurrentBlock = useCallback(() => {
-    if (gameModeRef.current !== "playing" || placementLockedRef.current) return;
+    if (gameModeRef.current !== "playing") return;
+    const renderer = rendererRef.current;
+    if (!renderer || !renderer.domElement.isConnected || !movingMeshRef.current) {
+      reloadGamePage();
+      return;
+    }
+    if (placementLockedRef.current) return;
 
     const tower = towerGroupRef.current;
     const movingMesh = movingMeshRef.current;
@@ -271,18 +315,26 @@ export default function StackTowerGame({
     });
     if (placement.perfect && navigator.vibrate) navigator.vibrate(18);
 
-    window.setTimeout(() => {
+    addMovingMesh(stage + 1);
+    placementUnlockTimerRef.current = window.setTimeout(() => {
+      placementUnlockTimerRef.current = null;
       if (gameModeRef.current !== "playing") return;
-      addMovingMesh(stage + 1);
       placementLockedRef.current = false;
     }, 110);
-  }, [addFallingPiece, addMovingMesh, finishRun]);
+  }, [addFallingPiece, addMovingMesh, finishRun, reloadGamePage]);
 
   const startGame = useCallback(async () => {
+    const renderer = rendererRef.current;
+    if (!renderer || !renderer.domElement.isConnected) {
+      reloadGamePage();
+      return;
+    }
     if (gameModeRef.current === "starting" || gameModeRef.current === "playing") return;
     setError(null);
     setResult(null);
     setGameMode("starting");
+    interruptedRunRef.current = false;
+    clearPlacementUnlockTimer();
 
     try {
       const response = await fetch("/api/games/stack/start", { method: "POST" });
@@ -313,7 +365,7 @@ export default function StackTowerGame({
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setGameMode("idle");
     }
-  }, [addFoundation, addMovingMesh, clearGameObjects, setGameMode]);
+  }, [addFoundation, addMovingMesh, clearGameObjects, clearPlacementUnlockTimer, reloadGamePage, setGameMode]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -366,7 +418,11 @@ export default function StackTowerGame({
     grid.position.y = -BLOCK_HEIGHT / 2;
     scene.add(grid);
 
-    addFoundation();
+    if (gameModeRef.current === "idle") {
+      addFoundation();
+    } else {
+      resetInterruptedGame();
+    }
 
     const resize = () => {
       const width = Math.max(1, mount.clientWidth);
@@ -452,13 +508,52 @@ export default function StackTowerGame({
     return () => {
       observer.disconnect();
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      clearPlacementUnlockTimer();
       clearGameObjects();
       disposeObject(floor);
       renderer.dispose();
       renderer.domElement.remove();
       scene.clear();
     };
-  }, [addFoundation, clearGameObjects]);
+  }, [addFoundation, clearGameObjects, clearPlacementUnlockTimer, resetInterruptedGame]);
+
+  useEffect(() => {
+    const markInterrupted = () => {
+      if (gameModeRef.current === "playing") interruptedRunRef.current = true;
+    };
+
+    const recoverIfInterrupted = () => {
+      if (gameModeRef.current !== "playing") return;
+      if (!interruptedRunRef.current && movingMeshRef.current) return;
+      resetInterruptedGame();
+    };
+
+    const recoverVisiblePage = () => {
+      const renderer = rendererRef.current;
+      if (!renderer || !renderer.domElement.isConnected) {
+        reloadGamePage();
+        return;
+      }
+      recoverIfInterrupted();
+    };
+
+    const onPageShow = () => recoverVisiblePage();
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      recoverVisiblePage();
+    };
+
+    window.addEventListener("pagehide", markInterrupted);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", recoverVisiblePage);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", markInterrupted);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", recoverVisiblePage);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [reloadGamePage, resetInterruptedGame]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
