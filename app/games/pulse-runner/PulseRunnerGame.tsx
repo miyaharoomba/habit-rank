@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mountPulseRunner, type PulseRunSummary } from "./PulseRunnerPhaser";
-import type { PulseMode } from "./level";
+import { pulseDistanceFromProgress, type PulseMode } from "./level";
 
 type Screen = "idle" | "starting" | "ready" | "playing" | "saving" | "result";
 
 type FinishResult = {
   progressPercent: number;
+  distanceMeters: number;
   completed: boolean;
   durationMs: number;
   coins: number;
@@ -26,10 +27,6 @@ type FinishResult = {
 type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: "landscape") => Promise<void>;
 };
-
-function formatTime(ms: number) {
-  return `${(Math.max(0, ms) / 1000).toFixed(2)}s`;
-}
 
 export default function PulseRunnerGame({
   initialBestProgress,
@@ -101,6 +98,7 @@ export default function PulseRunnerGame({
         setError(caught instanceof Error ? caught.message : "記録を保存できませんでした。");
         setResult({
           progressPercent: summary.progressPercent,
+          distanceMeters: summary.distanceMeters,
           completed: summary.completed,
           durationMs: summary.durationMs,
           coins: summary.coins,
@@ -305,7 +303,7 @@ export default function PulseRunnerGame({
         <div className="min-w-0 flex-1 px-2 text-center">
           <div className="text-[11px] font-black uppercase text-white/50">Pulse Runner</div>
           <div className="mt-1 text-sm font-bold tracking-wide">
-            {runnerMode === "cube" ? "CUBE" : "ROCKET"}・{Math.round(progress)}%
+            {runnerMode === "cube" ? "CUBE" : "ROCKET"}・{pulseDistanceFromProgress(progress)}m
           </div>
           <div className="mx-auto mt-2 h-1.5 max-w-md overflow-hidden bg-white/15">
             <div
@@ -331,7 +329,7 @@ export default function PulseRunnerGame({
             <div className="text-xs font-black uppercase text-[#62d8ff]">HabitBase Games</div>
             <h1 className="mt-2 text-4xl font-black sm:text-6xl">PULSE RUNNER</h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/65">
-              拍に乗って跳び、ロケットで駆け抜ける。到達率100%を目指そう。
+              変化するロングコースを駆け抜け、到達距離の自己ベストを伸ばそう。
             </p>
             <button
               type="button"
@@ -342,7 +340,7 @@ export default function PulseRunnerGame({
               RUN
             </button>
             <div className="mt-4 flex items-center justify-center gap-5 text-xs text-white/45">
-              <span>BEST {Math.round(bestProgress)}%</span>
+              <span>BEST {pulseDistanceFromProgress(bestProgress)}m</span>
               <span>XP対象 {Math.min(rewardedToday, 3)} / 3</span>
             </div>
           </div>
@@ -389,13 +387,16 @@ export default function PulseRunnerGame({
               {result?.completed ? "LEVEL COMPLETE" : "RUN RESULT"}
             </div>
             <div className="mt-1 text-6xl font-black tabular-nums">
-              {Math.round(result?.progressPercent ?? progress)}%
+              {result?.distanceMeters ?? pulseDistanceFromProgress(progress)}m
+            </div>
+            <div className="mt-2 text-sm font-bold text-white/50">
+              COURSE {Math.round(result?.progressPercent ?? progress)}%
             </div>
             {result ? (
               <div className="mt-6 grid grid-cols-3 border-y border-white/15 py-4">
                 <div>
-                  <div className="text-xs text-white/45">TIME</div>
-                  <div className="mt-1 text-lg font-bold">{formatTime(result.durationMs)}</div>
+                  <div className="text-xs text-white/45">COURSE</div>
+                  <div className="mt-1 text-lg font-bold">{Math.round(result.progressPercent)}%</div>
                 </div>
                 <div className="border-x border-white/15">
                   <div className="text-xs text-white/45">SHARDS</div>

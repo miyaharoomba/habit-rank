@@ -8,6 +8,7 @@ import {
 import {
   LEVEL_DURATION_MS,
   PULSE_GAME_VERSION,
+  pulseDistanceFromProgress,
   pulseRewardXp,
   type PulseInput,
 } from "@/app/games/pulse-runner/level";
@@ -110,11 +111,12 @@ export async function POST(request: Request) {
 
   const rewardEligible = (runsToday ?? 0) < 3;
   const rewardXp = rewardEligible ? pulseRewardXp(progress, completed, coins) : 0;
+  const distanceMeters = pulseDistanceFromProgress(progress);
   const { data: updatedRun, error: updateError } = await admin
     .from("minigame_runs")
     .update({
       status: "finished",
-      score: completed ? Math.max(1, 100_000 - durationMs) : Math.round(progress * 100),
+      score: distanceMeters,
       progress_percent: progress,
       completed,
       completion_ms: completed ? durationMs : null,
@@ -163,6 +165,7 @@ export async function POST(request: Request) {
     progressPercent: progress,
     completed,
     durationMs,
+    distanceMeters,
     coins,
     bestProgress,
     rewardXp,

@@ -15,9 +15,9 @@ export type PulseRankingRow = {
   level: number;
   titleLabel: string | null;
   titleRank: "platinum" | "gold" | "silver" | "bronze" | null;
+  distance: number;
   progress: number;
   completed: boolean;
-  completionMs: number | null;
   coins: number;
 };
 
@@ -49,7 +49,7 @@ export default function PulseLeaderboard({
             <div className="text-xs font-bold uppercase text-muted-foreground">Pulse Runner</div>
             <h2 className="mt-1 text-3xl font-black">ランキング</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              完走者はクリアタイム、未完走者は到達率で順位を決定します。
+              クリアタイムではなく、コースを進んだ距離で順位を決定します。
             </p>
           </div>
           <div className="grid grid-cols-3 border border-border bg-secondary/30 p-1">
@@ -135,12 +135,10 @@ export default function PulseLeaderboard({
 
                   <div className="text-right">
                     <div className="text-lg font-black tabular-nums sm:text-2xl">
-                      {row.completed && row.completionMs != null
-                        ? `${(row.completionMs / 1000).toFixed(2)}s`
-                        : `${Math.round(row.progress)}%`}
+                      {row.distance}m
                     </div>
                     <div className="text-[10px] font-bold text-muted-foreground">
-                      {row.completed ? "CLEAR" : "PROGRESS"}
+                      {row.completed ? "COURSE CLEAR" : `${Math.round(row.progress)}%`}
                     </div>
                   </div>
                 </li>

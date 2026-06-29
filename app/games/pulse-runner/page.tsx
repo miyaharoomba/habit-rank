@@ -3,14 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
 import { levelFromProfileXp } from "@/app/lib/leveling";
 import { jstDayStartIso } from "@/app/lib/stackGameServer";
+import { PULSE_GAME_VERSION } from "./level";
 import PulseRunnerGame from "./PulseRunnerGame";
 import PulseLeaderboard, { type PulseRankingRow } from "./PulseLeaderboard";
 
 type RunRow = {
   user_id: string;
+  score: number;
   progress_percent: number | string;
   completed: boolean;
-  completion_ms: number | null;
   coins_collected: number;
   finished_at: string;
 };
@@ -40,9 +41,9 @@ function jstWeekStartIso() {
 
 function betterRun(current: RunRow | undefined, next: RunRow) {
   if (!current) return true;
-  if (next.completed !== current.completed) return next.completed;
-  if (next.completed) {
-    return Number(next.completion_ms ?? Infinity) < Number(current.completion_ms ?? Infinity);
+  if (next.score !== current.score) return next.score > current.score;
+  if (next.coins_collected !== current.coins_collected) {
+    return next.coins_collected > current.coins_collected;
   }
   return Number(next.progress_percent) > Number(current.progress_percent);
 }
@@ -51,8 +52,8 @@ function bestPerUser(rows: RunRow[]) {
   const best = new Map<string, RunRow>();
   for (const row of rows) if (betterRun(best.get(row.user_id), row)) best.set(row.user_id, row);
   return Array.from(best.values()).sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? -1 : 1;
-    if (a.completed) return Number(a.completion_ms ?? Infinity) - Number(b.completion_ms ?? Infinity);
+    if (a.score !== b.score) return b.score - a.score;
+    if (a.coins_collected !== b.coins_collected) return b.coins_collected - a.coins_collected;
     return Number(b.progress_percent) - Number(a.progress_percent);
   });
 }
@@ -84,9 +85,9 @@ function buildRanking({
         level: levelFromProfileXp(profile?.xp_total, profile?.level),
         titleLabel: title?.title_label ?? null,
         titleRank: title?.badge_rank ?? null,
+        distance: Number(run.score),
         progress: Number(run.progress_percent),
         completed: run.completed,
-        completionMs: run.completion_ms,
         coins: Number(run.coins_collected),
       };
     });
@@ -103,15 +104,17 @@ export default async function PulseRunnerPage() {
   const [weeklyResult, allResult, bestResult, rewardedResult] = await Promise.all([
     supabase
       .from("minigame_runs")
-      .select("user_id, progress_percent, completed, completion_ms, coins_collected, finished_at")
+      .select("user_id, score, progress_percent, completed, coins_collected, finished_at")
       .eq("game_key", "pulse_runner")
+      .eq("game_version", PULSE_GAME_VERSION)
       .eq("status", "finished")
       .gte("finished_at", jstWeekStartIso())
       .limit(1000),
     supabase
       .from("minigame_runs")
-      .select("user_id, progress_percent, completed, completion_ms, coins_collected, finished_at")
+      .select("user_id, score, progress_percent, completed, coins_collected, finished_at")
       .eq("game_key", "pulse_runner")
+      .eq("game_version", PULSE_GAME_VERSION)
       .eq("status", "finished")
       .limit(2000),
     supabase
@@ -119,6 +122,7 @@ export default async function PulseRunnerPage() {
       .select("progress_percent")
       .eq("user_id", user.id)
       .eq("game_key", "pulse_runner")
+      .eq("game_version", PULSE_GAME_VERSION)
       .eq("status", "finished")
       .order("progress_percent", { ascending: false })
       .limit(1),
