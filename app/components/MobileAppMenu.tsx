@@ -41,7 +41,7 @@ export default function MobileAppMenu({
   const status = (statusMessage ?? "").trim();
 
   const quickLinks = [
-    { href: "/games/stack", label: "Stack Tower", desc: "積み上げゲームでスコアを競う", icon: Gamepad2 },
+    { href: "/games", label: "ミニゲーム", desc: "ゲームで遊んで記録を競う", icon: Gamepad2 },
     { href: "/calendar", label: "カレンダー", desc: "継続終了日を可視化", icon: CalendarDays },
     { href: "/reports", label: "レポート", desc: "週間・月間の集計", icon: ChartColumnIncreasing },
     { href: "/badges", label: "トロフィー", desc: "獲得したバッジ一覧", icon: Award },

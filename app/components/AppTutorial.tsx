@@ -108,11 +108,11 @@ const STEPS: TutorialStep[] = [
     ],
   },
   {
-    title: "Stack Towerでひと休み",
-    description: "短いミニゲームで息抜きしながら、みんなとスコアを競えます。",
+    title: "ミニゲームでひと休み",
+    description: "短いゲームで息抜きしながら、みんなと記録を競えます。",
     icon: Gamepad2,
     points: [
-      "流れてくるブロックをタップして高く積み上げる",
+      "Stack TowerとPulse Runnerをゲーム一覧からプレイ",
       "今日・今週・歴代ランキングでほかのユーザーと競争",
       "1日3回までXPを獲得でき、ゲーム限定称号も解放できる",
     ],

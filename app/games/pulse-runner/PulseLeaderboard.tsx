@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { Crown, Medal } from "lucide-react";
 import { useState } from "react";
 import LevelBadge from "@/app/components/LevelBadge";
 import TitleBadge from "@/app/components/TitleBadge";
 
-export type StackRankingRow = {
+export type PulseRankingRow = {
   rank: number;
   userId: string;
   displayName: string;
@@ -15,85 +15,73 @@ export type StackRankingRow = {
   level: number;
   titleLabel: string | null;
   titleRank: "platinum" | "gold" | "silver" | "bronze" | null;
-  score: number;
-  blocks: number;
-  perfects: number;
+  progress: number;
+  completed: boolean;
+  completionMs: number | null;
+  coins: number;
 };
 
-type RankingPeriod = "daily" | "weekly" | "all";
+type Period = "daily" | "weekly" | "all";
 
 function avatarUrl(path: string | null) {
   return path ? `/api/profile/avatar?path=${encodeURIComponent(path)}` : null;
 }
 
-function rankingLabel(rank: number) {
-  if (rank === 1) return "今日の王者";
-  if (rank <= 3) return "TOP 3";
-  return null;
-}
-
-export default function StackLeaderboard({
+export default function PulseLeaderboard({
   daily,
   weekly,
   allTime,
   myUserId,
 }: {
-  daily: StackRankingRow[];
-  weekly: StackRankingRow[];
-  allTime: StackRankingRow[];
+  daily: PulseRankingRow[];
+  weekly: PulseRankingRow[];
+  allTime: PulseRankingRow[];
   myUserId: string;
 }) {
-  const [period, setPeriod] = useState<RankingPeriod>("daily");
+  const [period, setPeriod] = useState<Period>("daily");
   const rows = period === "daily" ? daily : period === "weekly" ? weekly : allTime;
 
   return (
-    <section id="stack-ranking" className="bg-background px-4 py-12 text-foreground sm:px-6 sm:py-16">
+    <section id="pulse-ranking" className="bg-background px-4 py-12 text-foreground sm:px-6 sm:py-16">
       <div className="mx-auto max-w-4xl">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-xs font-bold uppercase text-muted-foreground">Stack Tower</div>
+            <div className="text-xs font-bold uppercase text-muted-foreground">Pulse Runner</div>
             <h2 className="mt-1 text-3xl font-black">ランキング</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              各ユーザーの期間内ベストスコアで順位を決定します。
+              完走者はクリアタイム、未完走者は到達率で順位を決定します。
             </p>
           </div>
-
           <div className="grid grid-cols-3 border border-border bg-secondary/30 p-1">
-            {(
-              [
-                ["daily", "今日"],
-                ["weekly", "今週"],
-                ["all", "歴代"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setPeriod(value)}
-                className={[
-                  "h-9 min-w-20 px-3 text-sm font-bold transition",
-                  period === value
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground",
-                ].join(" ")}
-              >
-                {label}
-              </button>
-            ))}
+            {([['daily', '今日'], ['weekly', '今週'], ['all', '歴代']] as const).map(
+              ([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPeriod(value)}
+                  className={[
+                    "h-9 min-w-20 px-3 text-sm font-bold transition",
+                    period === value
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              )
+            )}
           </div>
         </div>
 
         {rows.length === 0 ? (
           <div className="mt-8 border-y border-border py-12 text-center text-sm text-muted-foreground">
-            まだ記録がありません。最初の挑戦者になろう。
+            まだ記録がありません。最初のランナーになろう。
           </div>
         ) : (
           <ol className="mt-8 divide-y divide-border border-y border-border">
             {rows.map((row) => {
-              const profileHref = row.userId === myUserId ? "/profile" : `/users/${row.userId}`;
+              const href = row.userId === myUserId ? "/profile" : `/users/${row.userId}`;
               const avatar = avatarUrl(row.avatarPath);
-              const label = rankingLabel(row.rank);
-
               return (
                 <li
                   key={row.userId}
@@ -115,7 +103,7 @@ export default function StackLeaderboard({
                     )}
                   </div>
 
-                  <Link href={profileHref} className="shrink-0">
+                  <Link href={href}>
                     {avatar ? (
                       <Image
                         src={avatar}
@@ -134,28 +122,26 @@ export default function StackLeaderboard({
 
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link href={profileHref} className="truncate text-sm font-bold hover:underline">
-                        {row.displayName}
-                        {row.userId === myUserId ? "（あなた）" : ""}
+                      <Link href={href} className="truncate text-sm font-bold hover:underline">
+                        {row.displayName}{row.userId === myUserId ? "（あなた）" : ""}
                       </Link>
                       <LevelBadge level={row.level} compact />
                       <TitleBadge label={row.titleLabel} rank={row.titleRank} compact />
-                      {label ? (
-                        <span className="hidden text-[11px] font-bold text-amber-600 sm:inline">
-                          {label}
-                        </span>
-                      ) : null}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {row.blocks}ブロック・PERFECT {row.perfects}
+                      SHARDS {row.coins} / 3
                     </div>
                   </div>
 
                   <div className="text-right">
                     <div className="text-lg font-black tabular-nums sm:text-2xl">
-                      {row.score.toLocaleString("ja-JP")}
+                      {row.completed && row.completionMs != null
+                        ? `${(row.completionMs / 1000).toFixed(2)}s`
+                        : `${Math.round(row.progress)}%`}
                     </div>
-                    <div className="text-[10px] font-bold text-muted-foreground">SCORE</div>
+                    <div className="text-[10px] font-bold text-muted-foreground">
+                      {row.completed ? "CLEAR" : "PROGRESS"}
+                    </div>
                   </div>
                 </li>
               );

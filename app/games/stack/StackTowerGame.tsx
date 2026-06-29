@@ -591,10 +591,10 @@ export default function StackTowerGame({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4 sm:p-6">
         <Link
-          href="/app"
+          href="/games"
           className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/65"
-          aria-label="メイン画面に戻る"
-          title="メイン画面に戻る"
+          aria-label="ゲーム一覧に戻る"
+          title="ゲーム一覧に戻る"
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>

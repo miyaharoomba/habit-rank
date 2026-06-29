@@ -68,10 +68,10 @@ export default async function AppPage() {
       <Container>
         <header className="flex items-center justify-end gap-2">
           <Link
-            href="/games/stack"
+            href="/games"
             className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/90 shadow-md backdrop-blur transition hover:bg-secondary/50"
-            aria-label="Stack Towerをプレイ"
-            title="Stack Tower"
+            aria-label="ミニゲームを開く"
+            title="ミニゲーム"
           >
             <Gamepad2 className="h-5 w-5" aria-hidden="true" />
           </Link>
@@ -92,8 +92,8 @@ export default async function AppPage() {
           </div>
 
           <ProfileLink />
-          <HeaderLink href="/games/stack" icon={Gamepad2}>
-            Stack Tower
+          <HeaderLink href="/games" icon={Gamepad2}>
+            ミニゲーム
           </HeaderLink>
           <ParticipantsLink />
           <DmLink />

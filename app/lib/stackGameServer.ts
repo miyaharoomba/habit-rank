@@ -103,3 +103,62 @@ export async function awardStackBadges({
 
   return unlocked;
 }
+
+export async function awardPulseRunnerBadges({
+  userId,
+  bestProgress,
+}: {
+  userId: string;
+  bestProgress: number;
+}) {
+  const admin = getStackGameAdminClient();
+  const { data: badges, error: badgesError } = await admin
+    .from("badges")
+    .select("id, title, title_label, badge_rank, condition_value")
+    .eq("condition_type", "pulse_best_progress")
+    .lte("condition_value", bestProgress)
+    .order("condition_value", { ascending: true });
+
+  if (badgesError) throw new Error(badgesError.message);
+  const rows = (badges ?? []) as StackBadgeRow[];
+  if (rows.length === 0) return [];
+
+  const { data: owned, error: ownedError } = await admin
+    .from("user_badges")
+    .select("badge_id")
+    .eq("user_id", userId)
+    .in("badge_id", rows.map((badge) => badge.id));
+  if (ownedError) throw new Error(ownedError.message);
+
+  const ownedIds = new Set((owned ?? []).map((row) => String(row.badge_id)));
+  const unlocked: StackBadgeRow[] = [];
+  for (const badge of rows) {
+    if (ownedIds.has(badge.id)) continue;
+    const { error: insertError } = await admin.from("user_badges").insert({
+      user_id: userId,
+      badge_id: badge.id,
+    });
+    if (insertError) {
+      if (insertError.code !== "23505") throw new Error(insertError.message);
+      continue;
+    }
+
+    unlocked.push(badge);
+    const label = (badge.title_label ?? badge.title).trim();
+    const { error: notificationError } = await admin.from("notifications").insert({
+      recipient_id: userId,
+      actor_id: userId,
+      type: "trophy_unlock",
+      thread_id: null,
+      session_id: null,
+      announcement_id: null,
+      support_thread_id: null,
+      message_preview: `Pulse Runnerで称号「${label}」を獲得しました。`,
+    });
+    if (notificationError) {
+      console.error("pulse badge notification failed:", notificationError.message);
+    }
+  }
+
+  return unlocked;
+}

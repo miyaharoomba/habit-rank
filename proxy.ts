@@ -20,6 +20,6 @@ export const config = {
      * - favicon.ico
      * - 画像や JS などの静的拡張子
      */
-    "/((?!api|_next/static|_next/image|manifest.webmanifest|sw.js|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|map|txt|webmanifest)$).*)",
+    "/((?!api|_next/static|_next/image|manifest.webmanifest|sw.js|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|map|txt|webmanifest|wav|mp3|ogg)$).*)",
   ],
 };
