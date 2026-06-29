@@ -22,6 +22,7 @@ import {
   PULSE_SHIP_SECTIONS,
   RUN_SPEED,
   SHIP_HAZARDS,
+  SPIKE_BODY_WIDTH,
   pulseSurfaceState,
   type PulseGravity,
   type PulseInput,
@@ -326,7 +327,7 @@ export async function mountPulseRunner({
         const spike = this.hazards.create(beatX(beat), FLOOR_Y, "pulse-spike") as import("phaser").Physics.Arcade.Image;
         spike.setOrigin(0.5, 1).refreshBody();
         const body = spike.body as import("phaser").Physics.Arcade.StaticBody;
-        body.setSize(34, 37).setOffset(8, 12);
+        body.setSize(SPIKE_BODY_WIDTH, 37).setOffset(8, 12);
       }
 
       for (const item of CEILING_SPIKES) {
@@ -337,7 +338,7 @@ export async function mountPulseRunner({
         ) as import("phaser").Physics.Arcade.Image;
         spike.setOrigin(0.5, 0).refreshBody();
         const body = spike.body as import("phaser").Physics.Arcade.StaticBody;
-        body.setSize(34, 37).setOffset(8, 1);
+        body.setSize(SPIKE_BODY_WIDTH, 37).setOffset(8, 1);
       }
 
       for (const item of CUBE_PLATFORMS) {

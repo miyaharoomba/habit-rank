@@ -19,7 +19,10 @@ import {
   pulseSurfaceState,
   PULSE_GRAVITY_SECTIONS,
   PULSE_SHIP_SECTIONS,
+  PX_PER_BEAT,
+  RUN_SPEED,
   SHIP_HAZARDS,
+  SPIKE_BODY_WIDTH,
 } from "../app/games/pulse-runner/level.ts";
 
 test("each rocket section has stable boundaries and does not re-enter after its portal", () => {
@@ -147,6 +150,32 @@ test("normal jump cadence matches one beat and lands on each rising stair", () =
     assert.ok(
       landingBeat >= nextLeadingBeat && landingBeat <= nextTrailingBeat,
       `jump from ${current.beat} must land on stair ${next.beat}`
+    );
+  }
+});
+
+test("every multi-spike cluster fits inside one normal jump", () => {
+  const clusters = [];
+  let currentCluster = [];
+  for (const beat of CUBE_SPIKE_BEATS) {
+    const previous = currentCluster.at(-1);
+    if (previous == null || beat - previous <= 0.75) {
+      currentCluster.push(beat);
+    } else {
+      if (currentCluster.length > 1) clusters.push(currentCluster);
+      currentCluster = [beat];
+    }
+  }
+  if (currentCluster.length > 1) clusters.push(currentCluster);
+
+  const jumpSeconds = (2 * CUBE_JUMP_SPEED) / CUBE_GRAVITY;
+  const jumpDistance = RUN_SPEED * jumpSeconds;
+  for (const cluster of clusters) {
+    const collisionSpan =
+      (cluster.at(-1) - cluster[0]) * PX_PER_BEAT + SPIKE_BODY_WIDTH + CUBE_BODY_SIZE;
+    assert.ok(
+      collisionSpan < jumpDistance,
+      `spike cluster ${cluster.join(",")} must fit inside one jump`
     );
   }
 });
