@@ -278,7 +278,7 @@ export default function PulseRunnerGame({
   }, [stopMusic]);
 
   return (
-    <section className="relative h-[100svh] min-h-[36rem] overflow-hidden bg-[#090d18] text-white">
+    <section className="relative h-[100svh] overflow-hidden bg-[#090d18] text-white">
       <audio
         ref={audioRef}
         src="/audio/pulse-runner-theme.wav"
