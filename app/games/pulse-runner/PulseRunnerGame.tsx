@@ -23,6 +23,10 @@ type FinishResult = {
   unlocked: Array<{ title: string; titleLabel: string | null; rank: string }>;
 };
 
+type LockableScreenOrientation = ScreenOrientation & {
+  lock?: (orientation: "landscape") => Promise<void>;
+};
+
 function formatTime(ms: number) {
   return `${(Math.max(0, ms) / 1000).toFixed(2)}s`;
 }
@@ -44,12 +48,14 @@ export default function PulseRunnerGame({
   } | null>(null);
   const runIdRef = useRef<string | null>(null);
   const startTokenRef = useRef(0);
+  const orientationFullscreenRef = useRef(false);
 
   const [screen, setScreen] = useState<Screen>("idle");
   const [progress, setProgress] = useState(0);
   const [runnerMode, setRunnerMode] = useState<PulseMode>("cube");
   const [muted, setMuted] = useState(false);
   const [needsLandscape, setNeedsLandscape] = useState(false);
+  const [orientationError, setOrientationError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(0);
   const [bestProgress, setBestProgress] = useState(initialBestProgress);
   const [rewardedToday, setRewardedToday] = useState(rewardedRunsToday);
@@ -175,6 +181,41 @@ export default function PulseRunnerGame({
     setScreen("playing");
   }, [muted, needsLandscape, screen]);
 
+  const requestLandscape = useCallback(async (allowFullscreen: boolean) => {
+    const orientation = window.screen.orientation as LockableScreenOrientation | undefined;
+    if (!orientation?.lock) {
+      if (allowFullscreen) {
+        setOrientationError("端末の画面回転ロックを解除して、スマホを横向きにしてください。");
+      }
+      return false;
+    }
+
+    try {
+      await orientation.lock("landscape");
+      setOrientationError(null);
+      return true;
+    } catch {
+      // 通常のブラウザでは全画面表示中のみ向きの固定が許可される場合がある。
+    }
+
+    if (allowFullscreen && !document.fullscreenElement && document.fullscreenEnabled) {
+      try {
+        await document.documentElement.requestFullscreen();
+        orientationFullscreenRef.current = true;
+        await orientation.lock("landscape");
+        setOrientationError(null);
+        return true;
+      } catch {
+        // 下の案内を表示する。
+      }
+    }
+
+    if (allowFullscreen) {
+      setOrientationError("端末の画面回転ロックを解除して、スマホを横向きにしてください。");
+    }
+    return false;
+  }, []);
+
   useEffect(() => {
     const portraitQuery = window.matchMedia("(orientation: portrait)");
     const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
@@ -194,6 +235,22 @@ export default function PulseRunnerGame({
       window.removeEventListener("resize", updateOrientation);
     };
   }, []);
+
+  useEffect(() => {
+    const isTouchDevice =
+      window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+    if (isTouchDevice && window.matchMedia("(orientation: portrait)").matches) {
+      void requestLandscape(false);
+    }
+
+    return () => {
+      const orientation = window.screen.orientation as LockableScreenOrientation | undefined;
+      orientation?.unlock?.();
+      if (orientationFullscreenRef.current && document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => undefined);
+      }
+    };
+  }, [requestLandscape]);
 
   useEffect(() => {
     controllerRef.current?.setPaused(needsLandscape);
@@ -396,6 +453,16 @@ export default function PulseRunnerGame({
             <p className="mt-3 text-sm leading-6 text-white/60">
               Pulse Runnerは横画面専用です。スマホを横向きにするとゲームへ戻ります。
             </p>
+            <button
+              type="button"
+              onClick={() => void requestLandscape(true)}
+              className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#62d8ff] px-5 text-sm font-black text-[#07111d] transition hover:bg-[#8ce5ff]"
+            >
+              横画面に切り替える
+            </button>
+            {orientationError ? (
+              <p className="mt-4 text-sm leading-6 text-[#ff9aa5]">{orientationError}</p>
+            ) : null}
           </div>
         </div>
       ) : null}
