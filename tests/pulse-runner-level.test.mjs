@@ -22,6 +22,7 @@ import {
   PX_PER_BEAT,
   SHIP_HAZARDS,
   SPIKE_BODY_WIDTH,
+  SPIKE_HEIGHT,
 } from "../app/games/pulse-runner/level.ts";
 
 test("each rocket section has stable boundaries and does not re-enter after its portal", () => {
@@ -153,12 +154,12 @@ test("normal jump cadence matches one beat and lands on each rising stair", () =
   }
 });
 
-test("consecutive spikes leave room to land and immediately jump again", () => {
+test("held one-beat jumps clear every consecutive spike in rhythm", () => {
   const sequences = [];
   let currentSequence = [];
   for (const beat of CUBE_SPIKE_BEATS) {
     const previous = currentSequence.at(-1);
-    if (previous == null || beat - previous <= 1.25) {
+    if (previous == null || beat - previous <= 1.05) {
       currentSequence.push(beat);
     } else {
       if (currentSequence.length > 1) sequences.push(currentSequence);
@@ -167,11 +168,18 @@ test("consecutive spikes leave room to land and immediately jump again", () => {
   }
   if (currentSequence.length > 1) sequences.push(currentSequence);
 
+  const jumpBeats = ((2 * CUBE_JUMP_SPEED) / CUBE_GRAVITY) / (BEAT_MS / 1000);
+  assert.ok(Math.abs(jumpBeats - 1) < 0.001);
+  const apexRise = CUBE_JUMP_SPEED ** 2 / (2 * CUBE_GRAVITY);
+  assert.ok(apexRise > SPIKE_HEIGHT + 10);
+
   for (const sequence of sequences) {
     for (let index = 1; index < sequence.length; index += 1) {
-      const centerDistance = (sequence[index] - sequence[index - 1]) * PX_PER_BEAT;
+      const beatGap = sequence[index] - sequence[index - 1];
+      assert.ok(Math.abs(beatGap - jumpBeats) < 0.001, "spikes must match held-jump cadence");
+      const centerDistance = beatGap * PX_PER_BEAT;
       const safeLandingWidth = centerDistance - SPIKE_BODY_WIDTH - CUBE_BODY_SIZE;
-      assert.ok(safeLandingWidth >= 120, "held jumps need a generous landing gap");
+      assert.ok(safeLandingWidth >= 100, "landing point between jumps must stay clear");
     }
   }
 });

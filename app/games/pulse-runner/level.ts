@@ -9,6 +9,7 @@ export const CUBE_BODY_SIZE = 42;
 export const CUBE_MAX_VERTICAL_SPEED = 2000;
 export const BOUNCE_PAD_WIDTH = 76;
 export const SPIKE_BODY_WIDTH = 34;
+export const SPIKE_HEIGHT = 50;
 export const LEVEL_BEATS = 176;
 export const LEVEL_DISTANCE_METERS = LEVEL_BEATS * 10;
 export const LEVEL_START_X = 320;
@@ -63,10 +64,10 @@ export function pulseSurfaceState(mode: PulseMode, gravity: PulseGravity) {
 }
 
 export const CUBE_SPIKE_BEATS = [
-  4, 6, 8, 9.15, 12, 15, 18,
-  61, 64, 72, 73.15,
+  4, 6, 8, 9, 12, 15, 18,
+  61, 64, 72, 73,
   97, 104, 106, 109,
-  145, 147, 154, 155.15, 162, 165, 168, 170, 173,
+  145, 147, 154, 155, 162, 165, 168, 170, 173,
 ];
 
 export const CUBE_PLATFORMS = [
