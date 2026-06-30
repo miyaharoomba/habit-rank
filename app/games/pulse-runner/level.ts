@@ -63,10 +63,10 @@ export function pulseSurfaceState(mode: PulseMode, gravity: PulseGravity) {
 }
 
 export const CUBE_SPIKE_BEATS = [
-  4, 6, 8, 8.5, 12, 15, 18,
-  61, 64, 72, 72.5,
+  4, 6, 8, 9.15, 12, 15, 18,
+  61, 64, 72, 73.15,
   97, 104, 106, 109,
-  145, 147, 154, 154.5, 162, 165, 168, 170, 173,
+  145, 147, 154, 155.15, 162, 165, 168, 170, 173,
 ];
 
 export const CUBE_PLATFORMS = [

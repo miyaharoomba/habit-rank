@@ -20,7 +20,6 @@ import {
   PULSE_GRAVITY_SECTIONS,
   PULSE_SHIP_SECTIONS,
   PX_PER_BEAT,
-  RUN_SPEED,
   SHIP_HAZARDS,
   SPIKE_BODY_WIDTH,
 } from "../app/games/pulse-runner/level.ts";
@@ -154,28 +153,25 @@ test("normal jump cadence matches one beat and lands on each rising stair", () =
   }
 });
 
-test("every multi-spike cluster fits inside one normal jump", () => {
-  const clusters = [];
-  let currentCluster = [];
+test("consecutive spikes leave room to land and immediately jump again", () => {
+  const sequences = [];
+  let currentSequence = [];
   for (const beat of CUBE_SPIKE_BEATS) {
-    const previous = currentCluster.at(-1);
-    if (previous == null || beat - previous <= 0.75) {
-      currentCluster.push(beat);
+    const previous = currentSequence.at(-1);
+    if (previous == null || beat - previous <= 1.25) {
+      currentSequence.push(beat);
     } else {
-      if (currentCluster.length > 1) clusters.push(currentCluster);
-      currentCluster = [beat];
+      if (currentSequence.length > 1) sequences.push(currentSequence);
+      currentSequence = [beat];
     }
   }
-  if (currentCluster.length > 1) clusters.push(currentCluster);
+  if (currentSequence.length > 1) sequences.push(currentSequence);
 
-  const jumpSeconds = (2 * CUBE_JUMP_SPEED) / CUBE_GRAVITY;
-  const jumpDistance = RUN_SPEED * jumpSeconds;
-  for (const cluster of clusters) {
-    const collisionSpan =
-      (cluster.at(-1) - cluster[0]) * PX_PER_BEAT + SPIKE_BODY_WIDTH + CUBE_BODY_SIZE;
-    assert.ok(
-      collisionSpan < jumpDistance,
-      `spike cluster ${cluster.join(",")} must fit inside one jump`
-    );
+  for (const sequence of sequences) {
+    for (let index = 1; index < sequence.length; index += 1) {
+      const centerDistance = (sequence[index] - sequence[index - 1]) * PX_PER_BEAT;
+      const safeLandingWidth = centerDistance - SPIKE_BODY_WIDTH - CUBE_BODY_SIZE;
+      assert.ok(safeLandingWidth >= 120, "held jumps need a generous landing gap");
+    }
   }
 });
