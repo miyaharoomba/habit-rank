@@ -1,38 +1,51 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  AIR_JUMP_RINGS,
+  BEAT_BLOCKS,
   BOUNCE_PADS,
   BOUNCE_PAD_WIDTH,
   BEAT_MS,
   beatX,
+  BRANCH_PLATFORMS,
+  COLLAPSING_FLOORS,
   CUBE_PLATFORMS,
   CUBE_BODY_SIZE,
   CUBE_GRAVITY,
   CUBE_JUMP_SPEED,
   CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
+  CUBE_PRESS_GATES,
+  DASH_RINGS,
   INVERTED_BOUNCE_PADS,
   INVERTED_PLATFORMS,
   LEVEL_BEATS,
   LEVEL_DISTANCE_METERS,
   LEVEL_DURATION_MS,
+  MINI_CEILING_OBSTACLES,
+  pulseBeatBlockActive,
   pulseDistanceFromProgress,
   pulseGateGapAtBeat,
   pulseGravityAtX,
   pulseModeAtX,
+  pulseMiniAtX,
   pulseMusicSyncPlan,
   pulseMovingHazardYAtBeat,
+  pulsePressGateBottomAtBeat,
   pulseSurfaceState,
   PULSE_GRAVITY_SECTIONS,
+  PULSE_MINI_SECTIONS,
   PULSE_SHIP_SECTIONS,
   PX_PER_BEAT,
   SHIP_HAZARDS,
   SHIP_GATES,
   SHIP_MOVING_HAZARDS,
   SHIP_WIND_ZONES,
+  SPECIAL_FLOOR_PLATFORMS,
   SPIKE_BODY_WIDTH,
   SPIKE_HEIGHT,
   pulseWindAtBeat,
+  pulseUsesSegmentedFloorAtX,
 } from "../app/games/pulse-runner/level.ts";
 
 test("each rocket section has stable boundaries and does not re-enter after its portal", () => {
@@ -64,9 +77,24 @@ test("gravity inversion is active only inside configured cube sections", () => {
   }
 });
 
+test("mini cube and segmented-floor boundaries are stable", () => {
+  for (const { startBeat, endBeat } of PULSE_MINI_SECTIONS) {
+    assert.equal(pulseMiniAtX(beatX(startBeat) - 1), false);
+    assert.equal(pulseMiniAtX(beatX(startBeat)), true);
+    assert.equal(pulseMiniAtX(beatX(endBeat) - 1), true);
+    assert.equal(pulseMiniAtX(beatX(endBeat)), false);
+  }
+  assert.equal(pulseUsesSegmentedFloorAtX(beatX(158) - 1), false);
+  assert.equal(pulseUsesSegmentedFloorAtX(beatX(158)), true);
+});
+
 test("mode surfaces are restored correctly after every transformation", () => {
   assert.deepEqual(pulseSurfaceState("cube", 1), {
     groundEnabled: true,
+    ceilingEnabled: false,
+  });
+  assert.deepEqual(pulseSurfaceState("cube", 1, true), {
+    groundEnabled: false,
     ceilingEnabled: false,
   });
   assert.deepEqual(pulseSurfaceState("ship", 1), {
@@ -150,6 +178,19 @@ test("course objects stay inside their intended mode sections", () => {
     assert.equal(pulseGravityAtX(beatX(pad.beat)), -1);
     assert.equal(isShipBeat(pad.beat), false);
   }
+  for (const item of [
+    ...COLLAPSING_FLOORS,
+    ...AIR_JUMP_RINGS,
+    ...BEAT_BLOCKS,
+    ...CUBE_PRESS_GATES,
+    ...SPECIAL_FLOOR_PLATFORMS,
+    ...MINI_CEILING_OBSTACLES,
+    ...DASH_RINGS,
+    ...BRANCH_PLATFORMS,
+  ]) {
+    assert.equal(isShipBeat(item.beat), false);
+    assert.equal(pulseGravityAtX(beatX(item.beat)), 1);
+  }
   for (const section of PULSE_GRAVITY_SECTIONS) {
     assert.equal(isShipBeat(section.startBeat), false);
     assert.equal(isShipBeat(section.endBeat - 0.01), false);
@@ -161,9 +202,69 @@ test("course objects stay inside their intended mode sections", () => {
     ...CUBE_PLATFORMS.map(({ beat }) => beat),
     ...BOUNCE_PADS.map(({ beat }) => beat),
     ...INVERTED_PLATFORMS.map(({ beat }) => beat),
-    ...INVERTED_BOUNCE_PADS.map(({ beat }) => beat)
+    ...INVERTED_BOUNCE_PADS.map(({ beat }) => beat),
+    ...COLLAPSING_FLOORS.map(({ beat }) => beat),
+    ...AIR_JUMP_RINGS.map(({ beat }) => beat),
+    ...BEAT_BLOCKS.map(({ beat }) => beat),
+    ...CUBE_PRESS_GATES.map(({ beat }) => beat),
+    ...MINI_CEILING_OBSTACLES.map(({ beat }) => beat),
+    ...DASH_RINGS.map(({ beat }) => beat),
+    ...BRANCH_PLATFORMS.map(({ beat }) => beat)
   );
   assert.ok(furthestBeat < LEVEL_BEATS);
+});
+
+test("normal finale contains every new gimmick with deterministic timing", () => {
+  assert.ok(COLLAPSING_FLOORS.length >= 8);
+  assert.ok(AIR_JUMP_RINGS.length >= 6);
+  assert.ok(BEAT_BLOCKS.length >= 8);
+  assert.ok(CUBE_PRESS_GATES.length >= 2);
+  assert.ok(MINI_CEILING_OBSTACLES.length >= 2);
+  assert.ok(DASH_RINGS.length >= 1);
+  assert.ok(BRANCH_PLATFORMS.length >= 3);
+
+  const firstTileStart = COLLAPSING_FLOORS[0].beat - COLLAPSING_FLOORS[0].widthBeats / 2;
+  const lastTile = COLLAPSING_FLOORS.at(-1);
+  const lastTileEnd = lastTile.beat + lastTile.widthBeats / 2;
+  assert.equal(firstTileStart, 158);
+  assert.equal(lastTileEnd, 166);
+
+  for (const block of BEAT_BLOCKS) {
+    assert.equal(pulseBeatBlockActive(block, block.beat), true);
+    assert.equal(
+      pulseBeatBlockActive(block, block.beat + block.periodBeats / 2),
+      false
+    );
+  }
+
+  for (const gate of CUBE_PRESS_GATES) {
+    assert.equal(pulsePressGateBottomAtBeat(gate, gate.beat), gate.openBottomY);
+    assert.equal(
+      pulsePressGateBottomAtBeat(gate, gate.beat + gate.pulseBeats / 2),
+      gate.closedBottomY
+    );
+    assert.ok(gate.openBottomY < 360, "open press must clear the running cube");
+  }
+
+  for (const obstacle of MINI_CEILING_OBSTACLES) {
+    assert.equal(pulseMiniAtX(beatX(obstacle.beat)), true);
+    assert.ok(440 - obstacle.bottomY < CUBE_BODY_SIZE);
+    assert.ok(440 - obstacle.bottomY > CUBE_BODY_SIZE * 0.7);
+  }
+
+  assert.ok(DASH_RINGS.every((ring) => ring.speedMultiplier > 1));
+
+  const gapRings = AIR_JUMP_RINGS.filter((ring) => ring.beat < 174);
+  for (let index = 1; index < gapRings.length; index += 1) {
+    const previous = gapRings[index - 1];
+    const current = gapRings[index];
+    const ringAirtimeBeats =
+      ((2 * previous.power) / CUBE_GRAVITY) / (BEAT_MS / 1000);
+    assert.ok(
+      current.beat - previous.beat <= ringAirtimeBeats,
+      "held ring chain must reach the next ring before falling"
+    );
+  }
 });
 
 test("beat gates are widest exactly when the rocket reaches them", () => {

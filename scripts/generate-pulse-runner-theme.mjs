@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 
 const sampleRate = 44100;
 const bpm = 140;
-const beats = 192;
+const beats = 224;
 const secondsPerBeat = 60 / bpm;
 const duration = beats * secondsPerBeat;
 const sampleCount = Math.ceil(duration * sampleRate);
@@ -151,6 +151,10 @@ function sectionForBeat(beat) {
   if (beat < 110) return "invertedRise";
   if (beat < 128) return "buildB";
   if (beat < 158) return "rocketB";
+  if (beat < 174) return "gimmickA";
+  if (beat < 190) return "gimmickB";
+  if (beat < 204) return "mini";
+  if (beat < 216) return "branch";
   return "finale";
 }
 
@@ -181,7 +185,13 @@ for (let beat = 0; beat < beats; beat += 1) {
   const chordRoot = chordRoots[Math.floor(beat / 4) % chordRoots.length];
   const localBeat = beat % 16;
   const inverted = section === "inverted" || section === "invertedRise";
-  const isDrop = section === "rocketA" || section === "rocketB" || section === "finale";
+  const isDrop =
+    section === "rocketA" ||
+    section === "rocketB" ||
+    section === "gimmickB" ||
+    section === "mini" ||
+    section === "branch" ||
+    section === "finale";
   const isQuiet = section === "intro" || section === "inverted";
 
   if (section === "intro") {
@@ -245,11 +255,17 @@ for (let beat = 0; beat < beats; beat += 1) {
   }
 
   if (beat >= 8) {
-    const motif = inverted ? leadDark : section === "bridge" || section === "buildB" ? leadB : leadA;
+    const motif =
+      inverted
+        ? leadDark
+        : section === "bridge" || section === "buildB" || section === "gimmickA"
+          ? leadB
+          : leadA;
     for (let half = 0; half < 2; half += 1) {
       if (section === "intro" && (beat < 8 || half === 1)) continue;
       const motifIndex = (beat * 2 + half) % motif.length;
-      const lift = section === "rocketB" || section === "finale" ? 12 : 0;
+      const lift =
+        section === "rocketB" || section === "branch" || section === "finale" ? 12 : 0;
       const note = motif[motifIndex] + lift;
       const noteTime = time + half * secondsPerBeat * 0.5;
       addSynth({
@@ -279,7 +295,7 @@ for (let beat = 0; beat < beats; beat += 1) {
   }
 }
 
-for (const transition of [16, 32, 58, 76, 94, 110, 128, 158]) {
+for (const transition of [16, 32, 58, 76, 94, 110, 128, 158, 174, 190, 204, 216]) {
   addRiser(transition - 4, 4, transition === 128 ? 0.14 : 0.1);
   addCrash(transition * secondsPerBeat, transition === 128 || transition === 158 ? 0.27 : 0.2);
 }
@@ -287,7 +303,7 @@ for (const transition of [16, 32, 58, 76, 94, 110, 128, 158]) {
 // Final four beats resolve upward instead of dropping into a short loop.
 for (let step = 0; step < 16; step += 1) {
   addSynth({
-    time: (188 + step / 4) * secondsPerBeat,
+    time: (220 + step / 4) * secondsPerBeat,
     length: secondsPerBeat * 0.2,
     note: [76, 79, 83, 88][step % 4],
     gain: 0.085 * (1 - step / 24),

@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v4";
+export const PULSE_GAME_VERSION = "pulse_runner_v5";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -10,7 +10,7 @@ export const CUBE_MAX_VERTICAL_SPEED = 2000;
 export const BOUNCE_PAD_WIDTH = 76;
 export const SPIKE_BODY_WIDTH = 34;
 export const SPIKE_HEIGHT = 50;
-export const LEVEL_BEATS = 192;
+export const LEVEL_BEATS = 224;
 export const LEVEL_DISTANCE_METERS = LEVEL_BEATS * 10;
 export const LEVEL_START_X = 320;
 export const LEVEL_END_X = LEVEL_START_X + LEVEL_BEATS * PX_PER_BEAT;
@@ -22,6 +22,18 @@ export const CEILING_Y = 42;
 export type PulseMode = "cube" | "ship";
 export type PulseGravity = 1 | -1;
 export type PulseInput = { atMs: number; action: "down" | "up" };
+export type BeatBlock = {
+  beat: number;
+  widthBeats: number;
+  periodBeats: number;
+};
+export type CubePressGate = {
+  beat: number;
+  width: number;
+  closedBottomY: number;
+  openBottomY: number;
+  pulseBeats: number;
+};
 
 export type ShipGate = {
   beat: number;
@@ -50,6 +62,12 @@ export const PULSE_GRAVITY_SECTIONS = [
   { startBeat: 76, endBeat: 110 },
 ] as const;
 
+export const PULSE_MINI_SECTIONS = [
+  { startBeat: 190, endBeat: 204 },
+] as const;
+
+export const SEGMENTED_FLOOR_START_BEAT = 158;
+
 export function beatX(beat: number) {
   return LEVEL_START_X + beat * PX_PER_BEAT;
 }
@@ -68,6 +86,16 @@ export function pulseGravityAtX(x: number): PulseGravity {
   )
     ? -1
     : 1;
+}
+
+export function pulseMiniAtX(x: number) {
+  return PULSE_MINI_SECTIONS.some(
+    ({ startBeat, endBeat }) => x >= beatX(startBeat) && x < beatX(endBeat)
+  );
+}
+
+export function pulseUsesSegmentedFloorAtX(x: number) {
+  return x >= beatX(SEGMENTED_FLOOR_START_BEAT);
 }
 
 export function pulseDistanceFromProgress(progressPercent: number) {
@@ -98,11 +126,79 @@ export function pulseMusicSyncPlan({
   };
 }
 
-export function pulseSurfaceState(mode: PulseMode, gravity: PulseGravity) {
+export function pulseSurfaceState(
+  mode: PulseMode,
+  gravity: PulseGravity,
+  segmentedFloor = false
+) {
   return {
-    groundEnabled: mode === "cube" && gravity === 1,
+    groundEnabled: mode === "cube" && gravity === 1 && !segmentedFloor,
     ceilingEnabled: mode === "cube" && gravity === -1,
   };
+}
+
+export const COLLAPSING_FLOORS = Array.from({ length: 8 }, (_, index) => ({
+  beat: 158.5 + index,
+  widthBeats: 1,
+})) as readonly { beat: number; widthBeats: number }[];
+
+export const AIR_JUMP_RINGS = [
+  { beat: 166.6, y: 335, power: 1350 },
+  { beat: 168.05, y: 335, power: 1350 },
+  { beat: 169.5, y: 335, power: 1350 },
+  { beat: 170.95, y: 335, power: 1350 },
+  { beat: 172.4, y: 335, power: 1350 },
+  { beat: 173.85, y: 335, power: 1350 },
+  { beat: 204.7, y: 340, power: 1100 },
+  { beat: 208.2, y: 255, power: 920 },
+] as const;
+
+export const BEAT_BLOCKS: readonly BeatBlock[] = Array.from(
+  { length: 8 },
+  (_, index) => ({ beat: 174.45 + index, widthBeats: 0.9, periodBeats: 2 })
+);
+
+export const CUBE_PRESS_GATES: readonly CubePressGate[] = [
+  { beat: 184, width: 52, closedBottomY: 440, openBottomY: 338, pulseBeats: 2 },
+  { beat: 187, width: 56, closedBottomY: 440, openBottomY: 330, pulseBeats: 2 },
+] as const;
+
+export const SPECIAL_FLOOR_PLATFORMS = [
+  { beat: 186, widthBeats: 8 },
+  { beat: 197, widthBeats: 14 },
+  { beat: 205.5, widthBeats: 3 },
+  { beat: 209.5, widthBeats: 3 },
+  { beat: 218, widthBeats: 12 },
+] as const;
+
+export const MINI_CEILING_OBSTACLES = [
+  { beat: 192.5, widthBeats: 2.2, bottomY: 399 },
+  { beat: 200.5, widthBeats: 2.4, bottomY: 399 },
+] as const;
+
+export const DASH_RINGS = [
+  { beat: 196, y: 414, durationMs: 620, speedMultiplier: 1.65 },
+] as const;
+
+export const BRANCH_PLATFORMS = [
+  { beat: 206.5, widthBeats: 2, height: 110 },
+  { beat: 209, widthBeats: 2, height: 160 },
+  { beat: 212, widthBeats: 2, height: 110 },
+] as const;
+
+export function pulseBeatBlockActive(block: BeatBlock, courseBeat: number) {
+  const phase = ((courseBeat - block.beat) / block.periodBeats) * Math.PI * 2;
+  return Math.cos(phase) >= 0;
+}
+
+export function pulsePressGateBottomAtBeat(
+  gate: CubePressGate,
+  courseBeat: number
+) {
+  const phase = ((courseBeat - gate.beat) / gate.pulseBeats) * Math.PI * 2;
+  const openness = (Math.cos(phase) + 1) / 2;
+  return gate.closedBottomY -
+    (gate.closedBottomY - gate.openBottomY) * openness;
 }
 
 export const SHIP_GATES: readonly ShipGate[] = [
@@ -155,7 +251,7 @@ export const CUBE_SPIKE_BEATS = [
   61, 64, 72, 73,
   97.7,
   113, 120, 122, 125,
-  161, 163, 170, 171, 178, 181, 184, 186, 189,
+  218, 220, 222,
 ];
 
 export const CUBE_PLATFORMS = [
@@ -165,10 +261,6 @@ export const CUBE_PLATFORMS = [
   { beat: 23.35, widthBeats: 0.9, height: 164 },
   { beat: 27.75, widthBeats: 2.3, height: 188, bouncePadBeat: 26 },
   { beat: 115.75, widthBeats: 2.3, height: 184, bouncePadBeat: 114 },
-  { beat: 165.1, widthBeats: 0.75, height: 48 },
-  { beat: 166.05, widthBeats: 0.75, height: 86 },
-  { beat: 167, widthBeats: 0.75, height: 124 },
-  { beat: 167.95, widthBeats: 1.15, height: 162 },
 ] as const;
 
 export const INVERTED_PLATFORMS = [
@@ -187,7 +279,6 @@ export const BOUNCE_PADS = [
   { beat: 26, power: 1350 },
   { beat: 68, power: 1450 },
   { beat: 114, power: 1350 },
-  { beat: 174.5, power: 1450 },
 ] as const;
 
 export const INVERTED_BOUNCE_PADS = [
@@ -203,7 +294,6 @@ export const CEILING_SPIKES = [
   { beat: 94.5, baseY: CEILING_Y },
   { beat: 106.5, baseY: CEILING_Y },
   { beat: 107.5, baseY: CEILING_Y },
-  { beat: 175.6, baseY: 160 },
 ] as const;
 
 export const SHIP_HAZARDS = [
@@ -226,7 +316,7 @@ export const SHIP_HAZARDS = [
 export const PULSE_COINS = [
   { beat: 29, y: 215 },
   { beat: 93, y: 245 },
-  { beat: 148, y: 270 },
+  { beat: 211, y: 225 },
 ];
 
 export function pulseRewardXp(progressPercent: number, completed: boolean, coins: number) {

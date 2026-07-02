@@ -315,7 +315,7 @@ export default function PulseRunnerGame({
     <section className="relative h-[100svh] overflow-hidden bg-[#090d18] text-white">
       <audio
         ref={audioRef}
-        src="/audio/pulse-runner-theme.wav?v=4"
+        src="/audio/pulse-runner-theme.wav?v=5"
         preload="auto"
         loop
       />

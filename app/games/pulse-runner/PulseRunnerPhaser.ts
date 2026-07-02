@@ -1,29 +1,40 @@
 import {
+  AIR_JUMP_RINGS,
   BEAT_MS,
+  BEAT_BLOCKS,
   beatX,
   BOUNCE_PAD_WIDTH,
   BOUNCE_PADS,
+  BRANCH_PLATFORMS,
   CEILING_SPIKES,
   CEILING_Y,
+  COLLAPSING_FLOORS,
   CUBE_PLATFORMS,
+  CUBE_PRESS_GATES,
   CUBE_BODY_SIZE,
   CUBE_GRAVITY,
   CUBE_JUMP_SPEED,
   CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
+  DASH_RINGS,
   FLOOR_Y,
   INVERTED_BOUNCE_PADS,
   INVERTED_PLATFORMS,
   LEVEL_BEATS,
   LEVEL_END_X,
   LEVEL_START_X,
+  MINI_CEILING_OBSTACLES,
   PULSE_COINS,
+  pulseBeatBlockActive,
   pulseDistanceFromProgress,
   pulseGateGapAtBeat,
   pulseGravityAtX,
   PULSE_GRAVITY_SECTIONS,
+  PULSE_MINI_SECTIONS,
+  pulseMiniAtX,
   pulseModeAtX,
   pulseMovingHazardYAtBeat,
+  pulsePressGateBottomAtBeat,
   PULSE_SHIP_SECTIONS,
   PX_PER_BEAT,
   RUN_SPEED,
@@ -31,8 +42,10 @@ import {
   SHIP_HAZARDS,
   SHIP_MOVING_HAZARDS,
   SHIP_WIND_ZONES,
+  SPECIAL_FLOOR_PLATFORMS,
   SPIKE_BODY_WIDTH,
   pulseSurfaceState,
+  pulseUsesSegmentedFloorAtX,
   pulseWindAtBeat,
   type PulseGravity,
   type PulseInput,
@@ -77,6 +90,14 @@ type WindStreakRuntime = {
   wobble: number;
   baseAlpha: number;
 };
+type BeatBlockRuntime = {
+  block: (typeof BEAT_BLOCKS)[number];
+  object: import("phaser").GameObjects.Rectangle;
+};
+type PressGateRuntime = {
+  gate: (typeof CUBE_PRESS_GATES)[number];
+  object: import("phaser").GameObjects.Rectangle;
+};
 
 function clampProgress(x: number) {
   return Math.max(0, Math.min(100, ((x - LEVEL_START_X) / (LEVEL_END_X - LEVEL_START_X)) * 100));
@@ -99,13 +120,20 @@ export async function mountPulseRunner({
     private hazards!: import("phaser").Physics.Arcade.StaticGroup;
     private platforms!: import("phaser").Physics.Arcade.StaticGroup;
     private bouncePads!: import("phaser").Physics.Arcade.StaticGroup;
+    private airRings!: import("phaser").Physics.Arcade.StaticGroup;
+    private dashRings!: import("phaser").Physics.Arcade.StaticGroup;
     private coinsGroup!: import("phaser").Physics.Arcade.StaticGroup;
     private movingHazards!: import("phaser").Physics.Arcade.Group;
     private gateRuntimes: GateRuntime[] = [];
     private movingHazardRuntimes: MovingHazardRuntime[] = [];
     private windStreakRuntimes: WindStreakRuntime[] = [];
+    private beatBlockRuntimes: BeatBlockRuntime[] = [];
+    private pressGateRuntimes: PressGateRuntime[] = [];
     private mode: PulseMode = "cube";
     private gravityDirection: PulseGravity = 1;
+    private mini = false;
+    private dashUntil = 0;
+    private dashSpeedMultiplier = 1;
     private pressed = false;
     private jumpQueuedUntil = 0;
     private bounceLockedUntil = 0;
@@ -130,6 +158,8 @@ export async function mountPulseRunner({
       this.hazards = this.physics.add.staticGroup();
       this.platforms = this.physics.add.staticGroup();
       this.bouncePads = this.physics.add.staticGroup();
+      this.airRings = this.physics.add.staticGroup();
+      this.dashRings = this.physics.add.staticGroup();
       this.coinsGroup = this.physics.add.staticGroup();
       this.movingHazards = this.physics.add.group({ allowGravity: false, immovable: true });
       this.createSurfaces();
@@ -149,7 +179,27 @@ export async function mountPulseRunner({
           (platformGravity === 1
             ? playerBody.blocked.down && this.player.y < platform.y
             : playerBody.blocked.up && this.player.y > platform.y);
-        if (!landedOnSurface) this.finish(false);
+        if (!landedOnSurface) {
+          this.finish(false);
+          return;
+        }
+        if (
+          platform.getData("collapsible") === true &&
+          platform.getData("collapseTriggered") !== true
+        ) {
+          platform.setData("collapseTriggered", true);
+          this.time.delayedCall(150, () => {
+            const platformBody = platform.body as import("phaser").Physics.Arcade.StaticBody;
+            platformBody.enable = false;
+            this.tweens.add({
+              targets: platform,
+              y: platform.y + 34,
+              angle: platform.x % 2 === 0 ? 9 : -9,
+              alpha: 0,
+              duration: 280,
+            });
+          });
+        }
       });
       this.physics.add.collider(this.player, this.hazards, () => this.finish(false));
       this.physics.add.collider(this.player, this.movingHazards, () => this.finish(false));
@@ -183,6 +233,24 @@ export async function mountPulseRunner({
         this.coins += 1;
         this.cameras.main.flash(80, 255, 215, 90, false);
       });
+      this.physics.add.overlap(this.player, this.airRings, (_player, object) => {
+        const ring = object as import("phaser").Physics.Arcade.Image;
+        if (this.mode !== "cube" || !this.pressed || ring.getData("used") === true) return;
+        ring.setData("used", true).setAlpha(0.28);
+        this.jumpQueuedUntil = 0;
+        (this.player.body as ArcadeBody).setVelocityY(
+          -Number(ring.getData("power")) * this.gravityDirection
+        );
+        this.cameras.main.flash(90, 255, 215, 90, false);
+      });
+      this.physics.add.overlap(this.player, this.dashRings, (_player, object) => {
+        const ring = object as import("phaser").Physics.Arcade.Image;
+        if (this.mode !== "cube" || !this.pressed || ring.getData("used") === true) return;
+        ring.setData("used", true).setAlpha(0.3);
+        this.dashUntil = this.time.now + Number(ring.getData("durationMs"));
+        this.dashSpeedMultiplier = Number(ring.getData("speedMultiplier"));
+        this.cameras.main.flash(120, 98, 216, 255, false);
+      });
 
       this.physics.pause();
       this.verifyRenderedPixels();
@@ -193,17 +261,24 @@ export async function mountPulseRunner({
     update(time: number) {
       if (!this.started || this.ended || this.orientationPaused || !this.player?.body) return;
       const body = this.player.body as ArcadeBody;
-      body.setVelocityX(RUN_SPEED);
+      const courseBeat = (this.player.x - LEVEL_START_X) / PX_PER_BEAT;
+      const horizontalSpeed =
+        time < this.dashUntil ? RUN_SPEED * this.dashSpeedMultiplier : RUN_SPEED;
+      body.setVelocityX(horizontalSpeed);
 
       const expectedMode = pulseModeAtX(this.player.x);
       if (expectedMode !== this.mode) this.switchMode(expectedMode);
       const expectedGravity = this.mode === "cube" ? pulseGravityAtX(this.player.x) : 1;
       if (expectedGravity !== this.gravityDirection) this.switchGravity(expectedGravity);
+      const expectedMini = this.mode === "cube" && pulseMiniAtX(this.player.x);
+      if (expectedMini !== this.mini) this.switchCubeSize(expectedMini);
+      this.syncSurfaces();
+      this.updateNormalMechanics(courseBeat);
       this.updateWindEffects(time);
 
       if (this.mode === "cube") {
         body.setAccelerationY(CUBE_GRAVITY * this.gravityDirection);
-        body.setMaxVelocity(RUN_SPEED, CUBE_MAX_VERTICAL_SPEED);
+        body.setMaxVelocity(horizontalSpeed, CUBE_MAX_VERTICAL_SPEED);
         const grounded =
           this.gravityDirection === 1
             ? body.blocked.down || body.touching.down
@@ -218,11 +293,10 @@ export async function mountPulseRunner({
           this.player.angle += 260 * this.gravityDirection * (this.game.loop.delta / 1000);
         }
       } else {
-        const courseBeat = (this.player.x - LEVEL_START_X) / PX_PER_BEAT;
         this.updateShipMechanics(courseBeat);
         const windForce = pulseWindAtBeat(courseBeat);
         body.setAccelerationY((this.pressed ? -1450 : 1050) + windForce);
-        body.setMaxVelocity(RUN_SPEED, 430);
+        body.setMaxVelocity(horizontalSpeed, 430);
         const turbulence = windForce === 0 ? 0 : Math.sin(time * 0.045) * 2.4;
         this.player.setAngle(
           Math.max(-24, Math.min(28, body.velocity.y * 0.07 + turbulence))
@@ -248,6 +322,26 @@ export async function mountPulseRunner({
             onComplete: () => spark.destroy(),
           });
         }
+      }
+
+      if (time < this.dashUntil && time % 55 < 18) {
+        const trail = this.add.rectangle(
+          this.player.x - 34,
+          this.player.y,
+          52,
+          this.mini ? 14 : 20,
+          0x62d8ff,
+          0.55
+        );
+        trail.setDepth(8);
+        this.tweens.add({
+          targets: trail,
+          x: trail.x - 90,
+          scaleX: 1.8,
+          alpha: 0,
+          duration: 240,
+          onComplete: () => trail.destroy(),
+        });
       }
 
       if (this.player.y < 12 || this.player.y > 528) this.finish(false);
@@ -291,6 +385,17 @@ export async function mountPulseRunner({
       coin.fillStyle(0x7bf1a8, 1).fillCircle(18, 18, 16);
       coin.lineStyle(3, 0xffffff, 0.9).strokeCircle(18, 18, 13);
       coin.generateTexture("pulse-coin", 36, 36).destroy();
+
+      const jumpRing = this.add.graphics().setVisible(false);
+      jumpRing.lineStyle(7, 0xffd75a, 1).strokeCircle(30, 30, 23);
+      jumpRing.lineStyle(2, 0xffffff, 0.9).strokeCircle(30, 30, 16);
+      jumpRing.fillStyle(0xffd75a, 0.22).fillCircle(30, 30, 13);
+      jumpRing.generateTexture("pulse-jump-ring", 60, 60).destroy();
+
+      const dashRing = this.add.graphics().setVisible(false);
+      dashRing.lineStyle(7, 0x62d8ff, 1).strokeCircle(32, 32, 25);
+      dashRing.fillStyle(0xffffff, 0.92).fillTriangle(20, 18, 50, 32, 20, 46);
+      dashRing.generateTexture("pulse-dash-ring", 64, 64).destroy();
 
       const grid = this.add.graphics().setVisible(false);
       grid.fillStyle(0x090d18, 1).fillRect(0, 0, 128, 128);
@@ -433,6 +538,162 @@ export async function mountPulseRunner({
         this.physics.add.existing(platform, true);
         this.platforms.add(platform);
       }
+
+      for (const item of SPECIAL_FLOOR_PLATFORMS) {
+        const platform = this.add.rectangle(
+          beatX(item.beat),
+          FLOOR_Y + 50,
+          item.widthBeats * PX_PER_BEAT,
+          100,
+          0x294466,
+          0.96
+        );
+        platform.setStrokeStyle(3, 0x62d8ff, 0.68).setData("gravity", 1);
+        this.physics.add.existing(platform, true);
+        this.platforms.add(platform);
+      }
+
+      for (const item of COLLAPSING_FLOORS) {
+        const platform = this.add.rectangle(
+          beatX(item.beat),
+          FLOOR_Y + 28,
+          item.widthBeats * PX_PER_BEAT,
+          56,
+          0xff9f43,
+          0.92
+        );
+        platform
+          .setStrokeStyle(3, 0xffffff, 0.62)
+          .setData("gravity", 1)
+          .setData("collapsible", true)
+          .setData("collapseTriggered", false);
+        this.physics.add.existing(platform, true);
+        this.platforms.add(platform);
+      }
+
+      for (const block of BEAT_BLOCKS) {
+        const object = this.add.rectangle(
+          beatX(block.beat),
+          FLOOR_Y + 28,
+          block.widthBeats * PX_PER_BEAT,
+          56,
+          0x55e6d8,
+          0.92
+        );
+        object.setStrokeStyle(3, 0xffffff, 0.72).setData("gravity", 1);
+        this.physics.add.existing(object, true);
+        this.platforms.add(object);
+        this.beatBlockRuntimes.push({ block, object });
+      }
+
+      for (const item of BRANCH_PLATFORMS) {
+        const platform = this.add.rectangle(
+          beatX(item.beat),
+          FLOOR_Y - item.height,
+          item.widthBeats * PX_PER_BEAT,
+          24,
+          0x7f6cff,
+          0.94
+        );
+        platform.setStrokeStyle(3, 0xffffff, 0.72).setData("gravity", 1);
+        this.physics.add.existing(platform, true);
+        this.platforms.add(platform);
+      }
+
+      for (const item of MINI_CEILING_OBSTACLES) {
+        const obstacle = this.add.rectangle(
+          beatX(item.beat),
+          item.bottomY / 2,
+          item.widthBeats * PX_PER_BEAT,
+          item.bottomY,
+          0x493b70,
+          0.94
+        );
+        obstacle.setStrokeStyle(3, 0xc79bff, 0.72);
+        this.physics.add.existing(obstacle, true);
+        this.hazards.add(obstacle);
+      }
+
+      for (const item of AIR_JUMP_RINGS) {
+        const ring = this.airRings.create(
+          beatX(item.beat),
+          item.y,
+          "pulse-jump-ring"
+        ) as import("phaser").Physics.Arcade.Image;
+        ring.setData("power", item.power).setData("used", false).refreshBody();
+        (ring.body as import("phaser").Physics.Arcade.StaticBody).setSize(54, 54).setOffset(3, 3);
+        this.tweens.add({ targets: ring, scale: 1.12, alpha: 0.72, duration: 430, yoyo: true, repeat: -1 });
+      }
+
+      for (const item of DASH_RINGS) {
+        const ring = this.dashRings.create(
+          beatX(item.beat),
+          item.y,
+          "pulse-dash-ring"
+        ) as import("phaser").Physics.Arcade.Image;
+        ring
+          .setData("durationMs", item.durationMs)
+          .setData("speedMultiplier", item.speedMultiplier)
+          .setData("used", false)
+          .refreshBody();
+        (ring.body as import("phaser").Physics.Arcade.StaticBody).setSize(58, 58).setOffset(3, 3);
+        this.tweens.add({ targets: ring, angle: 360, duration: 900, repeat: -1 });
+      }
+
+      for (const gate of CUBE_PRESS_GATES) {
+        const height = 460;
+        const object = this.add.rectangle(
+          beatX(gate.beat),
+          gate.closedBottomY - height / 2,
+          gate.width,
+          height,
+          0xff6b7a,
+          0.94
+        );
+        object.setStrokeStyle(4, 0xffffff, 0.65).setDepth(3);
+        this.physics.add.existing(object);
+        const gateBody = object.body as ArcadeBody;
+        gateBody.setAllowGravity(false).setImmovable(true).setSize(gate.width, height);
+        this.movingHazards.add(object);
+        this.pressGateRuntimes.push({ gate, object });
+        this.add
+          .text(beatX(gate.beat), 472, "BEAT PRESS", {
+            fontFamily: "Arial, sans-serif",
+            fontSize: "12px",
+            fontStyle: "bold",
+            color: "#ff9aa5",
+          })
+          .setOrigin(0.5)
+          .setAlpha(0.82);
+      }
+
+      this.add
+        .text(beatX(162), 360, "CRUMBLE RUN", {
+          fontFamily: "Arial, sans-serif",
+          fontSize: "15px",
+          fontStyle: "bold",
+          color: "#ffc37a",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.82);
+      this.add
+        .text(beatX(170), 92, "HOLD THE RINGS", {
+          fontFamily: "Arial, sans-serif",
+          fontSize: "15px",
+          fontStyle: "bold",
+          color: "#ffe790",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.85);
+      this.add
+        .text(beatX(210), 92, "HIGH ROUTE // SHARD", {
+          fontFamily: "Arial, sans-serif",
+          fontSize: "14px",
+          fontStyle: "bold",
+          color: "#b9aaff",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.85);
 
       for (const item of BOUNCE_PADS) {
         const pad = this.add.rectangle(
@@ -622,6 +883,19 @@ export async function mountPulseRunner({
         this.createPortal(beatX(section.startBeat), 0xc79bff, "FLIP");
         this.createPortal(beatX(section.endBeat), 0x7bf1a8, "NORMAL");
       }
+      for (const section of PULSE_MINI_SECTIONS) {
+        this.createPortal(beatX(section.startBeat), 0xffd166, "MINI");
+        this.createPortal(beatX(section.endBeat), 0x62d8ff, "NORMAL");
+      }
+      this.add
+        .text(beatX(DASH_RINGS[0].beat), 330, "HOLD TO DASH", {
+          fontFamily: "Arial, sans-serif",
+          fontSize: "13px",
+          fontStyle: "bold",
+          color: "#9de9ff",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.85);
       this.createPortal(LEVEL_END_X, 0x7bf1a8, "GOAL");
     }
 
@@ -688,6 +962,23 @@ export async function mountPulseRunner({
       }
     }
 
+    private updateNormalMechanics(courseBeat: number) {
+      for (const { block, object } of this.beatBlockRuntimes) {
+        const active = pulseBeatBlockActive(block, courseBeat);
+        const blockBody = object.body as import("phaser").Physics.Arcade.StaticBody;
+        blockBody.enable = active;
+        object.setAlpha(active ? 0.94 : 0.14);
+        object.setScale(1, active ? 1 : 0.55);
+      }
+
+      const gateHeight = 460;
+      for (const { gate, object } of this.pressGateRuntimes) {
+        const bottomY = pulsePressGateBottomAtBeat(gate, courseBeat);
+        (object.body as ArcadeBody).reset(object.x, bottomY - gateHeight / 2);
+        object.setAlpha(0.78 + (gate.closedBottomY - bottomY) / 700);
+      }
+    }
+
     private createPlayer() {
       this.player = this.physics.add.sprite(LEVEL_START_X, FLOOR_Y - 26, "pulse-cube") as ArcadeSprite;
       this.player.setDepth(10).setCollideWorldBounds(false);
@@ -734,16 +1025,26 @@ export async function mountPulseRunner({
       this.mode = next;
       const body = this.player.body as ArcadeBody;
       if (next === "ship") {
+        this.mini = false;
         this.gravityDirection = 1;
         this.syncSurfaces();
-        this.player.setTexture("pulse-ship").setPosition(this.player.x, 300).setAngle(0);
+        this.player
+          .setTexture("pulse-ship")
+          .setScale(1)
+          .setPosition(this.player.x, 300)
+          .setAngle(0);
         this.player.setFlipY(false);
         body.setSize(52, 28).setOffset(5, 4).setVelocityY(-80);
         this.modeLabel.setText("ROCKET MODE").setColor("#ff8b98");
       } else {
+        this.mini = false;
         this.gravityDirection = pulseGravityAtX(this.player.x);
         this.syncSurfaces();
-        this.player.setTexture("pulse-cube").setPosition(this.player.x, FLOOR_Y - 28).setAngle(0);
+        this.player
+          .setTexture("pulse-cube")
+          .setScale(1)
+          .setPosition(this.player.x, FLOOR_Y - 28)
+          .setAngle(0);
         this.player.setFlipY(this.gravityDirection === -1);
         body.setSize(CUBE_BODY_SIZE, CUBE_BODY_SIZE).setOffset(3, 3).setVelocityY(0);
         this.modeLabel
@@ -752,6 +1053,22 @@ export async function mountPulseRunner({
       }
       callbacks.onModeChange(next);
       this.cameras.main.flash(180, next === "ship" ? 255 : 98, next === "ship" ? 107 : 216, next === "ship" ? 122 : 255, false);
+    }
+
+    private switchCubeSize(nextMini: boolean) {
+      if (this.mode !== "cube") return;
+      this.mini = nextMini;
+      const body = this.player.body as ArcadeBody;
+      const grounded = body.blocked.down || body.touching.down;
+      this.player.setScale(nextMini ? 0.7 : 1);
+      body.setSize(CUBE_BODY_SIZE, CUBE_BODY_SIZE).setOffset(3, 3);
+      if (grounded && this.gravityDirection === 1) {
+        this.player.y = FLOOR_Y - (nextMini ? 17 : 26);
+      }
+      this.modeLabel
+        .setText(nextMini ? "MINI CUBE" : "CUBE MODE")
+        .setColor(nextMini ? "#ffe090" : "#8ce6ff");
+      this.cameras.main.flash(160, nextMini ? 255 : 98, nextMini ? 209 : 216, 102, false);
     }
 
     private switchGravity(next: PulseGravity) {
@@ -767,7 +1084,8 @@ export async function mountPulseRunner({
     private syncSurfaces() {
       const { groundEnabled, ceilingEnabled } = pulseSurfaceState(
         this.mode,
-        this.gravityDirection
+        this.gravityDirection,
+        pulseUsesSegmentedFloorAtX(this.player?.x ?? LEVEL_START_X)
       );
       this.ground.setVisible(groundEnabled);
       this.ceiling.setVisible(ceilingEnabled);
