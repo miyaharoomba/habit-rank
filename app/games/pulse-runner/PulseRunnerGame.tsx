@@ -45,6 +45,7 @@ export default function PulseRunnerGame({
   } | null>(null);
   const runIdRef = useRef<string | null>(null);
   const startTokenRef = useRef(0);
+  const autoBeginNextRunRef = useRef(false);
   const orientationFullscreenRef = useRef(false);
 
   const [screen, setScreen] = useState<Screen>("idle");
@@ -116,7 +117,7 @@ export default function PulseRunnerGame({
     [bestProgress, rewardedToday, router, stopMusic]
   );
 
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (autoBegin = false) => {
     if (
       needsLandscape ||
       screen === "starting" ||
@@ -128,6 +129,7 @@ export default function PulseRunnerGame({
 
     const token = startTokenRef.current + 1;
     startTokenRef.current = token;
+    autoBeginNextRunRef.current = autoBegin;
     setScreen("starting");
     setError(null);
     setResult(null);
@@ -161,6 +163,7 @@ export default function PulseRunnerGame({
         },
       });
     } catch (caught) {
+      autoBeginNextRunRef.current = false;
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setScreen("idle");
     }
@@ -168,6 +171,7 @@ export default function PulseRunnerGame({
 
   const beginGame = useCallback(() => {
     if (screen !== "ready" || needsLandscape) return;
+    autoBeginNextRunRef.current = false;
     const music = audioRef.current;
     if (music) {
       music.currentTime = 0;
@@ -178,6 +182,12 @@ export default function PulseRunnerGame({
     setAttempts((value) => value + 1);
     setScreen("playing");
   }, [muted, needsLandscape, screen]);
+
+  useEffect(() => {
+    if (screen === "ready" && autoBeginNextRunRef.current && !needsLandscape) {
+      beginGame();
+    }
+  }, [beginGame, needsLandscape, screen]);
 
   const requestLandscape = useCallback(async (allowFullscreen: boolean) => {
     const orientation = window.screen.orientation as LockableScreenOrientation | undefined;
@@ -425,7 +435,7 @@ export default function PulseRunnerGame({
 
             <button
               type="button"
-              onClick={() => void startGame()}
+              onClick={() => void startGame(true)}
               className="mt-7 inline-flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-white px-6 text-base font-black text-[#090d18] transition hover:bg-white/90"
             >
               <RotateCcw className="h-5 w-5" aria-hidden="true" />
