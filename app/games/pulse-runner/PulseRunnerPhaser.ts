@@ -535,8 +535,8 @@ export async function mountPulseRunner({
         const up = zone.forceY < 0;
         const color = up ? 0x62d8ff : 0xc79bff;
         this.add
-          .rectangle(startX + width / 2, 270, width, 480, color, 0.065)
-          .setStrokeStyle(3, color, 0.38)
+          .rectangle(startX + width / 2, 270, width, 480, color, 0.11)
+          .setStrokeStyle(3, color, 0.55)
           .setDepth(-1);
 
         for (let index = 0; index < 18; index += 1) {
@@ -549,7 +549,7 @@ export async function mountPulseRunner({
               index % 4 === 0 ? 4 : 2,
               length,
               color,
-              0.2 + (index % 4) * 0.035
+              0.38 + (index % 4) * 0.04
             )
             .setAngle(index % 2 === 0 ? -5 : 5)
             .setDepth(1);
@@ -560,7 +560,7 @@ export async function mountPulseRunner({
             speed: 0.22 + (index % 6) * 0.035,
             direction: up ? -1 : 1,
             wobble: 4 + (index % 5) * 2,
-            baseAlpha: 0.2 + (index % 4) * 0.035,
+            baseAlpha: 0.38 + (index % 4) * 0.04,
           });
         }
 
@@ -572,7 +572,7 @@ export async function mountPulseRunner({
               width * (0.72 + index * 0.07),
               3,
               color,
-              0.18
+              0.32
             )
             .setDepth(1);
           this.windStreakRuntimes.push({
@@ -582,7 +582,7 @@ export async function mountPulseRunner({
             speed: 0.3 + index * 0.035,
             direction: up ? -1 : 1,
             wobble: 0,
-            baseAlpha: 0.18,
+            baseAlpha: 0.32,
           });
         }
 
@@ -595,7 +595,7 @@ export async function mountPulseRunner({
               color: up ? "#62d8ff" : "#c79bff",
             })
             .setOrigin(0.5)
-            .setAlpha(0.1);
+            .setAlpha(0.2);
         }
         this.add
           .text(startX + width / 2, 96, up ? "WIND ↑" : "WIND ↓", {
@@ -644,7 +644,7 @@ export async function mountPulseRunner({
         streak.object.x =
           streak.baseX + Math.sin(time * 0.004 + streak.phase) * streak.wobble;
         streak.object.setAlpha(
-          streak.baseAlpha * (0.72 + Math.sin(time * 0.009 + streak.phase) * 0.22)
+          streak.baseAlpha * (0.82 + Math.sin(time * 0.009 + streak.phase) * 0.14)
         );
       }
     }
