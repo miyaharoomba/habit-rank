@@ -15,6 +15,7 @@ export const LEVEL_DISTANCE_METERS = LEVEL_BEATS * 10;
 export const LEVEL_START_X = 320;
 export const LEVEL_END_X = LEVEL_START_X + LEVEL_BEATS * PX_PER_BEAT;
 export const LEVEL_DURATION_MS = LEVEL_BEATS * BEAT_MS;
+export const MUSIC_SYNC_TOLERANCE_SECONDS = 0.75;
 export const FLOOR_Y = 440;
 export const CEILING_Y = 42;
 
@@ -72,6 +73,29 @@ export function pulseGravityAtX(x: number): PulseGravity {
 export function pulseDistanceFromProgress(progressPercent: number) {
   const progress = Math.max(0, Math.min(100, progressPercent));
   return Math.round((progress / 100) * LEVEL_DISTANCE_METERS);
+}
+
+export function pulseMusicSyncPlan({
+  progressPercent,
+  currentTime,
+  paused,
+  ended,
+}: {
+  progressPercent: number;
+  currentTime: number;
+  paused: boolean;
+  ended: boolean;
+}) {
+  const progress = Math.max(0, Math.min(100, progressPercent));
+  const targetTime = (progress / 100) * (LEVEL_DURATION_MS / 1000);
+  return {
+    targetTime,
+    shouldSeek:
+      ended ||
+      !Number.isFinite(currentTime) ||
+      Math.abs(currentTime - targetTime) > MUSIC_SYNC_TOLERANCE_SECONDS,
+    shouldPlay: progress < 100 && (paused || ended),
+  };
 }
 
 export function pulseSurfaceState(mode: PulseMode, gravity: PulseGravity) {

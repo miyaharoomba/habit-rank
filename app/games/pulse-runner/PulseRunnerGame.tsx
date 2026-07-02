@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mountPulseRunner, type PulseRunSummary } from "./PulseRunnerPhaser";
-import { pulseDistanceFromProgress, type PulseMode } from "./level";
+import {
+  pulseDistanceFromProgress,
+  pulseMusicSyncPlan,
+  type PulseMode,
+} from "./level";
 
 type Screen = "idle" | "starting" | "ready" | "playing" | "saving" | "result";
 
@@ -47,6 +51,8 @@ export default function PulseRunnerGame({
   const startTokenRef = useRef(0);
   const autoBeginNextRunRef = useRef(false);
   const orientationFullscreenRef = useRef(false);
+  const musicProgressRef = useRef(0);
+  const needsLandscapeRef = useRef(false);
 
   const [screen, setScreen] = useState<Screen>("idle");
   const [progress, setProgress] = useState(0);
@@ -64,6 +70,19 @@ export default function PulseRunnerGame({
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
+  }, []);
+
+  const ensureMusicPlaying = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || needsLandscapeRef.current) return;
+    const plan = pulseMusicSyncPlan({
+      progressPercent: musicProgressRef.current,
+      currentTime: audio.currentTime,
+      paused: audio.paused,
+      ended: audio.ended,
+    });
+    if (plan.shouldSeek) audio.currentTime = plan.targetTime;
+    if (plan.shouldPlay) void audio.play().catch(() => undefined);
   }, []);
 
   const saveRun = useCallback(
@@ -134,6 +153,7 @@ export default function PulseRunnerGame({
     setError(null);
     setResult(null);
     setProgress(0);
+    musicProgressRef.current = 0;
     setRunnerMode("cube");
 
     try {
@@ -157,8 +177,13 @@ export default function PulseRunnerGame({
             if (startTokenRef.current !== token) return;
             setScreen("ready");
           },
-          onProgress: (value) => setProgress(value),
+          onProgress: (value) => {
+            musicProgressRef.current = value;
+            setProgress(value);
+            ensureMusicPlaying();
+          },
           onModeChange: (value) => setRunnerMode(value),
+          onInteraction: ensureMusicPlaying,
           onFinish: (summary) => void saveRun(summary),
         },
       });
@@ -167,7 +192,7 @@ export default function PulseRunnerGame({
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setScreen("idle");
     }
-  }, [needsLandscape, saveRun, screen]);
+  }, [ensureMusicPlaying, needsLandscape, saveRun, screen]);
 
   const beginGame = useCallback(() => {
     if (screen !== "ready" || needsLandscape) return;
@@ -261,15 +286,16 @@ export default function PulseRunnerGame({
   }, [requestLandscape]);
 
   useEffect(() => {
+    needsLandscapeRef.current = needsLandscape;
     controllerRef.current?.setPaused(needsLandscape);
     const audio = audioRef.current;
     if (!audio) return;
     if (needsLandscape) {
       audio.pause();
     } else if (screen === "playing") {
-      void audio.play().catch(() => undefined);
+      ensureMusicPlaying();
     }
-  }, [needsLandscape, screen]);
+  }, [ensureMusicPlaying, needsLandscape, screen]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -289,8 +315,9 @@ export default function PulseRunnerGame({
     <section className="relative h-[100svh] overflow-hidden bg-[#090d18] text-white">
       <audio
         ref={audioRef}
-        src="/audio/pulse-runner-theme.wav?v=2"
+        src="/audio/pulse-runner-theme.wav?v=3"
         preload="auto"
+        loop
       />
       <div
         ref={mountRef}

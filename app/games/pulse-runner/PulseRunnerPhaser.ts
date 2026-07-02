@@ -49,6 +49,7 @@ export type PulseRunnerCallbacks = {
   onReady: () => void;
   onProgress: (progress: number) => void;
   onModeChange: (mode: PulseMode) => void;
+  onInteraction: () => void;
   onFinish: (summary: PulseRunSummary) => void;
 };
 
@@ -544,6 +545,7 @@ export async function mountPulseRunner({
     private bindInput() {
       const down = () => {
         if (!this.started || this.ended || this.orientationPaused || this.pressed) return;
+        callbacks.onInteraction();
         this.pressed = true;
         this.inputs.push({ atMs: Math.round(performance.now() - this.startedAt), action: "down" });
         if (this.mode === "cube") this.jumpQueuedUntil = this.time.now + 120;

@@ -17,6 +17,7 @@ import {
   pulseGateGapAtBeat,
   pulseGravityAtX,
   pulseModeAtX,
+  pulseMusicSyncPlan,
   pulseMovingHazardYAtBeat,
   pulseSurfaceState,
   PULSE_GRAVITY_SECTIONS,
@@ -83,6 +84,44 @@ test("distance score is clamped and derived from course progress", () => {
   assert.equal(pulseDistanceFromProgress(50), LEVEL_DISTANCE_METERS / 2);
   assert.equal(pulseDistanceFromProgress(100), LEVEL_DISTANCE_METERS);
   assert.equal(pulseDistanceFromProgress(130), LEVEL_DISTANCE_METERS);
+});
+
+test("music playback recovers and stays synchronized with course progress", () => {
+  const halfway = pulseMusicSyncPlan({
+    progressPercent: 50,
+    currentTime: 0,
+    paused: true,
+    ended: false,
+  });
+  assert.ok(halfway.targetTime > 37 && halfway.targetTime < 38);
+  assert.equal(halfway.shouldSeek, true);
+  assert.equal(halfway.shouldPlay, true);
+
+  const inSync = pulseMusicSyncPlan({
+    progressPercent: 50,
+    currentTime: halfway.targetTime + 0.2,
+    paused: false,
+    ended: false,
+  });
+  assert.equal(inSync.shouldSeek, false);
+  assert.equal(inSync.shouldPlay, false);
+
+  const interrupted = pulseMusicSyncPlan({
+    progressPercent: 65,
+    currentTime: 49,
+    paused: true,
+    ended: true,
+  });
+  assert.equal(interrupted.shouldSeek, true);
+  assert.equal(interrupted.shouldPlay, true);
+
+  const finished = pulseMusicSyncPlan({
+    progressPercent: 100,
+    currentTime: 0,
+    paused: true,
+    ended: true,
+  });
+  assert.equal(finished.shouldPlay, false);
 });
 
 test("course objects stay inside their intended mode sections", () => {
