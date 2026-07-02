@@ -28,7 +28,7 @@ test("Pulse Runner theme has stereo movement and audible energy in every section
   const wav = readFileSync(audioPath);
   const dataBytes = wav.readUInt32LE(40);
   const frameCount = dataBytes / 4;
-  const sectionRanges = [0, 16, 32, 58, 76, 94, 112, 142, 176];
+  const sectionRanges = [0, 16, 32, 58, 76, 94, 110, 128, 158, 192];
   const energy = Array(sectionRanges.length - 1).fill(0);
   const samples = Array(sectionRanges.length - 1).fill(0);
   let peak = 0;

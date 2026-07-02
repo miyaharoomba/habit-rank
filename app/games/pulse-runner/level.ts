@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v3";
+export const PULSE_GAME_VERSION = "pulse_runner_v4";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -10,7 +10,7 @@ export const CUBE_MAX_VERTICAL_SPEED = 2000;
 export const BOUNCE_PAD_WIDTH = 76;
 export const SPIKE_BODY_WIDTH = 34;
 export const SPIKE_HEIGHT = 50;
-export const LEVEL_BEATS = 176;
+export const LEVEL_BEATS = 192;
 export const LEVEL_DISTANCE_METERS = LEVEL_BEATS * 10;
 export const LEVEL_START_X = 320;
 export const LEVEL_END_X = LEVEL_START_X + LEVEL_BEATS * PX_PER_BEAT;
@@ -43,11 +43,11 @@ export type ShipMovingHazard = {
 
 export const PULSE_SHIP_SECTIONS = [
   { startBeat: 32, endBeat: 58 },
-  { startBeat: 112, endBeat: 142 },
+  { startBeat: 128, endBeat: 158 },
 ] as const;
 
 export const PULSE_GRAVITY_SECTIONS = [
-  { startBeat: 76, endBeat: 94 },
+  { startBeat: 76, endBeat: 110 },
 ] as const;
 
 export function beatX(beat: number) {
@@ -108,21 +108,21 @@ export function pulseSurfaceState(mode: PulseMode, gravity: PulseGravity) {
 export const SHIP_GATES: readonly ShipGate[] = [
   { beat: 39, gapY: 270, closedGap: 132, openGap: 238, pulseBeats: 2 },
   { beat: 53.2, gapY: 325, closedGap: 132, openGap: 226, pulseBeats: 2 },
-  { beat: 119, gapY: 215, closedGap: 128, openGap: 228, pulseBeats: 2 },
-  { beat: 132, gapY: 330, closedGap: 128, openGap: 220, pulseBeats: 2 },
+  { beat: 135, gapY: 215, closedGap: 128, openGap: 228, pulseBeats: 2 },
+  { beat: 148, gapY: 330, closedGap: 128, openGap: 220, pulseBeats: 2 },
 ] as const;
 
 export const SHIP_MOVING_HAZARDS: readonly ShipMovingHazard[] = [
   { beat: 43, width: 98, height: 104, centerY: 270, amplitude: 135, periodBeats: 4, phase: 0.25 },
   { beat: 55.5, width: 92, height: 96, centerY: 270, amplitude: 125, periodBeats: 3, phase: 0.75 },
-  { beat: 122.5, width: 104, height: 110, centerY: 270, amplitude: 140, periodBeats: 4, phase: 0.25 },
-  { beat: 135.5, width: 96, height: 104, centerY: 270, amplitude: 135, periodBeats: 3, phase: 0 },
-  { beat: 138.2, width: 90, height: 96, centerY: 270, amplitude: 130, periodBeats: 3, phase: 0.5 },
+  { beat: 138.5, width: 104, height: 110, centerY: 270, amplitude: 140, periodBeats: 4, phase: 0.25 },
+  { beat: 151.5, width: 96, height: 104, centerY: 270, amplitude: 135, periodBeats: 3, phase: 0 },
+  { beat: 154.2, width: 90, height: 96, centerY: 270, amplitude: 130, periodBeats: 3, phase: 0.5 },
 ] as const;
 
 export const SHIP_WIND_ZONES = [
   { startBeat: 46, endBeat: 51, forceY: -620 },
-  { startBeat: 124.5, endBeat: 129.5, forceY: 560 },
+  { startBeat: 140.5, endBeat: 145.5, forceY: 560 },
 ] as const;
 
 export function pulseGateGapAtBeat(gate: ShipGate, courseBeat: number) {
@@ -153,8 +153,9 @@ export function pulseWindAtBeat(courseBeat: number) {
 export const CUBE_SPIKE_BEATS = [
   4, 6, 8, 9, 12, 15, 18,
   61, 64, 72, 73,
-  97, 104, 106, 109,
-  145, 147, 154, 155, 162, 165, 168, 170, 173,
+  97.7,
+  113, 120, 122, 125,
+  161, 163, 170, 171, 178, 181, 184, 186, 189,
 ];
 
 export const CUBE_PLATFORMS = [
@@ -163,28 +164,46 @@ export const CUBE_PLATFORMS = [
   { beat: 22.4, widthBeats: 0.72, height: 126 },
   { beat: 23.35, widthBeats: 0.9, height: 164 },
   { beat: 27.75, widthBeats: 2.3, height: 188, bouncePadBeat: 26 },
-  { beat: 99.75, widthBeats: 2.3, height: 184, bouncePadBeat: 98 },
-  { beat: 149.1, widthBeats: 0.75, height: 48 },
-  { beat: 150.05, widthBeats: 0.75, height: 86 },
-  { beat: 151, widthBeats: 0.75, height: 124 },
-  { beat: 151.95, widthBeats: 1.15, height: 162 },
+  { beat: 115.75, widthBeats: 2.3, height: 184, bouncePadBeat: 114 },
+  { beat: 165.1, widthBeats: 0.75, height: 48 },
+  { beat: 166.05, widthBeats: 0.75, height: 86 },
+  { beat: 167, widthBeats: 0.75, height: 124 },
+  { beat: 167.95, widthBeats: 1.15, height: 162 },
+] as const;
+
+export const INVERTED_PLATFORMS = [
+  { beat: 79.5, widthBeats: 0.72, depth: 50 },
+  { beat: 80.45, widthBeats: 0.72, depth: 88 },
+  { beat: 81.4, widthBeats: 0.72, depth: 126 },
+  { beat: 82.35, widthBeats: 0.9, depth: 164 },
+  { beat: 88.75, widthBeats: 2.3, depth: 188, bouncePadBeat: 87 },
+  { beat: 98.5, widthBeats: 0.72, depth: 48 },
+  { beat: 99.45, widthBeats: 0.72, depth: 86 },
+  { beat: 100.4, widthBeats: 0.9, depth: 124 },
+  { beat: 103.75, widthBeats: 2.3, depth: 180, bouncePadBeat: 102 },
 ] as const;
 
 export const BOUNCE_PADS = [
   { beat: 26, power: 1350 },
   { beat: 68, power: 1450 },
-  { beat: 98, power: 1350 },
-  { beat: 158.5, power: 1450 },
+  { beat: 114, power: 1350 },
+  { beat: 174.5, power: 1450 },
+] as const;
+
+export const INVERTED_BOUNCE_PADS = [
+  { beat: 87, power: 1350, danger: false },
+  { beat: 96.5, power: 1800, danger: true },
+  { beat: 102, power: 1350, danger: false },
 ] as const;
 
 export const CEILING_SPIKES = [
   { beat: 69.1, baseY: 168 },
-  { beat: 80, baseY: CEILING_Y },
-  { beat: 83, baseY: CEILING_Y },
-  { beat: 86, baseY: CEILING_Y },
-  { beat: 89, baseY: CEILING_Y },
+  { beat: 84.5, baseY: CEILING_Y },
   { beat: 92, baseY: CEILING_Y },
-  { beat: 159.6, baseY: 160 },
+  { beat: 94.5, baseY: CEILING_Y },
+  { beat: 106.5, baseY: CEILING_Y },
+  { beat: 107.5, baseY: CEILING_Y },
+  { beat: 175.6, baseY: 160 },
 ] as const;
 
 export const SHIP_HAZARDS = [
@@ -194,20 +213,20 @@ export const SHIP_HAZARDS = [
   { beat: 45, side: "bottom" as const, height: 155, width: 110 },
   { beat: 48.5, side: "top" as const, height: 145, width: 115 },
   { beat: 51, side: "bottom" as const, height: 145, width: 105 },
-  { beat: 114, side: "top" as const, height: 150, width: 120 },
-  { beat: 116, side: "bottom" as const, height: 180, width: 120 },
-  { beat: 120.7, side: "bottom" as const, height: 135, width: 100 },
-  { beat: 124, side: "top" as const, height: 150, width: 110 },
-  { beat: 127, side: "bottom" as const, height: 145, width: 110 },
-  { beat: 130, side: "top" as const, height: 145, width: 105 },
-  { beat: 134, side: "bottom" as const, height: 135, width: 95 },
-  { beat: 140, side: "top" as const, height: 155, width: 115 },
+  { beat: 130, side: "top" as const, height: 150, width: 120 },
+  { beat: 132, side: "bottom" as const, height: 180, width: 120 },
+  { beat: 136.7, side: "bottom" as const, height: 135, width: 100 },
+  { beat: 140, side: "top" as const, height: 150, width: 110 },
+  { beat: 143, side: "bottom" as const, height: 145, width: 110 },
+  { beat: 146, side: "top" as const, height: 145, width: 105 },
+  { beat: 150, side: "bottom" as const, height: 135, width: 95 },
+  { beat: 156, side: "top" as const, height: 155, width: 115 },
 ];
 
 export const PULSE_COINS = [
   { beat: 29, y: 215 },
-  { beat: 87, y: 155 },
-  { beat: 132, y: 270 },
+  { beat: 93, y: 245 },
+  { beat: 148, y: 270 },
 ];
 
 export function pulseRewardXp(progressPercent: number, completed: boolean, coins: number) {

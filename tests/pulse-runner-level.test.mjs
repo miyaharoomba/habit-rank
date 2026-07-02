@@ -11,8 +11,11 @@ import {
   CUBE_JUMP_SPEED,
   CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
+  INVERTED_BOUNCE_PADS,
+  INVERTED_PLATFORMS,
   LEVEL_BEATS,
   LEVEL_DISTANCE_METERS,
+  LEVEL_DURATION_MS,
   pulseDistanceFromProgress,
   pulseGateGapAtBeat,
   pulseGravityAtX,
@@ -57,6 +60,7 @@ test("gravity inversion is active only inside configured cube sections", () => {
     assert.equal(pulseGravityAtX(startX), -1);
     assert.equal(pulseGravityAtX(endX - 1), -1);
     assert.equal(pulseGravityAtX(endX), 1);
+    assert.ok(endBeat - startBeat >= 32, "inverted course must be a substantial section");
   }
 });
 
@@ -93,7 +97,7 @@ test("music playback recovers and stays synchronized with course progress", () =
     paused: true,
     ended: false,
   });
-  assert.ok(halfway.targetTime > 37 && halfway.targetTime < 38);
+  assert.ok(Math.abs(halfway.targetTime - LEVEL_DURATION_MS / 2000) < 0.001);
   assert.equal(halfway.shouldSeek, true);
   assert.equal(halfway.shouldPlay, true);
 
@@ -138,6 +142,14 @@ test("course objects stay inside their intended mode sections", () => {
   for (const beat of CUBE_SPIKE_BEATS) assert.equal(isShipBeat(beat), false);
   for (const platform of CUBE_PLATFORMS) assert.equal(isShipBeat(platform.beat), false);
   for (const pad of BOUNCE_PADS) assert.equal(isShipBeat(pad.beat), false);
+  for (const platform of INVERTED_PLATFORMS) {
+    assert.equal(pulseGravityAtX(beatX(platform.beat)), -1);
+    assert.equal(isShipBeat(platform.beat), false);
+  }
+  for (const pad of INVERTED_BOUNCE_PADS) {
+    assert.equal(pulseGravityAtX(beatX(pad.beat)), -1);
+    assert.equal(isShipBeat(pad.beat), false);
+  }
   for (const section of PULSE_GRAVITY_SECTIONS) {
     assert.equal(isShipBeat(section.startBeat), false);
     assert.equal(isShipBeat(section.endBeat - 0.01), false);
@@ -147,7 +159,9 @@ test("course objects stay inside their intended mode sections", () => {
     ...SHIP_HAZARDS.map(({ beat }) => beat),
     ...CUBE_SPIKE_BEATS,
     ...CUBE_PLATFORMS.map(({ beat }) => beat),
-    ...BOUNCE_PADS.map(({ beat }) => beat)
+    ...BOUNCE_PADS.map(({ beat }) => beat),
+    ...INVERTED_PLATFORMS.map(({ beat }) => beat),
+    ...INVERTED_BOUNCE_PADS.map(({ beat }) => beat)
   );
   assert.ok(furthestBeat < LEVEL_BEATS);
 });
@@ -281,6 +295,49 @@ test("safe bounce pads clear the leading wall and land on their high platform", 
   }
 });
 
+test("inverted bounce pads clear and land beneath their hanging platforms", () => {
+  for (const platform of INVERTED_PLATFORMS.filter((item) => "bouncePadBeat" in item)) {
+    const pad = INVERTED_BOUNCE_PADS.find(
+      (item) => item.beat === platform.bouncePadBeat && !item.danger
+    );
+    assert.ok(pad);
+    assert.ok(pad.power < CUBE_MAX_VERTICAL_SPEED, "bounce power must not be velocity-capped");
+
+    const contactOffsetBeats =
+      (BOUNCE_PAD_WIDTH / 2 + CUBE_BODY_SIZE / 2) / PX_PER_BEAT;
+    const launchBeat = pad.beat - contactOffsetBeats;
+    const leadingBeat = platform.beat - platform.widthBeats / 2;
+    const secondsToWall = (leadingBeat - launchBeat) * (BEAT_MS / 1000);
+    const downwardDisplacement =
+      pad.power * secondsToWall - (CUBE_GRAVITY / 2) * secondsToWall ** 2;
+    assert.ok(
+      downwardDisplacement > platform.depth,
+      "inverted bounce must clear the hanging platform wall"
+    );
+
+    const discriminant = pad.power ** 2 - 2 * CUBE_GRAVITY * platform.depth;
+    assert.ok(discriminant > 0, "bounce must travel beneath the platform");
+    const landingSeconds = (pad.power + Math.sqrt(discriminant)) / CUBE_GRAVITY;
+    const landingBeat = launchBeat + landingSeconds / (BEAT_MS / 1000);
+    const trailingBeat = platform.beat + platform.widthBeats / 2;
+    assert.ok(landingBeat >= leadingBeat && landingBeat <= trailingBeat);
+  }
+});
+
+test("the marked inverted danger pad launches into its floor spike", () => {
+  const dangerPad = INVERTED_BOUNCE_PADS.find((item) => item.danger);
+  assert.ok(dangerPad);
+  const followingFloorSpike = CUBE_SPIKE_BEATS.find(
+    (beat) => beat > dangerPad.beat && beat - dangerPad.beat < 2
+  );
+  assert.ok(followingFloorSpike);
+  const travelSeconds = (followingFloorSpike - dangerPad.beat) * (BEAT_MS / 1000);
+  const displacement =
+    dangerPad.power * travelSeconds - (CUBE_GRAVITY / 2) * travelSeconds ** 2;
+  const floorSpikeTop = 440 - SPIKE_HEIGHT;
+  assert.ok(42 + CUBE_BODY_SIZE + displacement >= floorSpikeTop);
+});
+
 test("normal jump cadence matches one beat and lands on each rising stair", () => {
   const airtimeMs = (2 * CUBE_JUMP_SPEED * 1000) / CUBE_GRAVITY;
   assert.ok(Math.abs(airtimeMs - BEAT_MS) < 1, "normal jump must stay synchronized to one beat");
@@ -306,6 +363,28 @@ test("normal jump cadence matches one beat and lands on each rising stair", () =
       landingBeat >= nextLeadingBeat && landingBeat <= nextTrailingBeat,
       `jump from ${current.beat} must land on stair ${next.beat}`
     );
+  }
+});
+
+test("inverted held jumps climb every hanging stair in one-beat rhythm", () => {
+  const stairPairs = INVERTED_PLATFORMS.slice(0, -1)
+    .map((platform, index) => [platform, INVERTED_PLATFORMS[index + 1]])
+    .filter(
+      ([current, next]) =>
+        next.beat - current.beat <= 1 &&
+        next.depth > current.depth &&
+        next.depth - current.depth <= 40
+    );
+  assert.ok(stairPairs.length >= 5);
+
+  for (const [current, next] of stairPairs) {
+    const rise = next.depth - current.depth;
+    const discriminant = CUBE_JUMP_SPEED ** 2 - 2 * CUBE_GRAVITY * rise;
+    assert.ok(discriminant > 0);
+    const landingSeconds = (CUBE_JUMP_SPEED + Math.sqrt(discriminant)) / CUBE_GRAVITY;
+    const landingBeat = current.beat + landingSeconds / (BEAT_MS / 1000);
+    assert.ok(landingBeat >= next.beat - next.widthBeats / 2);
+    assert.ok(landingBeat <= next.beat + next.widthBeats / 2);
   }
 });
 

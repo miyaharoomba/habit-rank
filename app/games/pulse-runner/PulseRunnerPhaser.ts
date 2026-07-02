@@ -12,6 +12,9 @@ import {
   CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
   FLOOR_Y,
+  INVERTED_BOUNCE_PADS,
+  INVERTED_PLATFORMS,
+  LEVEL_BEATS,
   LEVEL_END_X,
   LEVEL_START_X,
   PULSE_COINS,
@@ -129,12 +132,14 @@ export async function mountPulseRunner({
       this.physics.add.collider(this.player, this.platforms, (_player, object) => {
         const platform = object as import("phaser").GameObjects.Rectangle;
         const playerBody = this.player.body as ArcadeBody;
-        const landedOnTop =
+        const platformGravity = Number(platform.getData("gravity")) as PulseGravity;
+        const landedOnSurface =
           this.mode === "cube" &&
-          this.gravityDirection === 1 &&
-          playerBody.blocked.down &&
-          this.player.y < platform.y;
-        if (!landedOnTop) this.finish(false);
+          this.gravityDirection === platformGravity &&
+          (platformGravity === 1
+            ? playerBody.blocked.down && this.player.y < platform.y
+            : playerBody.blocked.up && this.player.y > platform.y);
+        if (!landedOnSurface) this.finish(false);
       });
       this.physics.add.collider(this.player, this.hazards, () => this.finish(false));
       this.physics.add.collider(this.player, this.movingHazards, () => this.finish(false));
@@ -142,15 +147,24 @@ export async function mountPulseRunner({
         const pad = object as import("phaser").GameObjects.Rectangle;
         if (
           this.mode !== "cube" ||
-          this.gravityDirection !== 1 ||
+          this.gravityDirection !== Number(pad.getData("gravity")) ||
           pad.getData("used") === true
         ) return;
         const body = this.player.body as ArcadeBody;
-        pad.setData("used", true).setFillStyle(0x7bf1a8, 0.45);
+        const danger = pad.getData("danger") === true;
+        pad
+          .setData("used", true)
+          .setFillStyle(danger ? 0xff6b7a : 0x7bf1a8, 0.45);
         this.jumpQueuedUntil = 0;
         this.bounceLockedUntil = this.time.now + 240;
-        body.setVelocityY(-Number(pad.getData("power")));
-        this.cameras.main.flash(120, 123, 241, 168, false);
+        body.setVelocityY(-Number(pad.getData("power")) * this.gravityDirection);
+        this.cameras.main.flash(
+          120,
+          danger ? 255 : 123,
+          danger ? 107 : 241,
+          danger ? 122 : 168,
+          false
+        );
       });
       this.physics.add.overlap(this.player, this.coinsGroup, (_player, object) => {
         const coin = object as import("phaser").Physics.Arcade.Image;
@@ -309,7 +323,7 @@ export async function mountPulseRunner({
       bg.setDepth(-20);
       const horizon = this.add.rectangle(0, FLOOR_Y - 110, LEVEL_END_X + 1200, 220, 0x121c31, 0.5);
       horizon.setOrigin(0, 0).setDepth(-15);
-      for (let beat = 0; beat <= 176; beat += 2) {
+      for (let beat = 0; beat <= LEVEL_BEATS; beat += 2) {
         const bar = this.add.rectangle(beatX(beat), 250, 5, 250, beat % 8 === 0 ? 0xff5f78 : 0x4fbfff, 0.14);
         bar.setDepth(-10);
       }
@@ -376,6 +390,22 @@ export async function mountPulseRunner({
           0.95
         );
         platform.setStrokeStyle(3, 0x62d8ff, 0.7);
+        platform.setData("gravity", 1);
+        this.physics.add.existing(platform, true);
+        this.platforms.add(platform);
+      }
+
+      for (const item of INVERTED_PLATFORMS) {
+        const width = item.widthBeats * PX_PER_BEAT;
+        const platform = this.add.rectangle(
+          beatX(item.beat),
+          CEILING_Y + item.depth / 2,
+          width,
+          item.depth,
+          0x493b70,
+          0.95
+        );
+        platform.setStrokeStyle(3, 0xc79bff, 0.78).setData("gravity", -1);
         this.physics.add.existing(platform, true);
         this.platforms.add(platform);
       }
@@ -389,9 +419,44 @@ export async function mountPulseRunner({
           0x7bf1a8,
           0.9
         );
-        pad.setStrokeStyle(2, 0xffffff, 0.85).setData("power", item.power).setData("used", false);
+        pad
+          .setStrokeStyle(2, 0xffffff, 0.85)
+          .setData("power", item.power)
+          .setData("gravity", 1)
+          .setData("danger", false)
+          .setData("used", false);
         this.physics.add.existing(pad, true);
         this.bouncePads.add(pad);
+      }
+
+      for (const item of INVERTED_BOUNCE_PADS) {
+        const pad = this.add.rectangle(
+          beatX(item.beat),
+          CEILING_Y + 6,
+          BOUNCE_PAD_WIDTH,
+          12,
+          item.danger ? 0xff6b7a : 0x7bf1a8,
+          0.92
+        );
+        pad
+          .setStrokeStyle(2, 0xffffff, 0.85)
+          .setData("power", item.power)
+          .setData("gravity", -1)
+          .setData("danger", item.danger)
+          .setData("used", false);
+        this.physics.add.existing(pad, true);
+        this.bouncePads.add(pad);
+        if (item.danger) {
+          this.add
+            .text(beatX(item.beat), 118, "DANGER PAD", {
+              fontFamily: "Arial, sans-serif",
+              fontSize: "12px",
+              fontStyle: "bold",
+              color: "#ff8b98",
+            })
+            .setOrigin(0.5)
+            .setAlpha(0.85);
+        }
       }
 
       for (const hazard of SHIP_HAZARDS) {
