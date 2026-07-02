@@ -68,6 +68,15 @@ type MovingHazardRuntime = {
   hazard: (typeof SHIP_MOVING_HAZARDS)[number];
   object: import("phaser").GameObjects.Rectangle;
 };
+type WindStreakRuntime = {
+  object: import("phaser").GameObjects.Rectangle;
+  baseX: number;
+  phase: number;
+  speed: number;
+  direction: -1 | 1;
+  wobble: number;
+  baseAlpha: number;
+};
 
 function clampProgress(x: number) {
   return Math.max(0, Math.min(100, ((x - LEVEL_START_X) / (LEVEL_END_X - LEVEL_START_X)) * 100));
@@ -94,6 +103,7 @@ export async function mountPulseRunner({
     private movingHazards!: import("phaser").Physics.Arcade.Group;
     private gateRuntimes: GateRuntime[] = [];
     private movingHazardRuntimes: MovingHazardRuntime[] = [];
+    private windStreakRuntimes: WindStreakRuntime[] = [];
     private mode: PulseMode = "cube";
     private gravityDirection: PulseGravity = 1;
     private pressed = false;
@@ -189,6 +199,7 @@ export async function mountPulseRunner({
       if (expectedMode !== this.mode) this.switchMode(expectedMode);
       const expectedGravity = this.mode === "cube" ? pulseGravityAtX(this.player.x) : 1;
       if (expectedGravity !== this.gravityDirection) this.switchGravity(expectedGravity);
+      this.updateWindEffects(time);
 
       if (this.mode === "cube") {
         body.setAccelerationY(CUBE_GRAVITY * this.gravityDirection);
@@ -209,9 +220,22 @@ export async function mountPulseRunner({
       } else {
         const courseBeat = (this.player.x - LEVEL_START_X) / PX_PER_BEAT;
         this.updateShipMechanics(courseBeat);
-        body.setAccelerationY((this.pressed ? -1450 : 1050) + pulseWindAtBeat(courseBeat));
+        const windForce = pulseWindAtBeat(courseBeat);
+        body.setAccelerationY((this.pressed ? -1450 : 1050) + windForce);
         body.setMaxVelocity(RUN_SPEED, 430);
-        this.player.setAngle(Math.max(-24, Math.min(28, body.velocity.y * 0.07)));
+        const turbulence = windForce === 0 ? 0 : Math.sin(time * 0.045) * 2.4;
+        this.player.setAngle(
+          Math.max(-24, Math.min(28, body.velocity.y * 0.07 + turbulence))
+        );
+        this.modeLabel
+          .setText(
+            windForce < 0
+              ? "ROCKET // UPDRAFT"
+              : windForce > 0
+                ? "ROCKET // DOWNDRAFT"
+                : "ROCKET MODE"
+          )
+          .setColor(windForce < 0 ? "#8ce6ff" : windForce > 0 ? "#d9b8ff" : "#ff8b98");
         if (this.pressed && this.time.now % 80 < 20) {
           const spark = this.add.circle(this.player.x - 32, this.player.y, 5, 0xffd166, 0.9);
           spark.setDepth(9);
@@ -509,20 +533,69 @@ export async function mountPulseRunner({
         const startX = beatX(zone.startBeat);
         const width = (zone.endBeat - zone.startBeat) * PX_PER_BEAT;
         const up = zone.forceY < 0;
+        const color = up ? 0x62d8ff : 0xc79bff;
         this.add
-          .rectangle(startX + width / 2, 270, width, 480, up ? 0x62d8ff : 0xc79bff, 0.075)
-          .setStrokeStyle(3, up ? 0x62d8ff : 0xc79bff, 0.35)
+          .rectangle(startX + width / 2, 270, width, 480, color, 0.065)
+          .setStrokeStyle(3, color, 0.38)
           .setDepth(-1);
-        for (let x = startX + 55; x < startX + width; x += 95) {
+
+        for (let index = 0; index < 18; index += 1) {
+          const fraction = (index + 0.5) / 18;
+          const length = 34 + (index % 5) * 11;
+          const streak = this.add
+            .rectangle(
+              startX + width * fraction,
+              30 + ((index * 83) % 480),
+              index % 4 === 0 ? 4 : 2,
+              length,
+              color,
+              0.2 + (index % 4) * 0.035
+            )
+            .setAngle(index % 2 === 0 ? -5 : 5)
+            .setDepth(1);
+          this.windStreakRuntimes.push({
+            object: streak,
+            baseX: streak.x,
+            phase: (index * 137) % 480,
+            speed: 0.22 + (index % 6) * 0.035,
+            direction: up ? -1 : 1,
+            wobble: 4 + (index % 5) * 2,
+            baseAlpha: 0.2 + (index % 4) * 0.035,
+          });
+        }
+
+        for (let index = 0; index < 3; index += 1) {
+          const gust = this.add
+            .rectangle(
+              startX + width / 2,
+              80 + index * 160,
+              width * (0.72 + index * 0.07),
+              3,
+              color,
+              0.18
+            )
+            .setDepth(1);
+          this.windStreakRuntimes.push({
+            object: gust,
+            baseX: gust.x,
+            phase: index * 157,
+            speed: 0.3 + index * 0.035,
+            direction: up ? -1 : 1,
+            wobble: 0,
+            baseAlpha: 0.18,
+          });
+        }
+
+        for (let x = startX + 80; x < startX + width; x += 180) {
           this.add
-            .text(x, 270, up ? "↑" : "↓", {
+            .text(x, 270 + ((x / 180) % 2) * 75, up ? "↑" : "↓", {
               fontFamily: "Arial, sans-serif",
-              fontSize: "44px",
+              fontSize: "52px",
               fontStyle: "bold",
               color: up ? "#62d8ff" : "#c79bff",
             })
             .setOrigin(0.5)
-            .setAlpha(0.22);
+            .setAlpha(0.1);
         }
         this.add
           .text(startX + width / 2, 96, up ? "WIND ↑" : "WIND ↓", {
@@ -559,6 +632,21 @@ export async function mountPulseRunner({
         .text(x, 92, label, { fontFamily: "Arial, sans-serif", fontSize: "14px", fontStyle: "bold", color: "#ffffff" })
         .setOrigin(0.5)
         .setAlpha(0.7);
+    }
+
+    private updateWindEffects(time: number) {
+      const minY = 22;
+      const range = 496;
+      for (const streak of this.windStreakRuntimes) {
+        const travel = (streak.phase + time * streak.speed) % range;
+        streak.object.y =
+          streak.direction === -1 ? minY + range - travel : minY + travel;
+        streak.object.x =
+          streak.baseX + Math.sin(time * 0.004 + streak.phase) * streak.wobble;
+        streak.object.setAlpha(
+          streak.baseAlpha * (0.72 + Math.sin(time * 0.009 + streak.phase) * 0.22)
+        );
+      }
     }
 
     private createShipGate(gate: (typeof SHIP_GATES)[number]) {
