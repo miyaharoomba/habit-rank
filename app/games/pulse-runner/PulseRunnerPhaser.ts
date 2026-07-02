@@ -667,15 +667,31 @@ export async function mountPulseRunner({
           .setAlpha(0.82);
       }
 
+      for (const label of [
+        { beat: 12, y: 350, text: "BEAT BLOCKS", color: "#7fffe9" },
+        { beat: 63, y: 350, text: "CRUMBLE RUN", color: "#ffc37a" },
+        { beat: 116, y: 330, text: "MINI TUNNEL", color: "#ffe090" },
+        { beat: 162, y: 360, text: "CRUMBLE RUN", color: "#ffc37a" },
+      ]) {
+        this.add
+          .text(beatX(label.beat), label.y, label.text, {
+            fontFamily: "Arial, sans-serif",
+            fontSize: "15px",
+            fontStyle: "bold",
+            color: label.color,
+          })
+          .setOrigin(0.5)
+          .setAlpha(0.82);
+      }
       this.add
-        .text(beatX(162), 360, "CRUMBLE RUN", {
+        .text(beatX(17.6), 92, "HOLD THE RINGS", {
           fontFamily: "Arial, sans-serif",
           fontSize: "15px",
           fontStyle: "bold",
-          color: "#ffc37a",
+          color: "#ffe790",
         })
         .setOrigin(0.5)
-        .setAlpha(0.82);
+        .setAlpha(0.85);
       this.add
         .text(beatX(170), 92, "HOLD THE RINGS", {
           fontFamily: "Arial, sans-serif",
@@ -887,15 +903,17 @@ export async function mountPulseRunner({
         this.createPortal(beatX(section.startBeat), 0xffd166, "MINI");
         this.createPortal(beatX(section.endBeat), 0x62d8ff, "NORMAL");
       }
-      this.add
-        .text(beatX(DASH_RINGS[0].beat), 330, "HOLD TO DASH", {
-          fontFamily: "Arial, sans-serif",
-          fontSize: "13px",
-          fontStyle: "bold",
-          color: "#9de9ff",
-        })
-        .setOrigin(0.5)
-        .setAlpha(0.85);
+      for (const ring of DASH_RINGS) {
+        this.add
+          .text(beatX(ring.beat), 330, "HOLD TO DASH", {
+            fontFamily: "Arial, sans-serif",
+            fontSize: "13px",
+            fontStyle: "bold",
+            color: "#9de9ff",
+          })
+          .setOrigin(0.5)
+          .setAlpha(0.85);
+      }
       this.createPortal(LEVEL_END_X, 0x7bf1a8, "GOAL");
     }
 

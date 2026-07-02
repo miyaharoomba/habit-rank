@@ -86,6 +86,10 @@ test("mini cube and segmented-floor boundaries are stable", () => {
   }
   assert.equal(pulseUsesSegmentedFloorAtX(beatX(158) - 1), false);
   assert.equal(pulseUsesSegmentedFloorAtX(beatX(158)), true);
+  assert.equal(pulseUsesSegmentedFloorAtX(beatX(8)), true);
+  assert.equal(pulseUsesSegmentedFloorAtX(beatX(16)), false);
+  assert.equal(pulseUsesSegmentedFloorAtX(beatX(60)), true);
+  assert.equal(pulseUsesSegmentedFloorAtX(beatX(66)), false);
 });
 
 test("mode surfaces are restored correctly after every transformation", () => {
@@ -223,8 +227,9 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
   assert.ok(DASH_RINGS.length >= 1);
   assert.ok(BRANCH_PLATFORMS.length >= 3);
 
-  const firstTileStart = COLLAPSING_FLOORS[0].beat - COLLAPSING_FLOORS[0].widthBeats / 2;
-  const lastTile = COLLAPSING_FLOORS.at(-1);
+  const finaleTiles = COLLAPSING_FLOORS.filter((tile) => tile.beat >= 158);
+  const firstTileStart = finaleTiles[0].beat - finaleTiles[0].widthBeats / 2;
+  const lastTile = finaleTiles.at(-1);
   const lastTileEnd = lastTile.beat + lastTile.widthBeats / 2;
   assert.equal(firstTileStart, 158);
   assert.equal(lastTileEnd, 166);
@@ -254,7 +259,7 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
 
   assert.ok(DASH_RINGS.every((ring) => ring.speedMultiplier > 1));
 
-  const gapRings = AIR_JUMP_RINGS.filter((ring) => ring.beat < 174);
+  const gapRings = AIR_JUMP_RINGS.filter((ring) => ring.beat >= 166 && ring.beat < 174);
   for (let index = 1; index < gapRings.length; index += 1) {
     const previous = gapRings[index - 1];
     const current = gapRings[index];

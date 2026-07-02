@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v5";
+export const PULSE_GAME_VERSION = "pulse_runner_v6";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -63,10 +63,15 @@ export const PULSE_GRAVITY_SECTIONS = [
 ] as const;
 
 export const PULSE_MINI_SECTIONS = [
+  { startBeat: 112, endBeat: 120 },
   { startBeat: 190, endBeat: 204 },
 ] as const;
 
-export const SEGMENTED_FLOOR_START_BEAT = 158;
+export const SEGMENTED_FLOOR_SECTIONS = [
+  { startBeat: 8, endBeat: 16 },
+  { startBeat: 60, endBeat: 66 },
+  { startBeat: 158, endBeat: LEVEL_BEATS },
+] as const;
 
 export function beatX(beat: number) {
   return LEVEL_START_X + beat * PX_PER_BEAT;
@@ -95,7 +100,9 @@ export function pulseMiniAtX(x: number) {
 }
 
 export function pulseUsesSegmentedFloorAtX(x: number) {
-  return x >= beatX(SEGMENTED_FLOOR_START_BEAT);
+  return SEGMENTED_FLOOR_SECTIONS.some(
+    ({ startBeat, endBeat }) => x >= beatX(startBeat) && x < beatX(endBeat)
+  );
 }
 
 export function pulseDistanceFromProgress(progressPercent: number) {
@@ -137,12 +144,14 @@ export function pulseSurfaceState(
   };
 }
 
-export const COLLAPSING_FLOORS = Array.from({ length: 8 }, (_, index) => ({
-  beat: 158.5 + index,
-  widthBeats: 1,
-})) as readonly { beat: number; widthBeats: number }[];
+export const COLLAPSING_FLOORS = [
+  ...Array.from({ length: 6 }, (_, index) => ({ beat: 60.5 + index, widthBeats: 1 })),
+  ...Array.from({ length: 8 }, (_, index) => ({ beat: 158.5 + index, widthBeats: 1 })),
+] as readonly { beat: number; widthBeats: number }[];
 
 export const AIR_JUMP_RINGS = [
+  { beat: 17, y: 335, power: 1100 },
+  { beat: 18.25, y: 300, power: 1100 },
   { beat: 166.6, y: 335, power: 1350 },
   { beat: 168.05, y: 335, power: 1350 },
   { beat: 169.5, y: 335, power: 1350 },
@@ -153,12 +162,21 @@ export const AIR_JUMP_RINGS = [
   { beat: 208.2, y: 255, power: 920 },
 ] as const;
 
-export const BEAT_BLOCKS: readonly BeatBlock[] = Array.from(
-  { length: 8 },
-  (_, index) => ({ beat: 174.45 + index, widthBeats: 0.9, periodBeats: 2 })
-);
+export const BEAT_BLOCKS: readonly BeatBlock[] = [
+  ...Array.from(
+    { length: 8 },
+    (_, index) => ({ beat: 8.5 + index, widthBeats: 1, periodBeats: 2 })
+  ),
+  ...Array.from(
+    { length: 8 },
+    (_, index) => ({ beat: 174.45 + index, widthBeats: 0.9, periodBeats: 2 })
+  ),
+];
 
 export const CUBE_PRESS_GATES: readonly CubePressGate[] = [
+  { beat: 72, width: 52, closedBottomY: 440, openBottomY: 338, pulseBeats: 2 },
+  { beat: 74.5, width: 52, closedBottomY: 440, openBottomY: 332, pulseBeats: 2 },
+  { beat: 126, width: 54, closedBottomY: 440, openBottomY: 334, pulseBeats: 2 },
   { beat: 184, width: 52, closedBottomY: 440, openBottomY: 338, pulseBeats: 2 },
   { beat: 187, width: 56, closedBottomY: 440, openBottomY: 330, pulseBeats: 2 },
 ] as const;
@@ -172,11 +190,14 @@ export const SPECIAL_FLOOR_PLATFORMS = [
 ] as const;
 
 export const MINI_CEILING_OBSTACLES = [
+  { beat: 113.5, widthBeats: 2.2, bottomY: 399 },
+  { beat: 118, widthBeats: 2, bottomY: 399 },
   { beat: 192.5, widthBeats: 2.2, bottomY: 399 },
   { beat: 200.5, widthBeats: 2.4, bottomY: 399 },
 ] as const;
 
 export const DASH_RINGS = [
+  { beat: 122, y: 414, durationMs: 620, speedMultiplier: 1.65 },
   { beat: 196, y: 414, durationMs: 620, speedMultiplier: 1.65 },
 ] as const;
 
@@ -247,10 +268,8 @@ export function pulseWindAtBeat(courseBeat: number) {
 }
 
 export const CUBE_SPIKE_BEATS = [
-  4, 6, 8, 9, 12, 15, 18,
-  61, 64, 72, 73,
+  4, 6,
   97.7,
-  113, 120, 122, 125,
   218, 220, 222,
 ];
 
@@ -260,7 +279,6 @@ export const CUBE_PLATFORMS = [
   { beat: 22.4, widthBeats: 0.72, height: 126 },
   { beat: 23.35, widthBeats: 0.9, height: 164 },
   { beat: 27.75, widthBeats: 2.3, height: 188, bouncePadBeat: 26 },
-  { beat: 115.75, widthBeats: 2.3, height: 184, bouncePadBeat: 114 },
 ] as const;
 
 export const INVERTED_PLATFORMS = [
@@ -278,7 +296,6 @@ export const INVERTED_PLATFORMS = [
 export const BOUNCE_PADS = [
   { beat: 26, power: 1350 },
   { beat: 68, power: 1450 },
-  { beat: 114, power: 1350 },
 ] as const;
 
 export const INVERTED_BOUNCE_PADS = [
