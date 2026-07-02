@@ -14,15 +14,21 @@ import {
   LEVEL_BEATS,
   LEVEL_DISTANCE_METERS,
   pulseDistanceFromProgress,
+  pulseGateGapAtBeat,
   pulseGravityAtX,
   pulseModeAtX,
+  pulseMovingHazardYAtBeat,
   pulseSurfaceState,
   PULSE_GRAVITY_SECTIONS,
   PULSE_SHIP_SECTIONS,
   PX_PER_BEAT,
   SHIP_HAZARDS,
+  SHIP_GATES,
+  SHIP_MOVING_HAZARDS,
+  SHIP_WIND_ZONES,
   SPIKE_BODY_WIDTH,
   SPIKE_HEIGHT,
+  pulseWindAtBeat,
 } from "../app/games/pulse-runner/level.ts";
 
 test("each rocket section has stable boundaries and does not re-enter after its portal", () => {
@@ -84,6 +90,12 @@ test("course objects stay inside their intended mode sections", () => {
     PULSE_SHIP_SECTIONS.some(({ startBeat, endBeat }) => beat >= startBeat && beat < endBeat);
 
   for (const hazard of SHIP_HAZARDS) assert.equal(isShipBeat(hazard.beat), true);
+  for (const gate of SHIP_GATES) assert.equal(isShipBeat(gate.beat), true);
+  for (const hazard of SHIP_MOVING_HAZARDS) assert.equal(isShipBeat(hazard.beat), true);
+  for (const zone of SHIP_WIND_ZONES) {
+    assert.equal(isShipBeat(zone.startBeat), true);
+    assert.equal(isShipBeat(zone.endBeat - 0.01), true);
+  }
   for (const beat of CUBE_SPIKE_BEATS) assert.equal(isShipBeat(beat), false);
   for (const platform of CUBE_PLATFORMS) assert.equal(isShipBeat(platform.beat), false);
   for (const pad of BOUNCE_PADS) assert.equal(isShipBeat(pad.beat), false);
@@ -99,6 +111,110 @@ test("course objects stay inside their intended mode sections", () => {
     ...BOUNCE_PADS.map(({ beat }) => beat)
   );
   assert.ok(furthestBeat < LEVEL_BEATS);
+});
+
+test("beat gates are widest exactly when the rocket reaches them", () => {
+  for (const gate of SHIP_GATES) {
+    assert.equal(pulseGateGapAtBeat(gate, gate.beat), gate.openGap);
+    assert.equal(
+      pulseGateGapAtBeat(gate, gate.beat + gate.pulseBeats / 2),
+      gate.closedGap
+    );
+    for (let offset = -4; offset <= 4; offset += 0.125) {
+      const gap = pulseGateGapAtBeat(gate, gate.beat + offset);
+      assert.ok(gap >= gate.closedGap && gap <= gate.openGap);
+    }
+  }
+});
+
+test("moving rocket hazards stay on-screen and follow deterministic beat phases", () => {
+  for (const hazard of SHIP_MOVING_HAZARDS) {
+    const arrivalY = pulseMovingHazardYAtBeat(hazard, hazard.beat);
+    const repeatedY = pulseMovingHazardYAtBeat(
+      hazard,
+      hazard.beat + hazard.periodBeats
+    );
+    assert.ok(Math.abs(arrivalY - repeatedY) < 0.001);
+    for (let offset = 0; offset <= hazard.periodBeats; offset += 0.1) {
+      const y = pulseMovingHazardYAtBeat(hazard, hazard.beat + offset);
+      assert.ok(y - hazard.height / 2 >= 0);
+      assert.ok(y + hazard.height / 2 <= 540);
+    }
+  }
+});
+
+test("rocket wind applies only inside each marked zone", () => {
+  for (const zone of SHIP_WIND_ZONES) {
+    assert.equal(pulseWindAtBeat(zone.startBeat - 0.001), 0);
+    assert.equal(pulseWindAtBeat(zone.startBeat), zone.forceY);
+    assert.equal(pulseWindAtBeat((zone.startBeat + zone.endBeat) / 2), zone.forceY);
+    assert.equal(pulseWindAtBeat(zone.endBeat), 0);
+  }
+});
+
+test("both rocket sections have a traversable one-button flight path", () => {
+  const shipWidth = 52;
+  const shipHeight = 28;
+  const stepsPerBeat = 16;
+  const deltaSeconds = BEAT_MS / 1000 / stepsPerBeat;
+
+  const collidesAt = (courseBeat, y) => {
+    if (y - shipHeight / 2 < 12 || y + shipHeight / 2 > 528) return true;
+
+    for (const hazard of SHIP_HAZARDS) {
+      const horizontalDistance = Math.abs(courseBeat - hazard.beat) * PX_PER_BEAT;
+      if (horizontalDistance > (shipWidth + hazard.width) / 2) continue;
+      if (hazard.side === "top" && y - shipHeight / 2 < hazard.height) return true;
+      if (hazard.side === "bottom" && y + shipHeight / 2 > 540 - hazard.height) return true;
+    }
+
+    for (const gate of SHIP_GATES) {
+      const horizontalDistance = Math.abs(courseBeat - gate.beat) * PX_PER_BEAT;
+      if (horizontalDistance > (shipWidth + 44) / 2) continue;
+      const gap = pulseGateGapAtBeat(gate, courseBeat);
+      if (
+        y - shipHeight / 2 < gate.gapY - gap / 2 ||
+        y + shipHeight / 2 > gate.gapY + gap / 2
+      ) return true;
+    }
+
+    for (const hazard of SHIP_MOVING_HAZARDS) {
+      const horizontalDistance = Math.abs(courseBeat - hazard.beat) * PX_PER_BEAT;
+      if (horizontalDistance > (shipWidth + hazard.width) / 2) continue;
+      const hazardY = pulseMovingHazardYAtBeat(hazard, courseBeat);
+      if (Math.abs(y - hazardY) < (shipHeight + hazard.height) / 2) return true;
+    }
+
+    return false;
+  };
+
+  for (const section of PULSE_SHIP_SECTIONS) {
+    let states = new Map([["300:-80", { y: 300, velocityY: -80 }]]);
+    const totalSteps = Math.ceil((section.endBeat - section.startBeat) * stepsPerBeat);
+
+    for (let step = 1; step <= totalSteps; step += 1) {
+      const courseBeat = section.startBeat + step / stepsPerBeat;
+      const nextStates = new Map();
+      for (const state of states.values()) {
+        for (const pressed of [false, true]) {
+          const acceleration = (pressed ? -1450 : 1050) + pulseWindAtBeat(courseBeat);
+          const velocityY = Math.max(
+            -430,
+            Math.min(430, state.velocityY + acceleration * deltaSeconds)
+          );
+          const y = state.y + velocityY * deltaSeconds;
+          if (collidesAt(courseBeat, y)) continue;
+          const key = `${Math.round(y / 5)}:${Math.round(velocityY / 20)}`;
+          if (!nextStates.has(key)) nextStates.set(key, { y, velocityY });
+        }
+      }
+      states = nextStates;
+      assert.ok(
+        states.size > 0,
+        `rocket section ${section.startBeat}-${section.endBeat} becomes impossible near beat ${courseBeat}`
+      );
+    }
+  }
 });
 
 test("safe bounce pads clear the leading wall and land on their high platform", () => {

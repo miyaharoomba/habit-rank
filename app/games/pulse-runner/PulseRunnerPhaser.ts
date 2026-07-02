@@ -16,14 +16,21 @@ import {
   LEVEL_START_X,
   PULSE_COINS,
   pulseDistanceFromProgress,
+  pulseGateGapAtBeat,
   pulseGravityAtX,
   PULSE_GRAVITY_SECTIONS,
   pulseModeAtX,
+  pulseMovingHazardYAtBeat,
   PULSE_SHIP_SECTIONS,
+  PX_PER_BEAT,
   RUN_SPEED,
+  SHIP_GATES,
   SHIP_HAZARDS,
+  SHIP_MOVING_HAZARDS,
+  SHIP_WIND_ZONES,
   SPIKE_BODY_WIDTH,
   pulseSurfaceState,
+  pulseWindAtBeat,
   type PulseGravity,
   type PulseInput,
   type PulseMode,
@@ -48,6 +55,15 @@ export type PulseRunnerCallbacks = {
 type PhaserGame = import("phaser").Game;
 type ArcadeSprite = import("phaser").Types.Physics.Arcade.SpriteWithDynamicBody;
 type ArcadeBody = import("phaser").Physics.Arcade.Body;
+type GateRuntime = {
+  gate: (typeof SHIP_GATES)[number];
+  top: import("phaser").GameObjects.Rectangle;
+  bottom: import("phaser").GameObjects.Rectangle;
+};
+type MovingHazardRuntime = {
+  hazard: (typeof SHIP_MOVING_HAZARDS)[number];
+  object: import("phaser").GameObjects.Rectangle;
+};
 
 function clampProgress(x: number) {
   return Math.max(0, Math.min(100, ((x - LEVEL_START_X) / (LEVEL_END_X - LEVEL_START_X)) * 100));
@@ -71,6 +87,9 @@ export async function mountPulseRunner({
     private platforms!: import("phaser").Physics.Arcade.StaticGroup;
     private bouncePads!: import("phaser").Physics.Arcade.StaticGroup;
     private coinsGroup!: import("phaser").Physics.Arcade.StaticGroup;
+    private movingHazards!: import("phaser").Physics.Arcade.Group;
+    private gateRuntimes: GateRuntime[] = [];
+    private movingHazardRuntimes: MovingHazardRuntime[] = [];
     private mode: PulseMode = "cube";
     private gravityDirection: PulseGravity = 1;
     private pressed = false;
@@ -98,6 +117,7 @@ export async function mountPulseRunner({
       this.platforms = this.physics.add.staticGroup();
       this.bouncePads = this.physics.add.staticGroup();
       this.coinsGroup = this.physics.add.staticGroup();
+      this.movingHazards = this.physics.add.group({ allowGravity: false, immovable: true });
       this.createSurfaces();
       this.createLevel();
       this.createPlayer();
@@ -116,6 +136,7 @@ export async function mountPulseRunner({
         if (!landedOnTop) this.finish(false);
       });
       this.physics.add.collider(this.player, this.hazards, () => this.finish(false));
+      this.physics.add.collider(this.player, this.movingHazards, () => this.finish(false));
       this.physics.add.overlap(this.player, this.bouncePads, (_player, object) => {
         const pad = object as import("phaser").GameObjects.Rectangle;
         if (
@@ -171,7 +192,9 @@ export async function mountPulseRunner({
           this.player.angle += 260 * this.gravityDirection * (this.game.loop.delta / 1000);
         }
       } else {
-        body.setAccelerationY(this.pressed ? -1450 : 1050);
+        const courseBeat = (this.player.x - LEVEL_START_X) / PX_PER_BEAT;
+        this.updateShipMechanics(courseBeat);
+        body.setAccelerationY((this.pressed ? -1450 : 1050) + pulseWindAtBeat(courseBeat));
         body.setMaxVelocity(RUN_SPEED, 430);
         this.player.setAngle(Math.max(-24, Math.min(28, body.velocity.y * 0.07)));
         if (this.pressed && this.time.now % 80 < 20) {
@@ -342,7 +365,7 @@ export async function mountPulseRunner({
       }
 
       for (const item of CUBE_PLATFORMS) {
-        const width = item.widthBeats * 190;
+        const width = item.widthBeats * PX_PER_BEAT;
         const platform = this.add.rectangle(
           beatX(item.beat),
           FLOOR_Y - item.height / 2,
@@ -385,6 +408,67 @@ export async function mountPulseRunner({
         this.hazards.add(rectangle);
       }
 
+      for (const gate of SHIP_GATES) this.createShipGate(gate);
+
+      for (const hazard of SHIP_MOVING_HAZARDS) {
+        const x = beatX(hazard.beat);
+        const guide = this.add.rectangle(x, 270, 4, 410, 0xffd166, 0.16).setDepth(-2);
+        guide.setStrokeStyle(1, 0xffd166, 0.24);
+        this.add
+          .text(x, 72, "↕ MOVING", {
+            fontFamily: "Arial, sans-serif",
+            fontSize: "12px",
+            fontStyle: "bold",
+            color: "#ffd166",
+          })
+          .setOrigin(0.5)
+          .setAlpha(0.72);
+        const object = this.add.rectangle(
+          x,
+          pulseMovingHazardYAtBeat(hazard, 0),
+          hazard.width,
+          hazard.height,
+          0xffb84d,
+          0.94
+        );
+        object.setStrokeStyle(4, 0xffffff, 0.62).setDepth(3);
+        this.physics.add.existing(object);
+        const movingBody = object.body as ArcadeBody;
+        movingBody.setAllowGravity(false).setImmovable(true).setSize(hazard.width, hazard.height);
+        this.movingHazards.add(object);
+        this.movingHazardRuntimes.push({ hazard, object });
+      }
+
+      for (const zone of SHIP_WIND_ZONES) {
+        const startX = beatX(zone.startBeat);
+        const width = (zone.endBeat - zone.startBeat) * PX_PER_BEAT;
+        const up = zone.forceY < 0;
+        this.add
+          .rectangle(startX + width / 2, 270, width, 480, up ? 0x62d8ff : 0xc79bff, 0.075)
+          .setStrokeStyle(3, up ? 0x62d8ff : 0xc79bff, 0.35)
+          .setDepth(-1);
+        for (let x = startX + 55; x < startX + width; x += 95) {
+          this.add
+            .text(x, 270, up ? "↑" : "↓", {
+              fontFamily: "Arial, sans-serif",
+              fontSize: "44px",
+              fontStyle: "bold",
+              color: up ? "#62d8ff" : "#c79bff",
+            })
+            .setOrigin(0.5)
+            .setAlpha(0.22);
+        }
+        this.add
+          .text(startX + width / 2, 96, up ? "WIND ↑" : "WIND ↓", {
+            fontFamily: "Arial, sans-serif",
+            fontSize: "15px",
+            fontStyle: "bold",
+            color: up ? "#8ce6ff" : "#d9b8ff",
+          })
+          .setOrigin(0.5)
+          .setAlpha(0.8);
+      }
+
       for (const item of PULSE_COINS) {
         const coin = this.coinsGroup.create(beatX(item.beat), item.y, "pulse-coin") as import("phaser").Physics.Arcade.Image;
         coin.refreshBody();
@@ -409,6 +493,45 @@ export async function mountPulseRunner({
         .text(x, 92, label, { fontFamily: "Arial, sans-serif", fontSize: "14px", fontStyle: "bold", color: "#ffffff" })
         .setOrigin(0.5)
         .setAlpha(0.7);
+    }
+
+    private createShipGate(gate: (typeof SHIP_GATES)[number]) {
+      const x = beatX(gate.beat);
+      const segmentHeight = 360;
+      const top = this.add.rectangle(x, 0, 44, segmentHeight, 0x55e6d8, 0.92);
+      const bottom = this.add.rectangle(x, 540, 44, segmentHeight, 0x55e6d8, 0.92);
+      for (const segment of [top, bottom]) {
+        segment.setStrokeStyle(4, 0xffffff, 0.65).setDepth(3);
+        this.physics.add.existing(segment);
+        const gateBody = segment.body as ArcadeBody;
+        gateBody.setAllowGravity(false).setImmovable(true).setSize(44, segmentHeight);
+        this.movingHazards.add(segment);
+      }
+      this.add
+        .text(x, 72, "BEAT GATE", {
+          fontFamily: "Arial, sans-serif",
+          fontSize: "12px",
+          fontStyle: "bold",
+          color: "#7fffe9",
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.78);
+      this.gateRuntimes.push({ gate, top, bottom });
+    }
+
+    private updateShipMechanics(courseBeat: number) {
+      const segmentHeight = 360;
+      for (const { gate, top, bottom } of this.gateRuntimes) {
+        const gap = pulseGateGapAtBeat(gate, courseBeat);
+        const topY = gate.gapY - gap / 2 - segmentHeight / 2;
+        const bottomY = gate.gapY + gap / 2 + segmentHeight / 2;
+        (top.body as ArcadeBody).reset(top.x, topY);
+        (bottom.body as ArcadeBody).reset(bottom.x, bottomY);
+      }
+      for (const { hazard, object } of this.movingHazardRuntimes) {
+        const y = pulseMovingHazardYAtBeat(hazard, courseBeat);
+        (object.body as ArcadeBody).reset(object.x, y);
+      }
     }
 
     private createPlayer() {
