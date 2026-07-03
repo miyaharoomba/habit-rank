@@ -220,7 +220,7 @@ test("course objects stay inside their intended mode sections", () => {
 });
 
 test("normal finale contains every new gimmick with deterministic timing", () => {
-  assert.ok(COLLAPSING_FLOORS.length >= 8);
+  assert.ok(COLLAPSING_FLOORS.length >= 7);
   assert.ok(AIR_JUMP_RINGS.length >= 6);
   assert.ok(BEAT_BLOCKS.length >= 8);
   assert.ok(CUBE_PRESS_GATES.length >= 2);
@@ -233,7 +233,19 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
   const lastTile = finaleTiles.at(-1);
   const lastTileEnd = lastTile.beat + lastTile.widthBeats / 2;
   assert.equal(firstTileStart, 158);
-  assert.equal(lastTileEnd, 166);
+  assert.equal(lastTileEnd, 165);
+  const stableLaunchFloor = SPECIAL_FLOOR_PLATFORMS.find(
+    (platform) => platform.beat === 165.5
+  );
+  assert.ok(stableLaunchFloor);
+  assert.equal(
+    stableLaunchFloor.beat - stableLaunchFloor.widthBeats / 2,
+    lastTileEnd
+  );
+  assert.equal(
+    stableLaunchFloor.beat + stableLaunchFloor.widthBeats / 2,
+    166
+  );
 
   for (const block of BEAT_BLOCKS) {
     assert.equal(pulseBeatBlockActive(block, block.beat), true);
@@ -276,6 +288,21 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
 test("finale launch pad and air rings form one continuous reachable trajectory", () => {
   const entryPad = BOUNCE_PADS.find((pad) => pad.beat === 165.4);
   assert.ok(entryPad);
+  const stableLaunchFloor = SPECIAL_FLOOR_PLATFORMS.find(
+    (platform) =>
+      entryPad.beat >= platform.beat - platform.widthBeats / 2 &&
+      entryPad.beat <= platform.beat + platform.widthBeats / 2
+  );
+  assert.ok(stableLaunchFloor, "entry pad must sit on a permanent floor");
+  assert.equal(
+    COLLAPSING_FLOORS.some(
+      (tile) =>
+        entryPad.beat >= tile.beat - tile.widthBeats / 2 &&
+        entryPad.beat <= tile.beat + tile.widthBeats / 2
+    ),
+    false,
+    "entry pad must not overlap a collapsing tile"
+  );
   const rings = AIR_JUMP_RINGS.filter((ring) => ring.beat >= 166 && ring.beat < 174);
   assert.ok(rings.length >= 5);
 

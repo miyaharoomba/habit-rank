@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v7";
+export const PULSE_GAME_VERSION = "pulse_runner_v8";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -146,7 +146,7 @@ export function pulseSurfaceState(
 
 export const COLLAPSING_FLOORS = [
   ...Array.from({ length: 6 }, (_, index) => ({ beat: 60.5 + index, widthBeats: 1 })),
-  ...Array.from({ length: 8 }, (_, index) => ({ beat: 158.5 + index, widthBeats: 1 })),
+  ...Array.from({ length: 7 }, (_, index) => ({ beat: 158.5 + index, widthBeats: 1 })),
 ] as readonly { beat: number; widthBeats: number }[];
 
 export const AIR_JUMP_RINGS = [
@@ -181,6 +181,7 @@ export const CUBE_PRESS_GATES: readonly CubePressGate[] = [
 ] as const;
 
 export const SPECIAL_FLOOR_PLATFORMS = [
+  { beat: 165.5, widthBeats: 1 },
   { beat: 186, widthBeats: 8 },
   { beat: 197, widthBeats: 14 },
   { beat: 205.5, widthBeats: 3 },
