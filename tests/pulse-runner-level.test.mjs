@@ -17,6 +17,7 @@ import {
   CUBE_SPIKE_BEATS,
   CUBE_PRESS_GATES,
   DASH_RINGS,
+  FLOOR_Y,
   INVERTED_BOUNCE_PADS,
   INVERTED_PLATFORMS,
   LEVEL_BEATS,
@@ -270,6 +271,53 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
       "held ring chain must reach the next ring before falling"
     );
   }
+});
+
+test("finale launch pad and air rings form one continuous reachable trajectory", () => {
+  const entryPad = BOUNCE_PADS.find((pad) => pad.beat === 165.4);
+  assert.ok(entryPad);
+  const rings = AIR_JUMP_RINGS.filter((ring) => ring.beat >= 166 && ring.beat < 174);
+  assert.ok(rings.length >= 5);
+
+  const beatSeconds = BEAT_MS / 1000;
+  const triggerRadius = (96 + CUBE_BODY_SIZE) / 2;
+  const contactOffsetBeats =
+    (BOUNCE_PAD_WIDTH / 2 + CUBE_BODY_SIZE / 2) / PX_PER_BEAT;
+  const launchBeat = entryPad.beat - contactOffsetBeats;
+  const floorCenterY = FLOOR_Y - CUBE_BODY_SIZE / 2;
+  const secondsToFirstRing = (rings[0].beat - launchBeat) * beatSeconds;
+  const firstRingY =
+    floorCenterY -
+    entryPad.power * secondsToFirstRing +
+    (CUBE_GRAVITY / 2) * secondsToFirstRing ** 2;
+  assert.ok(
+    Math.abs(firstRingY - rings[0].y) <= triggerRadius,
+    "entry pad must intersect the first ring"
+  );
+
+  for (let index = 1; index < rings.length; index += 1) {
+    const previous = rings[index - 1];
+    const current = rings[index];
+    const seconds = (current.beat - previous.beat) * beatSeconds;
+    const arrivalY =
+      previous.y - previous.power * seconds + (CUBE_GRAVITY / 2) * seconds ** 2;
+    assert.ok(
+      Math.abs(arrivalY - current.y) <= triggerRadius,
+      `ring at beat ${previous.beat} must reach ring ${current.beat}`
+    );
+  }
+
+  const lastRing = rings.at(-1);
+  const firstLandingBlock = BEAT_BLOCKS.find((block) => block.beat >= 174);
+  assert.ok(firstLandingBlock);
+  const fallDistance = floorCenterY - lastRing.y;
+  const landingSeconds =
+    (lastRing.power +
+      Math.sqrt(lastRing.power ** 2 + 2 * CUBE_GRAVITY * fallDistance)) /
+    CUBE_GRAVITY;
+  const landingBeat = lastRing.beat + landingSeconds / beatSeconds;
+  assert.ok(landingBeat >= firstLandingBlock.beat - firstLandingBlock.widthBeats / 2);
+  assert.ok(landingBeat <= firstLandingBlock.beat + firstLandingBlock.widthBeats / 2);
 });
 
 test("beat gates are widest exactly when the rocket reaches them", () => {

@@ -621,7 +621,9 @@ export async function mountPulseRunner({
           "pulse-jump-ring"
         ) as import("phaser").Physics.Arcade.Image;
         ring.setData("power", item.power).setData("used", false).refreshBody();
-        (ring.body as import("phaser").Physics.Arcade.StaticBody).setSize(54, 54).setOffset(3, 3);
+        (ring.body as import("phaser").Physics.Arcade.StaticBody)
+          .setSize(96, 96)
+          .setOffset(-18, -18);
         this.tweens.add({ targets: ring, scale: 1.12, alpha: 0.72, duration: 430, yoyo: true, repeat: -1 });
       }
 

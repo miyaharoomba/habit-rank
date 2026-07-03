@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v6";
+export const PULSE_GAME_VERSION = "pulse_runner_v7";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -152,12 +152,11 @@ export const COLLAPSING_FLOORS = [
 export const AIR_JUMP_RINGS = [
   { beat: 17, y: 335, power: 1100 },
   { beat: 18.25, y: 300, power: 1100 },
-  { beat: 166.6, y: 335, power: 1350 },
-  { beat: 168.05, y: 335, power: 1350 },
-  { beat: 169.5, y: 335, power: 1350 },
-  { beat: 170.95, y: 335, power: 1350 },
-  { beat: 172.4, y: 335, power: 1350 },
-  { beat: 173.85, y: 335, power: 1350 },
+  { beat: 166.45, y: 330, power: 1450 },
+  { beat: 168, y: 330, power: 1450 },
+  { beat: 169.55, y: 330, power: 1450 },
+  { beat: 171.1, y: 330, power: 1450 },
+  { beat: 172.65, y: 330, power: 1450 },
   { beat: 204.7, y: 340, power: 1100 },
   { beat: 208.2, y: 255, power: 920 },
 ] as const;
@@ -296,6 +295,7 @@ export const INVERTED_PLATFORMS = [
 export const BOUNCE_PADS = [
   { beat: 26, power: 1350 },
   { beat: 68, power: 1450 },
+  { beat: 165.4, power: 1450 },
 ] as const;
 
 export const INVERTED_BOUNCE_PADS = [
