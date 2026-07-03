@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v8";
+export const PULSE_GAME_VERSION = "pulse_runner_v9";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -8,6 +8,7 @@ export const CUBE_JUMP_SPEED = 900;
 export const CUBE_BODY_SIZE = 42;
 export const CUBE_MAX_VERTICAL_SPEED = 2000;
 export const BOUNCE_PAD_WIDTH = 76;
+export const AIR_RING_BODY_SIZE = 132;
 export const SPIKE_BODY_WIDTH = 34;
 export const SPIKE_HEIGHT = 50;
 export const LEVEL_BEATS = 224;
@@ -152,11 +153,12 @@ export const COLLAPSING_FLOORS = [
 export const AIR_JUMP_RINGS = [
   { beat: 17, y: 335, power: 1100 },
   { beat: 18.25, y: 300, power: 1100 },
-  { beat: 166.5, y: 380, power: 1500 },
-  { beat: 168.16, y: 380, power: 1500 },
-  { beat: 169.82, y: 380, power: 1500 },
-  { beat: 171.48, y: 380, power: 1500 },
-  { beat: 173.14, y: 380, power: 1500 },
+  { beat: 166.4, y: 350, power: 1215 },
+  { beat: 167.75, y: 350, power: 1215 },
+  { beat: 169.1, y: 350, power: 1215 },
+  { beat: 170.45, y: 350, power: 1215 },
+  { beat: 171.8, y: 350, power: 1215 },
+  { beat: 173.15, y: 350, power: 1215 },
   { beat: 204.7, y: 340, power: 1100 },
   { beat: 208.2, y: 255, power: 920 },
 ] as const;

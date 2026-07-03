@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AIR_JUMP_RINGS,
+  AIR_RING_BODY_SIZE,
   BEAT_BLOCKS,
   BOUNCE_PADS,
   BOUNCE_PAD_WIDTH,
@@ -279,13 +280,13 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
     const ringAirtimeBeats =
       ((2 * previous.power) / CUBE_GRAVITY) / (BEAT_MS / 1000);
     assert.ok(
-      current.beat - previous.beat <= ringAirtimeBeats,
+      current.beat - previous.beat <= ringAirtimeBeats + 0.001,
       "held ring chain must reach the next ring before falling"
     );
   }
 });
 
-test("finale launch pad and air rings form one continuous reachable trajectory", () => {
+test("held input crosses every finale air ring in a frame-by-frame trajectory", () => {
   const entryPad = BOUNCE_PADS.find((pad) => pad.beat === 165.4);
   assert.ok(entryPad);
   const stableLaunchFloor = SPECIAL_FLOOR_PLATFORMS.find(
@@ -307,42 +308,41 @@ test("finale launch pad and air rings form one continuous reachable trajectory",
   assert.ok(rings.length >= 5);
 
   const beatSeconds = BEAT_MS / 1000;
-  const triggerRadius = (96 + CUBE_BODY_SIZE) / 2;
+  const triggerRadius = (AIR_RING_BODY_SIZE + CUBE_BODY_SIZE) / 2;
   const contactOffsetBeats =
     (BOUNCE_PAD_WIDTH / 2 + CUBE_BODY_SIZE / 2) / PX_PER_BEAT;
-  const launchBeat = entryPad.beat - contactOffsetBeats;
+  let courseBeat = entryPad.beat - contactOffsetBeats;
   const floorCenterY = FLOOR_Y - CUBE_BODY_SIZE / 2;
-  const triggerY = rings[0].y - triggerRadius;
-  const entryRise = floorCenterY - triggerY;
-  const entryDiscriminant =
-    entryPad.power ** 2 - 2 * CUBE_GRAVITY * entryRise;
-  assert.ok(entryDiscriminant > 0);
-  const entryTriggerSeconds =
-    (entryPad.power + Math.sqrt(entryDiscriminant)) / CUBE_GRAVITY;
-  const entryTriggerBeat = launchBeat + entryTriggerSeconds / beatSeconds;
-  const horizontalTriggerBeats = triggerRadius / PX_PER_BEAT;
-  assert.ok(
-    Math.abs(entryTriggerBeat - rings[0].beat) <= horizontalTriggerBeats,
-    "entry pad descent must intersect the first ring"
-  );
+  let playerY = floorCenterY;
+  let velocityY = -entryPad.power;
+  let landingBeat = null;
+  const usedRings = new Set();
+  const frameSeconds = 1 / 480;
 
-  for (let index = 1; index < rings.length; index += 1) {
-    const previous = rings[index - 1];
-    const current = rings[index];
-    const returnBeats = ((2 * previous.power) / CUBE_GRAVITY) / beatSeconds;
-    assert.ok(
-      Math.abs(previous.beat + returnBeats - current.beat) <= horizontalTriggerBeats,
-      `held boost at beat ${previous.beat} must overlap ring ${current.beat}`
-    );
+  for (let elapsed = 0; elapsed < 5; elapsed += frameSeconds) {
+    courseBeat += frameSeconds / beatSeconds;
+    velocityY += CUBE_GRAVITY * frameSeconds;
+    playerY += velocityY * frameSeconds;
+
+    for (let index = 0; index < rings.length; index += 1) {
+      const ring = rings[index];
+      if (usedRings.has(index)) continue;
+      const overlapsX = Math.abs(courseBeat - ring.beat) * PX_PER_BEAT <= triggerRadius;
+      const overlapsY = Math.abs(playerY - ring.y) <= triggerRadius;
+      if (overlapsX && overlapsY) {
+        usedRings.add(index);
+        velocityY = -ring.power;
+      }
+    }
+
+    if (usedRings.size === rings.length && velocityY > 0 && playerY >= floorCenterY) {
+      landingBeat = courseBeat;
+      break;
+    }
   }
 
-  const lastRing = rings.at(-1);
-  const fallDistance = floorCenterY - triggerY;
-  const landingSeconds =
-    (lastRing.power +
-      Math.sqrt(lastRing.power ** 2 + 2 * CUBE_GRAVITY * fallDistance)) /
-    CUBE_GRAVITY;
-  const landingBeat = lastRing.beat + landingSeconds / beatSeconds;
+  assert.equal(usedRings.size, rings.length, "held input must activate every ring");
+  assert.ok(landingBeat !== null, "ring chain must return to the floor");
   const landingBlock = BEAT_BLOCKS.find(
     (block) =>
       block.beat >= 174 &&

@@ -1,5 +1,6 @@
 import {
   AIR_JUMP_RINGS,
+  AIR_RING_BODY_SIZE,
   BEAT_MS,
   BEAT_BLOCKS,
   beatX,
@@ -647,8 +648,11 @@ export async function mountPulseRunner({
         ) as import("phaser").Physics.Arcade.Image;
         ring.setData("power", item.power).setData("used", false).refreshBody();
         (ring.body as import("phaser").Physics.Arcade.StaticBody)
-          .setSize(96, 96)
-          .setOffset(-18, -18);
+          .setSize(AIR_RING_BODY_SIZE, AIR_RING_BODY_SIZE)
+          .setOffset(
+            (60 - AIR_RING_BODY_SIZE) / 2,
+            (60 - AIR_RING_BODY_SIZE) / 2
+          );
         this.tweens.add({ targets: ring, scale: 1.12, alpha: 0.72, duration: 430, yoyo: true, repeat: -1 });
       }
 
