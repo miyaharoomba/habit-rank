@@ -152,11 +152,11 @@ export const COLLAPSING_FLOORS = [
 export const AIR_JUMP_RINGS = [
   { beat: 17, y: 335, power: 1100 },
   { beat: 18.25, y: 300, power: 1100 },
-  { beat: 166.45, y: 330, power: 1450 },
-  { beat: 168, y: 330, power: 1450 },
-  { beat: 169.55, y: 330, power: 1450 },
-  { beat: 171.1, y: 330, power: 1450 },
-  { beat: 172.65, y: 330, power: 1450 },
+  { beat: 166.5, y: 380, power: 1500 },
+  { beat: 168.16, y: 380, power: 1500 },
+  { beat: 169.82, y: 380, power: 1500 },
+  { beat: 171.48, y: 380, power: 1500 },
+  { beat: 173.14, y: 380, power: 1500 },
   { beat: 204.7, y: 340, power: 1100 },
   { beat: 208.2, y: 255, power: 920 },
 ] as const;
@@ -168,7 +168,7 @@ export const BEAT_BLOCKS: readonly BeatBlock[] = [
   ),
   ...Array.from(
     { length: 8 },
-    (_, index) => ({ beat: 174.45 + index, widthBeats: 0.9, periodBeats: 2 })
+    (_, index) => ({ beat: 174.5 + index, widthBeats: 1, periodBeats: 2 })
   ),
 ];
 

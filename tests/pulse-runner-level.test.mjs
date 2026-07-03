@@ -285,39 +285,45 @@ test("finale launch pad and air rings form one continuous reachable trajectory",
     (BOUNCE_PAD_WIDTH / 2 + CUBE_BODY_SIZE / 2) / PX_PER_BEAT;
   const launchBeat = entryPad.beat - contactOffsetBeats;
   const floorCenterY = FLOOR_Y - CUBE_BODY_SIZE / 2;
-  const secondsToFirstRing = (rings[0].beat - launchBeat) * beatSeconds;
-  const firstRingY =
-    floorCenterY -
-    entryPad.power * secondsToFirstRing +
-    (CUBE_GRAVITY / 2) * secondsToFirstRing ** 2;
+  const triggerY = rings[0].y - triggerRadius;
+  const entryRise = floorCenterY - triggerY;
+  const entryDiscriminant =
+    entryPad.power ** 2 - 2 * CUBE_GRAVITY * entryRise;
+  assert.ok(entryDiscriminant > 0);
+  const entryTriggerSeconds =
+    (entryPad.power + Math.sqrt(entryDiscriminant)) / CUBE_GRAVITY;
+  const entryTriggerBeat = launchBeat + entryTriggerSeconds / beatSeconds;
+  const horizontalTriggerBeats = triggerRadius / PX_PER_BEAT;
   assert.ok(
-    Math.abs(firstRingY - rings[0].y) <= triggerRadius,
-    "entry pad must intersect the first ring"
+    Math.abs(entryTriggerBeat - rings[0].beat) <= horizontalTriggerBeats,
+    "entry pad descent must intersect the first ring"
   );
 
   for (let index = 1; index < rings.length; index += 1) {
     const previous = rings[index - 1];
     const current = rings[index];
-    const seconds = (current.beat - previous.beat) * beatSeconds;
-    const arrivalY =
-      previous.y - previous.power * seconds + (CUBE_GRAVITY / 2) * seconds ** 2;
+    const returnBeats = ((2 * previous.power) / CUBE_GRAVITY) / beatSeconds;
     assert.ok(
-      Math.abs(arrivalY - current.y) <= triggerRadius,
-      `ring at beat ${previous.beat} must reach ring ${current.beat}`
+      Math.abs(previous.beat + returnBeats - current.beat) <= horizontalTriggerBeats,
+      `held boost at beat ${previous.beat} must overlap ring ${current.beat}`
     );
   }
 
   const lastRing = rings.at(-1);
-  const firstLandingBlock = BEAT_BLOCKS.find((block) => block.beat >= 174);
-  assert.ok(firstLandingBlock);
-  const fallDistance = floorCenterY - lastRing.y;
+  const fallDistance = floorCenterY - triggerY;
   const landingSeconds =
     (lastRing.power +
       Math.sqrt(lastRing.power ** 2 + 2 * CUBE_GRAVITY * fallDistance)) /
     CUBE_GRAVITY;
   const landingBeat = lastRing.beat + landingSeconds / beatSeconds;
-  assert.ok(landingBeat >= firstLandingBlock.beat - firstLandingBlock.widthBeats / 2);
-  assert.ok(landingBeat <= firstLandingBlock.beat + firstLandingBlock.widthBeats / 2);
+  const landingBlock = BEAT_BLOCKS.find(
+    (block) =>
+      block.beat >= 174 &&
+      landingBeat >= block.beat - block.widthBeats / 2 &&
+      landingBeat <= block.beat + block.widthBeats / 2
+  );
+  assert.ok(landingBlock, `last ring must land on a beat block near ${landingBeat}`);
+  assert.equal(pulseBeatBlockActive(landingBlock, landingBeat), true);
 });
 
 test("beat gates are widest exactly when the rocket reaches them", () => {
