@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Bug, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mountPulseRunner, type PulseRunSummary } from "./PulseRunnerPhaser";
 import {
@@ -35,9 +35,11 @@ type LockableScreenOrientation = ScreenOrientation & {
 export default function PulseRunnerGame({
   initialBestProgress,
   rewardedRunsToday,
+  canUseDebugMode,
 }: {
   initialBestProgress: number;
   rewardedRunsToday: number;
+  canUseDebugMode: boolean;
 }) {
   const router = useRouter();
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -65,6 +67,7 @@ export default function PulseRunnerGame({
   const [rewardedToday, setRewardedToday] = useState(rewardedRunsToday);
   const [result, setResult] = useState<FinishResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   const stopMusic = useCallback(() => {
     const audio = audioRef.current;
@@ -136,6 +139,28 @@ export default function PulseRunnerGame({
     [bestProgress, rewardedToday, router, stopMusic]
   );
 
+  const finishDebugRun = useCallback(
+    (summary: PulseRunSummary) => {
+      stopMusic();
+      setResult({
+        progressPercent: summary.progressPercent,
+        distanceMeters: summary.distanceMeters,
+        completed: summary.completed,
+        durationMs: summary.durationMs,
+        coins: summary.coins,
+        bestProgress,
+        rewardXp: 0,
+        rewardEligible: false,
+        rewardedRunsToday: rewardedToday,
+        levelBefore: 1,
+        levelAfter: 1,
+        unlocked: [],
+      });
+      setScreen("result");
+    },
+    [bestProgress, rewardedToday, stopMusic]
+  );
+
   const startGame = useCallback(async (autoBegin = false) => {
     if (
       needsLandscape ||
@@ -157,14 +182,18 @@ export default function PulseRunnerGame({
     setRunnerMode("cube");
 
     try {
-      const response = await fetch("/api/games/pulse-runner/start", { method: "POST" });
-      const payload = (await response.json().catch(() => null)) as
-        | { runId?: string; error?: string }
-        | null;
-      if (!response.ok || !payload?.runId) {
-        throw new Error(payload?.error || "ゲームを開始できませんでした。");
+      if (debugMode) {
+        runIdRef.current = null;
+      } else {
+        const response = await fetch("/api/games/pulse-runner/start", { method: "POST" });
+        const payload = (await response.json().catch(() => null)) as
+          | { runId?: string; error?: string }
+          | null;
+        if (!response.ok || !payload?.runId) {
+          throw new Error(payload?.error || "ゲームを開始できませんでした。");
+        }
+        runIdRef.current = payload.runId;
       }
-      runIdRef.current = payload.runId;
       if (startTokenRef.current !== token) return;
 
       controllerRef.current?.destroy();
@@ -172,6 +201,7 @@ export default function PulseRunnerGame({
 
       controllerRef.current = await mountPulseRunner({
         parent,
+        debugMode,
         callbacks: {
           onReady: () => {
             if (startTokenRef.current !== token) return;
@@ -184,7 +214,10 @@ export default function PulseRunnerGame({
           },
           onModeChange: (value) => setRunnerMode(value),
           onInteraction: ensureMusicPlaying,
-          onFinish: (summary) => void saveRun(summary),
+          onFinish: (summary) => {
+            if (debugMode) finishDebugRun(summary);
+            else void saveRun(summary);
+          },
         },
       });
     } catch (caught) {
@@ -192,7 +225,7 @@ export default function PulseRunnerGame({
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setScreen("idle");
     }
-  }, [ensureMusicPlaying, needsLandscape, saveRun, screen]);
+  }, [debugMode, ensureMusicPlaying, finishDebugRun, needsLandscape, saveRun, screen]);
 
   const beginGame = useCallback(() => {
     if (screen !== "ready" || needsLandscape) return;
@@ -349,6 +382,13 @@ export default function PulseRunnerGame({
           </div>
         </div>
 
+        {debugMode ? (
+          <div className="hidden shrink-0 items-center gap-2 rounded-lg border border-[#7bf1a8]/45 bg-[#07180f]/85 px-3 py-2 text-[11px] font-black text-[#7bf1a8] backdrop-blur sm:flex">
+            <Bug className="h-4 w-4" aria-hidden="true" />
+            DEBUG // GHOST
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={() => setMuted((value) => !value)}
@@ -367,11 +407,27 @@ export default function PulseRunnerGame({
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/65">
               変化するロングコースを駆け抜け、到達距離の自己ベストを伸ばそう。
             </p>
+            {canUseDebugMode ? (
+              <button
+                type="button"
+                onClick={() => setDebugMode((value) => !value)}
+                data-testid="pulse-debug-toggle"
+                aria-pressed={debugMode}
+                className={`mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-black transition ${
+                  debugMode
+                    ? "border-[#7bf1a8]/60 bg-[#7bf1a8]/15 text-[#9affbd]"
+                    : "border-white/20 bg-black/25 text-white/65 hover:bg-white/10"
+                }`}
+              >
+                <Bug className="h-4 w-4" aria-hidden="true" />
+                DEBUG MODE {debugMode ? "ON" : "OFF"}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void startGame()}
               data-testid="pulse-start"
-              className="mt-7 inline-flex h-14 w-full items-center justify-center rounded-lg bg-white px-6 text-base font-black text-[#090d18] transition hover:bg-white/90"
+              className={`${canUseDebugMode ? "mt-3" : "mt-7"} inline-flex h-14 w-full items-center justify-center rounded-lg bg-white px-6 text-base font-black text-[#090d18] transition hover:bg-white/90`}
             >
               RUN
             </button>
@@ -403,7 +459,9 @@ export default function PulseRunnerGame({
 
       {screen === "playing" ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 text-center text-xs font-bold text-white/50">
-          {runnerMode === "cube" ? "TAP / SPACE" : "HOLD TO FLY"}・ATTEMPT {attempts}
+          {debugMode
+            ? "DEBUG // COLLISION OFF // SCORE NOT SAVED"
+            : `${runnerMode === "cube" ? "TAP / SPACE" : "HOLD TO FLY"}・ATTEMPT ${attempts}`}
         </div>
       ) : null}
 
@@ -420,7 +478,7 @@ export default function PulseRunnerGame({
         <div className="absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-black/70 px-5 py-20 backdrop-blur-sm">
           <div className="w-full max-w-lg text-center">
             <div className="text-xs font-black uppercase text-white/50">
-              {result?.completed ? "LEVEL COMPLETE" : "RUN RESULT"}
+              {debugMode ? "DEBUG COMPLETE" : result?.completed ? "LEVEL COMPLETE" : "RUN RESULT"}
             </div>
             <div className="mt-1 text-6xl font-black tabular-nums">
               {result?.distanceMeters ?? pulseDistanceFromProgress(progress)}m

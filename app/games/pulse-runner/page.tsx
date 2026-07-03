@@ -100,6 +100,9 @@ export default async function PulseRunnerPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/sign-in");
 
+  const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
+  const canUseDebugMode = !adminError && Boolean(isAdmin);
+
   const dayStart = jstDayStartIso();
   const [weeklyResult, allResult, bestResult, rewardedResult] = await Promise.all([
     supabase
@@ -192,6 +195,7 @@ export default async function PulseRunnerPage() {
       <PulseRunnerGame
         initialBestProgress={Number(bestResult.data?.[0]?.progress_percent ?? 0)}
         rewardedRunsToday={rewardedResult.count ?? 0}
+        canUseDebugMode={canUseDebugMode}
       />
       <PulseLeaderboard
         daily={buildRanking({ runs: dailyRuns, ...shared })}

@@ -106,9 +106,11 @@ function clampProgress(x: number) {
 export async function mountPulseRunner({
   parent,
   callbacks,
+  debugMode = false,
 }: {
   parent: HTMLElement;
   callbacks: PulseRunnerCallbacks;
+  debugMode?: boolean;
 }) {
   const PhaserModule = await import("phaser");
   const Phaser = (PhaserModule.default ?? PhaserModule) as typeof PhaserModule;
@@ -145,6 +147,7 @@ export async function mountPulseRunner({
     private started = false;
     private orientationPaused = false;
     private orientationPausedAt = 0;
+    private debugGhostUntil = 0;
     private beatFlash!: import("phaser").GameObjects.Rectangle;
     private modeLabel!: import("phaser").GameObjects.Text;
 
@@ -180,7 +183,7 @@ export async function mountPulseRunner({
             ? playerBody.blocked.down && this.player.y < platform.y
             : playerBody.blocked.up && this.player.y > platform.y);
         if (!landedOnSurface) {
-          this.finish(false);
+          if (!debugMode) this.finish(false);
           return;
         }
         if (
@@ -200,9 +203,17 @@ export async function mountPulseRunner({
             });
           });
         }
-      });
-      this.physics.add.collider(this.player, this.hazards, () => this.finish(false));
-      this.physics.add.collider(this.player, this.movingHazards, () => this.finish(false));
+      }, debugMode ? (_player, object) => this.canDebugLandOn(object) : undefined);
+      if (debugMode) {
+        const ghostThrough = () => {
+          this.debugGhostUntil = this.time.now + 90;
+        };
+        this.physics.add.overlap(this.player, this.hazards, ghostThrough);
+        this.physics.add.overlap(this.player, this.movingHazards, ghostThrough);
+      } else {
+        this.physics.add.collider(this.player, this.hazards, () => this.finish(false));
+        this.physics.add.collider(this.player, this.movingHazards, () => this.finish(false));
+      }
       this.physics.add.overlap(this.player, this.bouncePads, (_player, object) => {
         const pad = object as import("phaser").GameObjects.Rectangle;
         if (
@@ -261,6 +272,7 @@ export async function mountPulseRunner({
     update(time: number) {
       if (!this.started || this.ended || this.orientationPaused || !this.player?.body) return;
       const body = this.player.body as ArcadeBody;
+      this.player.setAlpha(debugMode && time < this.debugGhostUntil ? 0.42 : 1);
       const courseBeat = (this.player.x - LEVEL_START_X) / PX_PER_BEAT;
       const horizontalSpeed =
         time < this.dashUntil ? RUN_SPEED * this.dashSpeedMultiplier : RUN_SPEED;
@@ -344,7 +356,20 @@ export async function mountPulseRunner({
         });
       }
 
-      if (this.player.y < 12 || this.player.y > 528) this.finish(false);
+      if (this.player.y < 12 || this.player.y > 528) {
+        if (debugMode) {
+          this.player.y =
+            this.mode === "ship"
+              ? 270
+              : this.gravityDirection === 1
+                ? FLOOR_Y - 72
+                : CEILING_Y + 72;
+          body.setVelocityY(0);
+          this.debugGhostUntil = time + 120;
+        } else {
+          this.finish(false);
+        }
+      }
       if (this.player.x >= LEVEL_END_X) this.finish(true);
 
       this.cameras.main.scrollX = Math.max(0, this.player.x - 190);
@@ -1111,6 +1136,20 @@ export async function mountPulseRunner({
       this.ceiling.setVisible(ceilingEnabled);
       (this.ground.body as import("phaser").Physics.Arcade.StaticBody).enable = groundEnabled;
       (this.ceiling.body as import("phaser").Physics.Arcade.StaticBody).enable = ceilingEnabled;
+    }
+
+    private canDebugLandOn(object: unknown) {
+      if (this.mode !== "cube") return false;
+      const platform = object as import("phaser").GameObjects.Rectangle;
+      const platformGravity = Number(platform.getData("gravity")) as PulseGravity;
+      if (platformGravity !== this.gravityDirection) return false;
+
+      const playerBody = this.player.body as ArcadeBody;
+      const platformBody = platform.body as import("phaser").Physics.Arcade.StaticBody;
+      const landingTolerance = 52;
+      return platformGravity === 1
+        ? playerBody.velocity.y >= 0 && playerBody.bottom <= platformBody.top + landingTolerance
+        : playerBody.velocity.y <= 0 && playerBody.top >= platformBody.bottom - landingTolerance;
     }
 
     private finish(completed: boolean) {
