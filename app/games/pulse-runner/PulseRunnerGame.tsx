@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Bug, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Bug, Rewind, RotateCcw, Smartphone, Trophy, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mountPulseRunner, type PulseRunSummary } from "./PulseRunnerPhaser";
 import {
   pulseDistanceFromProgress,
+  PULSE_DEBUG_REWIND_SECONDS,
+  PULSE_DEBUG_SPEEDS,
   pulseMusicSyncPlan,
   type PulseMode,
 } from "./level";
@@ -32,6 +34,8 @@ type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: "landscape") => Promise<void>;
 };
 
+type DebugSpeed = (typeof PULSE_DEBUG_SPEEDS)[number];
+
 export default function PulseRunnerGame({
   initialBestProgress,
   rewardedRunsToday,
@@ -47,6 +51,8 @@ export default function PulseRunnerGame({
   const controllerRef = useRef<{
     begin(): void;
     setPaused(paused: boolean): void;
+    setDebugSpeed(multiplier: number): void;
+    rewindDebug(seconds: number): void;
     destroy(): void;
   } | null>(null);
   const runIdRef = useRef<string | null>(null);
@@ -68,6 +74,7 @@ export default function PulseRunnerGame({
   const [result, setResult] = useState<FinishResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [debugMode, setDebugMode] = useState(false);
+  const [debugSpeed, setDebugSpeed] = useState<DebugSpeed>(1);
 
   const stopMusic = useCallback(() => {
     const audio = audioRef.current;
@@ -199,7 +206,7 @@ export default function PulseRunnerGame({
       controllerRef.current?.destroy();
       parent.replaceChildren();
 
-      controllerRef.current = await mountPulseRunner({
+      const controller = await mountPulseRunner({
         parent,
         debugMode,
         callbacks: {
@@ -220,12 +227,25 @@ export default function PulseRunnerGame({
           },
         },
       });
+      controllerRef.current = controller;
+      if (debugMode) controller.setDebugSpeed(debugSpeed);
     } catch (caught) {
       autoBeginNextRunRef.current = false;
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setScreen("idle");
     }
-  }, [debugMode, ensureMusicPlaying, finishDebugRun, needsLandscape, saveRun, screen]);
+  }, [debugMode, debugSpeed, ensureMusicPlaying, finishDebugRun, needsLandscape, saveRun, screen]);
+
+  const changeDebugSpeed = useCallback((speed: DebugSpeed) => {
+    setDebugSpeed(speed);
+    controllerRef.current?.setDebugSpeed(speed);
+    const music = audioRef.current;
+    if (music) music.playbackRate = speed;
+  }, []);
+
+  const rewindDebug = useCallback(() => {
+    controllerRef.current?.rewindDebug(PULSE_DEBUG_REWIND_SECONDS);
+  }, []);
 
   const beginGame = useCallback(() => {
     if (screen !== "ready" || needsLandscape) return;
@@ -234,12 +254,13 @@ export default function PulseRunnerGame({
     if (music) {
       music.currentTime = 0;
       music.muted = muted;
+      music.playbackRate = debugMode ? debugSpeed : 1;
       void music.play().catch(() => undefined);
     }
     controllerRef.current?.begin();
     setAttempts((value) => value + 1);
     setScreen("playing");
-  }, [muted, needsLandscape, screen]);
+  }, [debugMode, debugSpeed, muted, needsLandscape, screen]);
 
   useEffect(() => {
     if (screen === "ready" && autoBeginNextRunRef.current && !needsLandscape) {
@@ -410,7 +431,11 @@ export default function PulseRunnerGame({
             {canUseDebugMode ? (
               <button
                 type="button"
-                onClick={() => setDebugMode((value) => !value)}
+                onClick={() => {
+                  const next = !debugMode;
+                  setDebugMode(next);
+                  if (!next) changeDebugSpeed(1);
+                }}
                 data-testid="pulse-debug-toggle"
                 aria-pressed={debugMode}
                 className={`mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-black transition ${
@@ -457,11 +482,42 @@ export default function PulseRunnerGame({
         </div>
       ) : null}
 
-      {screen === "playing" ? (
+      {screen === "playing" && debugMode ? (
+        <div className="absolute inset-x-0 bottom-3 z-30 flex justify-center px-3">
+          <div className="flex items-center gap-1.5 rounded-xl border border-[#7bf1a8]/35 bg-[#07180f]/90 p-1.5 shadow-lg backdrop-blur">
+            <span className="hidden px-2 text-[10px] font-black text-[#7bf1a8] sm:inline">
+              DEBUG
+            </span>
+            {PULSE_DEBUG_SPEEDS.map((speed) => (
+              <button
+                key={speed}
+                type="button"
+                onClick={() => changeDebugSpeed(speed)}
+                data-testid={`pulse-debug-speed-${speed}`}
+                aria-pressed={debugSpeed === speed}
+                className={`h-10 min-w-12 rounded-lg px-3 text-xs font-black transition ${
+                  debugSpeed === speed
+                    ? "bg-[#7bf1a8] text-[#07180f]"
+                    : "bg-white/10 text-white/70 hover:bg-white/20"
+                }`}
+              >
+                {speed}×
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={rewindDebug}
+              data-testid="pulse-debug-rewind"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-white/10 px-3 text-xs font-black text-white/80 transition hover:bg-white/20"
+            >
+              <Rewind className="h-4 w-4" aria-hidden="true" />
+              {PULSE_DEBUG_REWIND_SECONDS}秒戻す
+            </button>
+          </div>
+        </div>
+      ) : screen === "playing" ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 text-center text-xs font-bold text-white/50">
-          {debugMode
-            ? "DEBUG // COLLISION OFF // SCORE NOT SAVED"
-            : `${runnerMode === "cube" ? "TAP / SPACE" : "HOLD TO FLY"}・ATTEMPT ${attempts}`}
+          {runnerMode === "cube" ? "TAP / SPACE" : "HOLD TO FLY"}・ATTEMPT {attempts}
         </div>
       ) : null}
 

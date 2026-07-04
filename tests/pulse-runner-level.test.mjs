@@ -27,6 +27,7 @@ import {
   MINI_CEILING_OBSTACLES,
   pulseBeatBlockActive,
   pulseDistanceFromProgress,
+  pulseDebugRewindBeat,
   pulseGateGapAtBeat,
   pulseGravityAtX,
   pulseModeAtX,
@@ -36,6 +37,8 @@ import {
   pulsePressGateBottomAtBeat,
   pulseSurfaceState,
   PULSE_GRAVITY_SECTIONS,
+  PULSE_DEBUG_REWIND_SECONDS,
+  PULSE_DEBUG_SPEEDS,
   PULSE_MINI_SECTIONS,
   PULSE_SHIP_SECTIONS,
   PX_PER_BEAT,
@@ -122,6 +125,15 @@ test("distance score is clamped and derived from course progress", () => {
   assert.equal(pulseDistanceFromProgress(50), LEVEL_DISTANCE_METERS / 2);
   assert.equal(pulseDistanceFromProgress(100), LEVEL_DISTANCE_METERS);
   assert.equal(pulseDistanceFromProgress(130), LEVEL_DISTANCE_METERS);
+});
+
+test("admin debug rewind is time-based and clamped inside the course", () => {
+  assert.deepEqual(PULSE_DEBUG_SPEEDS, [1, 2, 4]);
+  const rewindBeats = PULSE_DEBUG_REWIND_SECONDS / (BEAT_MS / 1000);
+  assert.ok(Math.abs(pulseDebugRewindBeat(100) - (100 - rewindBeats)) < 1e-9);
+  assert.equal(pulseDebugRewindBeat(5), 0);
+  assert.equal(pulseDebugRewindBeat(80, -4), 80);
+  assert.equal(pulseDebugRewindBeat(LEVEL_BEATS + 20, 0), LEVEL_BEATS);
 });
 
 test("music playback recovers and stays synchronized with course progress", () => {

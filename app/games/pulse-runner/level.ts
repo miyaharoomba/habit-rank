@@ -17,6 +17,8 @@ export const LEVEL_START_X = 320;
 export const LEVEL_END_X = LEVEL_START_X + LEVEL_BEATS * PX_PER_BEAT;
 export const LEVEL_DURATION_MS = LEVEL_BEATS * BEAT_MS;
 export const MUSIC_SYNC_TOLERANCE_SECONDS = 0.75;
+export const PULSE_DEBUG_SPEEDS = [1, 2, 4] as const;
+export const PULSE_DEBUG_REWIND_SECONDS = 10;
 export const FLOOR_Y = 440;
 export const CEILING_Y = 42;
 
@@ -76,6 +78,14 @@ export const SEGMENTED_FLOOR_SECTIONS = [
 
 export function beatX(beat: number) {
   return LEVEL_START_X + beat * PX_PER_BEAT;
+}
+
+export function pulseDebugRewindBeat(
+  courseBeat: number,
+  seconds = PULSE_DEBUG_REWIND_SECONDS
+) {
+  const rewindBeats = Math.max(0, seconds) / (BEAT_MS / 1000);
+  return Math.max(0, Math.min(LEVEL_BEATS, courseBeat - rewindBeats));
 }
 
 export function pulseModeAtX(x: number): PulseMode {
