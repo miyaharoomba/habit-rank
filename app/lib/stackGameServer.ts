@@ -1,4 +1,5 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { pulseBadgeThreshold } from "@/app/games/pulse-runner/level";
 
 function mustEnv(name: string) {
   const value = process.env[name];
@@ -116,7 +117,7 @@ export async function awardPulseRunnerBadges({
     .from("badges")
     .select("id, title, title_label, badge_rank, condition_value")
     .eq("condition_type", "pulse_best_progress")
-    .lte("condition_value", bestProgress)
+    .lte("condition_value", pulseBadgeThreshold(bestProgress))
     .order("condition_value", { ascending: true });
 
   if (badgesError) throw new Error(badgesError.message);

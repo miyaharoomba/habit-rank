@@ -26,6 +26,7 @@ import {
   LEVEL_DURATION_MS,
   MINI_CEILING_OBSTACLES,
   pulseBeatBlockActive,
+  pulseBadgeThreshold,
   pulseDistanceFromProgress,
   pulseDebugRewindBeat,
   pulseGateGapAtBeat,
@@ -125,6 +126,13 @@ test("distance score is clamped and derived from course progress", () => {
   assert.equal(pulseDistanceFromProgress(50), LEVEL_DISTANCE_METERS / 2);
   assert.equal(pulseDistanceFromProgress(100), LEVEL_DISTANCE_METERS);
   assert.equal(pulseDistanceFromProgress(130), LEVEL_DISTANCE_METERS);
+});
+
+test("badge progress is converted to the integer threshold used by Supabase", () => {
+  assert.equal(pulseBadgeThreshold(73.98), 73);
+  assert.equal(pulseBadgeThreshold(25), 25);
+  assert.equal(pulseBadgeThreshold(-1), 0);
+  assert.equal(pulseBadgeThreshold(101), 100);
 });
 
 test("admin debug rewind is time-based and clamped inside the course", () => {

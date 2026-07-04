@@ -121,6 +121,10 @@ export function pulseDistanceFromProgress(progressPercent: number) {
   return Math.round((progress / 100) * LEVEL_DISTANCE_METERS);
 }
 
+export function pulseBadgeThreshold(progressPercent: number) {
+  return Math.floor(Math.max(0, Math.min(100, progressPercent)));
+}
+
 export function pulseMusicSyncPlan({
   progressPercent,
   currentTime,

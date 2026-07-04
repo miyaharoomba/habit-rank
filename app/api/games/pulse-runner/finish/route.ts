@@ -145,7 +145,12 @@ export async function POST(request: Request) {
   if (bestError) return NextResponse.json({ error: bestError.message }, { status: 500 });
 
   const bestProgress = Number(bestRows?.[0]?.progress_percent ?? progress);
-  const unlocked = await awardPulseRunnerBadges({ userId: user.id, bestProgress });
+  let unlocked: Awaited<ReturnType<typeof awardPulseRunnerBadges>> = [];
+  try {
+    unlocked = await awardPulseRunnerBadges({ userId: user.id, bestProgress });
+  } catch (badgeError) {
+    console.error("pulse runner badge award failed after run save:", badgeError);
+  }
   const { data: profileAfter } = await admin
     .from("profiles")
     .select("xp_total, level")
