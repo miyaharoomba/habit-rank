@@ -83,6 +83,25 @@ export default function PulseRunnerGame({
     audio.pause();
   }, []);
 
+  const resetMusic = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+  }, []);
+
+  const abandonRun = useCallback(() => {
+    const runId = runIdRef.current;
+    if (!runId) return;
+    runIdRef.current = null;
+    void fetch("/api/games/pulse-runner/abandon", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ runId }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, []);
+
   const ensureMusicPlaying = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || needsLandscapeRef.current) return;
@@ -107,6 +126,7 @@ export default function PulseRunnerGame({
         setScreen("result");
         return;
       }
+      runIdRef.current = null;
 
       try {
         const response = await fetch("/api/games/pulse-runner/finish", {
@@ -127,6 +147,7 @@ export default function PulseRunnerGame({
         setScreen("result");
         router.refresh();
       } catch (caught) {
+        runIdRef.current = runId;
         setError(caught instanceof Error ? caught.message : "記録を保存できませんでした。");
         setResult({
           progressPercent: summary.progressPercent,
@@ -204,7 +225,10 @@ export default function PulseRunnerGame({
         }
         runIdRef.current = payload.runId;
       }
-      if (startTokenRef.current !== token) return;
+      if (startTokenRef.current !== token) {
+        abandonRun();
+        return;
+      }
 
       controllerRef.current?.destroy();
       parent.replaceChildren();
@@ -237,7 +261,7 @@ export default function PulseRunnerGame({
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setScreen("idle");
     }
-  }, [debugMode, debugSpeed, ensureMusicPlaying, finishDebugRun, needsLandscape, saveRun, screen]);
+  }, [abandonRun, debugMode, debugSpeed, ensureMusicPlaying, finishDebugRun, needsLandscape, saveRun, screen]);
 
   const changeDebugSpeed = useCallback((speed: DebugSpeed) => {
     setDebugSpeed(speed);
@@ -255,6 +279,13 @@ export default function PulseRunnerGame({
   const rewindDebug = useCallback(() => {
     controllerRef.current?.rewindDebug(PULSE_DEBUG_REWIND_SECONDS);
   }, []);
+
+  const leaveGame = useCallback(() => {
+    startTokenRef.current += 1;
+    resetMusic();
+    controllerRef.current?.setPaused(true);
+    abandonRun();
+  }, [abandonRun, resetMusic]);
 
   const beginGame = useCallback(() => {
     if (screen !== "ready" || needsLandscape) return;
@@ -366,13 +397,39 @@ export default function PulseRunnerGame({
   }, [muted]);
 
   useEffect(() => {
+    const handlePageHide = () => leaveGame();
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) window.location.reload();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        controllerRef.current?.setPaused(true);
+        stopMusic();
+      } else {
+        controllerRef.current?.setPaused(needsLandscapeRef.current);
+        if (screen === "playing" && !needsLandscapeRef.current) ensureMusicPlaying();
+      }
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [ensureMusicPlaying, leaveGame, screen, stopMusic]);
+
+  useEffect(() => {
     return () => {
       startTokenRef.current += 1;
-      stopMusic();
+      resetMusic();
+      abandonRun();
       controllerRef.current?.destroy();
       controllerRef.current = null;
     };
-  }, [stopMusic]);
+  }, [abandonRun, resetMusic]);
 
   return (
     <section className="relative h-[100svh] overflow-hidden bg-[#090d18] text-white">
@@ -393,6 +450,7 @@ export default function PulseRunnerGame({
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4 sm:p-6">
         <Link
           href="/games"
+          onClick={leaveGame}
           className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-black/50 backdrop-blur transition hover:bg-black/70"
           aria-label="ゲーム一覧に戻る"
         >
