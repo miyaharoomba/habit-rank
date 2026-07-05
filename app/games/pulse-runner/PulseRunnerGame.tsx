@@ -282,9 +282,18 @@ export default function PulseRunnerGame({
 
   const leaveGame = useCallback(() => {
     startTokenRef.current += 1;
+    autoBeginNextRunRef.current = false;
     resetMusic();
-    controllerRef.current?.setPaused(true);
+    controllerRef.current?.destroy();
+    controllerRef.current = null;
+    mountRef.current?.replaceChildren();
     abandonRun();
+    musicProgressRef.current = 0;
+    setProgress(0);
+    setRunnerMode("cube");
+    setResult(null);
+    setError(null);
+    setScreen("idle");
   }, [abandonRun, resetMusic]);
 
   const beginGame = useCallback(() => {
@@ -422,14 +431,8 @@ export default function PulseRunnerGame({
   }, [ensureMusicPlaying, leaveGame, screen, stopMusic]);
 
   useEffect(() => {
-    return () => {
-      startTokenRef.current += 1;
-      resetMusic();
-      abandonRun();
-      controllerRef.current?.destroy();
-      controllerRef.current = null;
-    };
-  }, [abandonRun, resetMusic]);
+    return () => leaveGame();
+  }, [leaveGame]);
 
   return (
     <section className="relative h-[100svh] overflow-hidden bg-[#090d18] text-white">
