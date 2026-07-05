@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v9";
+export const PULSE_GAME_VERSION = "pulse_runner_v10";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;
@@ -182,10 +182,6 @@ export const BEAT_BLOCKS: readonly BeatBlock[] = [
     { length: 8 },
     (_, index) => ({ beat: 8.5 + index, widthBeats: 1, periodBeats: 2 })
   ),
-  ...Array.from(
-    { length: 8 },
-    (_, index) => ({ beat: 174.5 + index, widthBeats: 1, periodBeats: 2 })
-  ),
 ];
 
 export const CUBE_PRESS_GATES: readonly CubePressGate[] = [
@@ -198,6 +194,7 @@ export const CUBE_PRESS_GATES: readonly CubePressGate[] = [
 
 export const SPECIAL_FLOOR_PLATFORMS = [
   { beat: 165.5, widthBeats: 1 },
+  { beat: 178, widthBeats: 8 },
   { beat: 186, widthBeats: 8 },
   { beat: 197, widthBeats: 14 },
   { beat: 205.5, widthBeats: 3 },

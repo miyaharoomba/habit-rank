@@ -267,6 +267,22 @@ test("normal finale contains every new gimmick with deterministic timing", () =>
     stableLaunchFloor.beat + stableLaunchFloor.widthBeats / 2,
     166
   );
+  const landingRunway = SPECIAL_FLOOR_PLATFORMS.find(
+    (platform) => platform.beat === 178
+  );
+  const nextFloor = SPECIAL_FLOOR_PLATFORMS.find((platform) => platform.beat === 186);
+  assert.ok(landingRunway);
+  assert.ok(nextFloor);
+  assert.equal(landingRunway.beat - landingRunway.widthBeats / 2, 174);
+  assert.equal(
+    landingRunway.beat + landingRunway.widthBeats / 2,
+    nextFloor.beat - nextFloor.widthBeats / 2
+  );
+  assert.equal(
+    BEAT_BLOCKS.some((block) => block.beat >= 166),
+    false,
+    "air ring landing must not lead into switching floors"
+  );
 
   for (const block of BEAT_BLOCKS) {
     assert.equal(pulseBeatBlockActive(block, block.beat), true);
@@ -363,14 +379,13 @@ test("held input crosses every finale air ring in a frame-by-frame trajectory", 
 
   assert.equal(usedRings.size, rings.length, "held input must activate every ring");
   assert.ok(landingBeat !== null, "ring chain must return to the floor");
-  const landingBlock = BEAT_BLOCKS.find(
-    (block) =>
-      block.beat >= 174 &&
-      landingBeat >= block.beat - block.widthBeats / 2 &&
-      landingBeat <= block.beat + block.widthBeats / 2
+  const landingRunway = SPECIAL_FLOOR_PLATFORMS.find(
+    (platform) =>
+      platform.beat === 178 &&
+      landingBeat >= platform.beat - platform.widthBeats / 2 &&
+      landingBeat <= platform.beat + platform.widthBeats / 2
   );
-  assert.ok(landingBlock, `last ring must land on a beat block near ${landingBeat}`);
-  assert.equal(pulseBeatBlockActive(landingBlock, landingBeat), true);
+  assert.ok(landingRunway, `last ring must land on the fixed runway near ${landingBeat}`);
 });
 
 test("beat gates are widest exactly when the rocket reaches them", () => {
