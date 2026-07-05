@@ -75,6 +75,7 @@ export default function PulseRunnerGame({
   const [error, setError] = useState<string | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [debugSpeed, setDebugSpeed] = useState<DebugSpeed>(1);
+  const [resultWasDebug, setResultWasDebug] = useState(false);
 
   const stopMusic = useCallback(() => {
     const audio = audioRef.current;
@@ -98,6 +99,7 @@ export default function PulseRunnerGame({
   const saveRun = useCallback(
     async (summary: PulseRunSummary) => {
       stopMusic();
+      setResultWasDebug(false);
       setScreen("saving");
       const runId = runIdRef.current;
       if (!runId) {
@@ -149,6 +151,7 @@ export default function PulseRunnerGame({
   const finishDebugRun = useCallback(
     (summary: PulseRunSummary) => {
       stopMusic();
+      setResultWasDebug(true);
       setResult({
         progressPercent: summary.progressPercent,
         distanceMeters: summary.distanceMeters,
@@ -242,6 +245,12 @@ export default function PulseRunnerGame({
     const music = audioRef.current;
     if (music) music.playbackRate = speed;
   }, []);
+
+  const toggleDebugMode = useCallback(() => {
+    const next = !debugMode;
+    setDebugMode(next);
+    if (!next) changeDebugSpeed(1);
+  }, [changeDebugSpeed, debugMode]);
 
   const rewindDebug = useCallback(() => {
     controllerRef.current?.rewindDebug(PULSE_DEBUG_REWIND_SECONDS);
@@ -431,11 +440,7 @@ export default function PulseRunnerGame({
             {canUseDebugMode ? (
               <button
                 type="button"
-                onClick={() => {
-                  const next = !debugMode;
-                  setDebugMode(next);
-                  if (!next) changeDebugSpeed(1);
-                }}
+                onClick={toggleDebugMode}
                 data-testid="pulse-debug-toggle"
                 aria-pressed={debugMode}
                 className={`mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-black transition ${
@@ -534,7 +539,7 @@ export default function PulseRunnerGame({
         <div className="absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-black/70 px-5 py-20 backdrop-blur-sm">
           <div className="w-full max-w-lg text-center">
             <div className="text-xs font-black uppercase text-white/50">
-              {debugMode ? "DEBUG COMPLETE" : result?.completed ? "LEVEL COMPLETE" : "RUN RESULT"}
+              {resultWasDebug ? "DEBUG COMPLETE" : result?.completed ? "LEVEL COMPLETE" : "RUN RESULT"}
             </div>
             <div className="mt-1 text-6xl font-black tabular-nums">
               {result?.distanceMeters ?? pulseDistanceFromProgress(progress)}m
@@ -574,10 +579,27 @@ export default function PulseRunnerGame({
             ))}
             {error ? <p className="mt-4 text-sm text-[#ff8b98]">{error}</p> : null}
 
+            {canUseDebugMode ? (
+              <button
+                type="button"
+                onClick={toggleDebugMode}
+                data-testid="pulse-result-debug-toggle"
+                aria-pressed={debugMode}
+                className={`mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-black transition ${
+                  debugMode
+                    ? "border-[#7bf1a8]/60 bg-[#7bf1a8]/15 text-[#9affbd]"
+                    : "border-white/20 bg-black/25 text-white/65 hover:bg-white/10"
+                }`}
+              >
+                <Bug className="h-4 w-4" aria-hidden="true" />
+                NEXT RUN // DEBUG {debugMode ? "ON" : "OFF"}
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={() => void startGame(true)}
-              className="mt-7 inline-flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-white px-6 text-base font-black text-[#090d18] transition hover:bg-white/90"
+              className={`${canUseDebugMode ? "mt-3" : "mt-7"} inline-flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-white px-6 text-base font-black text-[#090d18] transition hover:bg-white/90`}
             >
               <RotateCcw className="h-5 w-5" aria-hidden="true" />
               RETRY
