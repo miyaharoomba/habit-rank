@@ -589,7 +589,7 @@ export default function StackTowerGame({
         aria-label="Stack Tower game area"
       />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4 sm:p-6">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-3 p-4 sm:p-6">
         <Link
           href="/games"
           className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/65"
