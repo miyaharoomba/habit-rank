@@ -58,7 +58,7 @@ const BLOCK_COLORS = [
   0xff9f68,
 ];
 
-const STACK_BGM_STEP_MS = 145;
+const STACK_BGM_STEP_MS = 135;
 const STACK_BGM_ARP = [0, 7, 10, 14, 12, 10, 7, 5, 0, 5, 8, 12, 15, 12, 10, 7];
 const STACK_BGM_BASS = [-12, -12, -17, -17, -19, -19, -15, -15];
 
@@ -81,7 +81,7 @@ class StackAudioController {
 
     const context = new AudioCtor();
     const masterGain = context.createGain();
-    masterGain.gain.value = 0.42;
+    masterGain.gain.value = 0.68;
     masterGain.connect(context.destination);
 
     const bgmGain = context.createGain();
@@ -148,17 +148,27 @@ class StackAudioController {
     this.playTone({
       frequency,
       duration: 0.13,
-      gain: 0.028,
+      gain: 0.082,
       type: "triangle",
       destination: this.bgmGain,
     });
+
+    if (step % 2 === 1) {
+      this.playTone({
+        frequency: frequency * 2,
+        duration: 0.055,
+        gain: 0.024,
+        type: "square",
+        destination: this.bgmGain,
+      });
+    }
 
     if (step % 4 === 0) {
       const bassSemitone = STACK_BGM_BASS[Math.floor(step / 2) % STACK_BGM_BASS.length];
       this.playTone({
         frequency: baseFrequency * 2 ** (bassSemitone / 12),
-        duration: 0.22,
-        gain: 0.036,
+        duration: 0.28,
+        gain: 0.095,
         type: "sawtooth",
         destination: this.bgmGain,
       });
@@ -315,6 +325,7 @@ export default function StackTowerGame({
   const interruptedRunRef = useRef(false);
   const recoveryReloadingRef = useRef(false);
   const cameraTargetYRef = useRef(1.7);
+  const cameraZoomTargetRef = useRef(1);
 
   const [mode, setMode] = useState<GameMode>("idle");
   const [score, setScore] = useState(0);
@@ -340,6 +351,14 @@ export default function StackTowerGame({
     if (recoveryReloadingRef.current) return;
     recoveryReloadingRef.current = true;
     window.location.reload();
+  }, []);
+
+  const focusTowerOverview = useCallback(() => {
+    const builtBlockCount = Math.max(1, stackRef.current.length - 1);
+    const towerTopY = builtBlockCount * BLOCK_HEIGHT;
+    const viewHeight = Math.max(8.8, towerTopY + 3.4);
+    cameraTargetYRef.current = Math.max(1.7, towerTopY / 2);
+    cameraZoomTargetRef.current = THREE.MathUtils.clamp(8.8 / viewHeight, 0.16, 1);
   }, []);
 
   const clearGameObjects = useCallback(() => {
@@ -401,6 +420,7 @@ export default function StackTowerGame({
     placementLockedRef.current = false;
     interruptedRunRef.current = false;
     cameraTargetYRef.current = 1.7;
+    cameraZoomTargetRef.current = 1;
     setScore(0);
     setBlocks(0);
     setCombo(0);
@@ -514,6 +534,7 @@ export default function StackTowerGame({
       movingMeshRef.current = null;
       comboRef.current = 0;
       setCombo(0);
+      focusTowerOverview();
       const audio = getAudio();
       audio.stopBgm();
       audio.playGameOver();
@@ -570,7 +591,15 @@ export default function StackTowerGame({
       if (gameModeRef.current !== "playing") return;
       placementLockedRef.current = false;
     }, 110);
-  }, [addFallingPiece, addMovingMesh, addSizeUpEffect, finishRun, getAudio, reloadGamePage]);
+  }, [
+    addFallingPiece,
+    addMovingMesh,
+    addSizeUpEffect,
+    finishRun,
+    focusTowerOverview,
+    getAudio,
+    reloadGamePage,
+  ]);
 
   const startGame = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -579,7 +608,9 @@ export default function StackTowerGame({
       return;
     }
     if (gameModeRef.current === "starting" || gameModeRef.current === "playing") return;
-    getAudio().prime();
+    const audio = getAudio();
+    audio.prime();
+    audio.startBgm();
     setError(null);
     setResult(null);
     setGameMode("starting");
@@ -605,12 +636,12 @@ export default function StackTowerGame({
       seedRef.current = Number(payload.seed);
       placementLockedRef.current = false;
       cameraTargetYRef.current = 1.7;
+      cameraZoomTargetRef.current = 1;
       setScore(0);
       setBlocks(0);
       setCombo(0);
       addFoundation();
       addMovingMesh(1);
-      getAudio().startBgm();
       setGameMode("playing");
     } catch (caught) {
       audioRef.current?.stopBgm();
@@ -738,6 +769,15 @@ export default function StackTowerGame({
       const lookY = camera.position.y - 5.5;
       const nextLookY = THREE.MathUtils.lerp(lookY, targetY, 0.055 * delta);
       camera.position.y = nextLookY + 5.5;
+      const nextZoom = THREE.MathUtils.lerp(
+        camera.zoom,
+        cameraZoomTargetRef.current,
+        0.045 * delta
+      );
+      if (Math.abs(nextZoom - camera.zoom) > 0.0005) {
+        camera.zoom = nextZoom;
+        camera.updateProjectionMatrix();
+      }
       camera.lookAt(0, nextLookY, 0);
       renderer.render(scene, camera);
 
@@ -951,7 +991,7 @@ export default function StackTowerGame({
       ) : null}
 
       {mode === "saving" ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25">
           <div className="text-center">
             <div className="text-2xl font-black">GAME OVER</div>
             <div className="mt-3 text-sm text-white/65">スコアを確定中...</div>
@@ -960,8 +1000,8 @@ export default function StackTowerGame({
       ) : null}
 
       {mode === "finished" ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-y-auto bg-black/65 px-5 py-24 backdrop-blur-sm">
-          <div className="w-full max-w-lg text-center">
+        <div className="absolute inset-0 z-20 flex items-end justify-center overflow-y-auto bg-gradient-to-t from-black/80 via-black/25 to-transparent px-5 pb-5 pt-28 sm:items-center sm:justify-end sm:bg-gradient-to-l sm:px-8 sm:py-10">
+          <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#090d18]/75 p-5 text-center shadow-2xl backdrop-blur-md sm:p-6">
             <div className="text-sm font-bold text-white/55">FINAL SCORE</div>
             <div className="mt-1 text-6xl font-black tabular-nums">
               {result?.score ?? score}
