@@ -1,7 +1,7 @@
-export const STACK_GAME_VERSION = "stack_v2";
+export const STACK_GAME_VERSION = "stack_v3";
 export const BASE_SIZE = 3.2;
 export const MAX_STACK_SIZE = 4.25;
-export const PERFECT_SIZE_UP_INTERVAL = 5;
+export const PERFECT_SIZE_UP_START = 5;
 export const PERFECT_SIZE_UP_AMOUNT = 0.35;
 export const BLOCK_HEIGHT = 0.52;
 export const TRAVEL_LIMIT = 4.8;
@@ -109,7 +109,7 @@ export function placeBlock({
 
   if (perfect) {
     const nextCombo = combo + 1;
-    const shouldSizeUp = nextCombo % PERFECT_SIZE_UP_INTERVAL === 0;
+    const shouldSizeUp = nextCombo >= PERFECT_SIZE_UP_START;
     const width = shouldSizeUp
       ? Math.min(MAX_STACK_SIZE, moving.width + PERFECT_SIZE_UP_AMOUNT)
       : moving.width;

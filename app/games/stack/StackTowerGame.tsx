@@ -10,7 +10,7 @@ import {
   BLOCK_HEIGHT,
   initialStack,
   movingBlock,
-  PERFECT_SIZE_UP_INTERVAL,
+  PERFECT_SIZE_UP_START,
   placeBlock,
   type StackBlock,
   type StackCut,
@@ -945,7 +945,7 @@ export default function StackTowerGame({
         <div className="pointer-events-none absolute inset-x-0 bottom-7 z-10 text-center text-sm font-semibold text-white/65">
           タップ・クリック・Spaceで積む
           <span className="mt-1 block text-xs text-[#ffd166]/80">
-            PERFECT {PERFECT_SIZE_UP_INTERVAL}連続でSIZE UP
+            PERFECT {PERFECT_SIZE_UP_START}連続目から毎回SIZE UP
           </span>
         </div>
       ) : null}

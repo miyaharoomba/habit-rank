@@ -6,17 +6,18 @@ import {
   initialStack,
   MAX_STACK_SIZE,
   PERFECT_SIZE_UP_AMOUNT,
-  PERFECT_SIZE_UP_INTERVAL,
+  PERFECT_SIZE_UP_START,
   placeBlock,
   speedForStage,
   STACK_GAME_VERSION,
 } from "../app/games/stack/gameEngine.ts";
 
-test("five consecutive perfect placements increase the stack size", () => {
+test("perfect placements grow the stack every time after the fifth combo", () => {
   const stack = initialStack();
   let combo = 0;
+  const placements = [];
 
-  for (let stage = 1; stage <= PERFECT_SIZE_UP_INTERVAL; stage += 1) {
+  for (let stage = 1; stage <= PERFECT_SIZE_UP_START + 2; stage += 1) {
     const previous = stack.at(-1);
     const placement = placeBlock({
       previous,
@@ -28,19 +29,22 @@ test("five consecutive perfect placements increase the stack size", () => {
     assert.equal(placement.gameOver, false);
     assert.equal(placement.perfect, true);
     assert.equal(placement.combo, stage);
-    assert.equal(placement.sizeUp, stage === PERFECT_SIZE_UP_INTERVAL);
+    assert.equal(placement.sizeUp, stage >= PERFECT_SIZE_UP_START);
 
+    placements.push(placement);
     stack.push(placement.block);
     combo = placement.combo;
   }
 
   const grown = stack.at(-1);
-  assert.equal(grown.width, BASE_SIZE + PERFECT_SIZE_UP_AMOUNT);
-  assert.equal(grown.depth, BASE_SIZE + PERFECT_SIZE_UP_AMOUNT);
+  const growthCount = placements.filter((placement) => placement.sizeUp).length;
+  assert.equal(growthCount, 3);
+  assert.equal(grown.width, Math.min(MAX_STACK_SIZE, BASE_SIZE + PERFECT_SIZE_UP_AMOUNT * 3));
+  assert.equal(grown.depth, Math.min(MAX_STACK_SIZE, BASE_SIZE + PERFECT_SIZE_UP_AMOUNT * 3));
 });
 
 test("perfect size boosts are capped and reflected in replay evaluation", () => {
-  const tapsMs = Array.from({ length: PERFECT_SIZE_UP_INTERVAL * 8 }, (_, index) =>
+  const tapsMs = Array.from({ length: PERFECT_SIZE_UP_START + 10 }, (_, index) =>
     Math.round(4800 / speedForStage(index + 1))
   );
   const result = evaluateReplay(tapsMs, 0);
@@ -53,5 +57,5 @@ test("perfect size boosts are capped and reflected in replay evaluation", () => 
 });
 
 test("stack version is bumped for the size-up scoring rule", () => {
-  assert.equal(STACK_GAME_VERSION, "stack_v2");
+  assert.equal(STACK_GAME_VERSION, "stack_v3");
 });
