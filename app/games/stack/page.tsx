@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveBannedUserIds } from "@/lib/bannedUsers";
 import { levelFromProfileXp } from "@/app/lib/leveling";
 import { jstDayStartIso } from "@/app/lib/stackGameServer";
+import { STACK_GAME_VERSION } from "./gameEngine";
 import StackTowerGame from "./StackTowerGame";
 import StackLeaderboard, { type StackRankingRow } from "./StackLeaderboard";
 
@@ -100,6 +101,7 @@ export default async function StackTowerPage() {
       .from("minigame_runs")
       .select("user_id, score, blocks_stacked, perfect_count, finished_at")
       .eq("game_key", "stack_tower")
+      .eq("game_version", STACK_GAME_VERSION)
       .eq("status", "finished")
       .gte("finished_at", weekStart)
       .order("score", { ascending: false })
@@ -108,6 +110,7 @@ export default async function StackTowerPage() {
       .from("minigame_runs")
       .select("user_id, score, blocks_stacked, perfect_count, finished_at")
       .eq("game_key", "stack_tower")
+      .eq("game_version", STACK_GAME_VERSION)
       .eq("status", "finished")
       .order("score", { ascending: false })
       .limit(500),
@@ -116,6 +119,7 @@ export default async function StackTowerPage() {
       .select("score")
       .eq("user_id", user.id)
       .eq("game_key", "stack_tower")
+      .eq("game_version", STACK_GAME_VERSION)
       .eq("status", "finished")
       .order("score", { ascending: false })
       .limit(1),

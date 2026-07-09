@@ -10,6 +10,7 @@ import {
   BLOCK_HEIGHT,
   initialStack,
   movingBlock,
+  PERFECT_SIZE_UP_INTERVAL,
   placeBlock,
   type StackBlock,
   type StackCut,
@@ -42,6 +43,12 @@ type FallingPiece = {
   spinZ: number;
 };
 
+type SizeUpEffect = {
+  mesh: THREE.Mesh;
+  life: number;
+  maxLife: number;
+};
+
 const BLOCK_COLORS = [
   0x55c2ff,
   0xff6b6b,
@@ -50,6 +57,201 @@ const BLOCK_COLORS = [
   0xb69cff,
   0xff9f68,
 ];
+
+const STACK_BGM_STEP_MS = 145;
+const STACK_BGM_ARP = [0, 7, 10, 14, 12, 10, 7, 5, 0, 5, 8, 12, 15, 12, 10, 7];
+const STACK_BGM_BASS = [-12, -12, -17, -17, -19, -19, -15, -15];
+
+type AudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
+class StackAudioController {
+  private context: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private bgmGain: GainNode | null = null;
+  private bgmTimer: number | null = null;
+  private bgmStep = 0;
+
+  private createContext() {
+    if (this.context) return this.context;
+    const AudioCtor = window.AudioContext ?? (window as AudioWindow).webkitAudioContext;
+    if (!AudioCtor) return null;
+
+    const context = new AudioCtor();
+    const masterGain = context.createGain();
+    masterGain.gain.value = 0.42;
+    masterGain.connect(context.destination);
+
+    const bgmGain = context.createGain();
+    bgmGain.gain.value = 0;
+    bgmGain.connect(masterGain);
+
+    this.context = context;
+    this.masterGain = masterGain;
+    this.bgmGain = bgmGain;
+    return context;
+  }
+
+  private async unlock() {
+    const context = this.createContext();
+    if (!context) return null;
+    if (context.state === "suspended") {
+      await context.resume().catch(() => undefined);
+    }
+    return context;
+  }
+
+  private playTone({
+    frequency,
+    duration,
+    gain,
+    type,
+    delay = 0,
+    destination,
+  }: {
+    frequency: number;
+    duration: number;
+    gain: number;
+    type: OscillatorType;
+    delay?: number;
+    destination?: AudioNode | null;
+  }) {
+    const context = this.context;
+    const output = destination ?? this.masterGain;
+    if (!context || !output) return;
+
+    const start = context.currentTime + delay;
+    const oscillator = context.createOscillator();
+    const envelope = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.exponentialRampToValueAtTime(gain, start + 0.012);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(envelope);
+    envelope.connect(output);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.04);
+  }
+
+  private playBgmStep() {
+    const context = this.context;
+    if (!context || !this.bgmGain) return;
+
+    const step = this.bgmStep % STACK_BGM_ARP.length;
+    const baseFrequency = 196;
+    const semitone = STACK_BGM_ARP[step];
+    const frequency = baseFrequency * 2 ** (semitone / 12);
+
+    this.playTone({
+      frequency,
+      duration: 0.13,
+      gain: 0.028,
+      type: "triangle",
+      destination: this.bgmGain,
+    });
+
+    if (step % 4 === 0) {
+      const bassSemitone = STACK_BGM_BASS[Math.floor(step / 2) % STACK_BGM_BASS.length];
+      this.playTone({
+        frequency: baseFrequency * 2 ** (bassSemitone / 12),
+        duration: 0.22,
+        gain: 0.036,
+        type: "sawtooth",
+        destination: this.bgmGain,
+      });
+    }
+
+    this.bgmStep += 1;
+  }
+
+  prime() {
+    void this.unlock();
+  }
+
+  startBgm() {
+    void this.unlock().then((context) => {
+      if (!context || !this.bgmGain || this.bgmTimer !== null) return;
+      this.bgmStep = 0;
+      this.bgmGain.gain.cancelScheduledValues(context.currentTime);
+      this.bgmGain.gain.setTargetAtTime(1, context.currentTime, 0.08);
+      this.playBgmStep();
+      this.bgmTimer = window.setInterval(() => this.playBgmStep(), STACK_BGM_STEP_MS);
+    });
+  }
+
+  stopBgm() {
+    if (this.bgmTimer !== null) {
+      window.clearInterval(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+    if (this.context && this.bgmGain) {
+      this.bgmGain.gain.cancelScheduledValues(this.context.currentTime);
+      this.bgmGain.gain.setTargetAtTime(0, this.context.currentTime, 0.08);
+    }
+  }
+
+  playPerfect(combo: number) {
+    void this.unlock().then(() => {
+      const semitone = Math.min(22, Math.max(0, combo - 1));
+      const frequency = 523.25 * 2 ** (semitone / 12);
+      this.playTone({ frequency, duration: 0.12, gain: 0.13, type: "triangle" });
+      this.playTone({
+        frequency: frequency * 2,
+        duration: 0.08,
+        gain: 0.045,
+        type: "sine",
+        delay: 0.018,
+      });
+    });
+  }
+
+  playSizeUp(combo: number) {
+    void this.unlock().then(() => {
+      const start = 392 * 2 ** (Math.min(12, combo) / 24);
+      [0, 4, 7, 12].forEach((semitone, index) => {
+        this.playTone({
+          frequency: start * 2 ** (semitone / 12),
+          duration: 0.22,
+          gain: 0.07,
+          type: "triangle",
+          delay: index * 0.035,
+        });
+      });
+    });
+  }
+
+  playPlace(overlapRatio: number) {
+    void this.unlock().then(() => {
+      const frequency = 130 + Math.max(0, overlapRatio) * 70;
+      this.playTone({ frequency, duration: 0.07, gain: 0.07, type: "square" });
+    });
+  }
+
+  playGameOver() {
+    void this.unlock().then(() => {
+      [220, 174.61, 130.81].forEach((frequency, index) => {
+        this.playTone({
+          frequency,
+          duration: 0.16,
+          gain: 0.075,
+          type: "sawtooth",
+          delay: index * 0.075,
+        });
+      });
+    });
+  }
+
+  dispose() {
+    this.stopBgm();
+    void this.context?.close().catch(() => undefined);
+    this.context = null;
+    this.masterGain = null;
+    this.bgmGain = null;
+  }
+}
 
 function blockMaterial(stage: number) {
   return new THREE.MeshStandardMaterial({
@@ -96,6 +298,8 @@ export default function StackTowerGame({
   const effectsGroupRef = useRef<THREE.Group | null>(null);
   const movingMeshRef = useRef<THREE.Mesh | null>(null);
   const fallingRef = useRef<FallingPiece[]>([]);
+  const sizeUpEffectsRef = useRef<SizeUpEffect[]>([]);
+  const audioRef = useRef<StackAudioController | null>(null);
   const frameRef = useRef<number | null>(null);
   const stageStartedAtRef = useRef(0);
   const gameModeRef = useRef<GameMode>("idle");
@@ -127,6 +331,11 @@ export default function StackTowerGame({
     setMode(next);
   }, []);
 
+  const getAudio = useCallback(() => {
+    audioRef.current ??= new StackAudioController();
+    return audioRef.current;
+  }, []);
+
   const reloadGamePage = useCallback(() => {
     if (recoveryReloadingRef.current) return;
     recoveryReloadingRef.current = true;
@@ -150,6 +359,7 @@ export default function StackTowerGame({
     }
     movingMeshRef.current = null;
     fallingRef.current = [];
+    sizeUpEffectsRef.current = [];
   }, []);
 
   const addFoundation = useCallback(() => {
@@ -178,6 +388,7 @@ export default function StackTowerGame({
   }, []);
 
   const resetInterruptedGame = useCallback(() => {
+    audioRef.current?.stopBgm();
     clearPlacementUnlockTimer();
     clearGameObjects();
     stackRef.current = initialStack();
@@ -219,6 +430,28 @@ export default function StackTowerGame({
     },
     []
   );
+
+  const addSizeUpEffect = useCallback((block: StackBlock, stage: number) => {
+    const effects = effectsGroupRef.current;
+    if (!effects) return;
+
+    const geometry = new THREE.BoxGeometry(
+      block.width + 0.1,
+      BLOCK_HEIGHT + 0.1,
+      block.depth + 0.1
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffd166,
+      transparent: true,
+      opacity: 0.62,
+      wireframe: true,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(block.x, stage * BLOCK_HEIGHT, block.z);
+    effects.add(mesh);
+    sizeUpEffectsRef.current.push({ mesh, life: 0, maxLife: 34 });
+  }, []);
 
   const finishRun = useCallback(async () => {
     const runId = runIdRef.current;
@@ -281,6 +514,9 @@ export default function StackTowerGame({
       movingMeshRef.current = null;
       comboRef.current = 0;
       setCombo(0);
+      const audio = getAudio();
+      audio.stopBgm();
+      audio.playGameOver();
       if (navigator.vibrate) navigator.vibrate([40, 30, 70]);
       void finishRun();
       return;
@@ -301,6 +537,15 @@ export default function StackTowerGame({
     movingMeshRef.current = null;
 
     if (placement.cut) addFallingPiece(placement.cut, stage);
+    if (placement.sizeUp) addSizeUpEffect(placement.block, stage);
+
+    const audio = getAudio();
+    if (placement.perfect) {
+      audio.playPerfect(placement.combo);
+      if (placement.sizeUp) audio.playSizeUp(placement.combo);
+    } else {
+      audio.playPlace(placement.overlapRatio);
+    }
 
     scoreRef.current += placement.points;
     comboRef.current = placement.combo;
@@ -311,7 +556,11 @@ export default function StackTowerGame({
     cameraTargetYRef.current = Math.max(1.7, stage * BLOCK_HEIGHT + 1.2);
     setFeedback({
       id: Date.now(),
-      text: placement.perfect ? `PERFECT${placement.combo > 1 ? ` x${placement.combo}` : ""}` : `+${placement.points}`,
+      text: placement.sizeUp
+        ? `SIZE UP! PERFECT x${placement.combo}`
+        : placement.perfect
+          ? `PERFECT${placement.combo > 1 ? ` x${placement.combo}` : ""}`
+          : `+${placement.points}`,
     });
     if (placement.perfect && navigator.vibrate) navigator.vibrate(18);
 
@@ -321,7 +570,7 @@ export default function StackTowerGame({
       if (gameModeRef.current !== "playing") return;
       placementLockedRef.current = false;
     }, 110);
-  }, [addFallingPiece, addMovingMesh, finishRun, reloadGamePage]);
+  }, [addFallingPiece, addMovingMesh, addSizeUpEffect, finishRun, getAudio, reloadGamePage]);
 
   const startGame = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -330,6 +579,7 @@ export default function StackTowerGame({
       return;
     }
     if (gameModeRef.current === "starting" || gameModeRef.current === "playing") return;
+    getAudio().prime();
     setError(null);
     setResult(null);
     setGameMode("starting");
@@ -360,12 +610,14 @@ export default function StackTowerGame({
       setCombo(0);
       addFoundation();
       addMovingMesh(1);
+      getAudio().startBgm();
       setGameMode("playing");
     } catch (caught) {
+      audioRef.current?.stopBgm();
       setError(caught instanceof Error ? caught.message : "ゲームを開始できませんでした。");
       setGameMode("idle");
     }
-  }, [addFoundation, addMovingMesh, clearGameObjects, clearPlacementUnlockTimer, reloadGamePage, setGameMode]);
+  }, [addFoundation, addMovingMesh, clearGameObjects, clearPlacementUnlockTimer, getAudio, reloadGamePage, setGameMode]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -467,6 +719,21 @@ export default function StackTowerGame({
         return false;
       });
 
+      sizeUpEffectsRef.current = sizeUpEffectsRef.current.filter((effect) => {
+        effect.life += delta;
+        const progress = Math.min(1, effect.life / effect.maxLife);
+        effect.mesh.scale.setScalar(1 + progress * 0.34);
+        effect.mesh.rotation.y += 0.045 * delta;
+        const material = effect.mesh.material;
+        if (material instanceof THREE.MeshBasicMaterial) {
+          material.opacity = Math.max(0, 0.62 * (1 - progress));
+        }
+        if (progress < 1) return true;
+        effects.remove(effect.mesh);
+        disposeObject(effect.mesh);
+        return false;
+      });
+
       const targetY = cameraTargetYRef.current;
       const lookY = camera.position.y - 5.5;
       const nextLookY = THREE.MathUtils.lerp(lookY, targetY, 0.055 * delta);
@@ -519,6 +786,7 @@ export default function StackTowerGame({
 
   useEffect(() => {
     const markInterrupted = () => {
+      audioRef.current?.stopBgm();
       if (gameModeRef.current === "playing") interruptedRunRef.current = true;
     };
 
@@ -535,11 +803,15 @@ export default function StackTowerGame({
         return;
       }
       recoverIfInterrupted();
+      if (gameModeRef.current === "playing") getAudio().startBgm();
     };
 
     const onPageShow = () => recoverVisiblePage();
     const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible") {
+        audioRef.current?.stopBgm();
+        return;
+      }
       recoverVisiblePage();
     };
 
@@ -553,7 +825,7 @@ export default function StackTowerGame({
       window.removeEventListener("focus", recoverVisiblePage);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [reloadGamePage, resetInterruptedGame]);
+  }, [getAudio, reloadGamePage, resetInterruptedGame]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -568,6 +840,12 @@ export default function StackTowerGame({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [placeCurrentBlock, startGame]);
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.dispose();
+    };
+  }, []);
 
   useEffect(() => {
     if (!feedback) return;
@@ -666,6 +944,9 @@ export default function StackTowerGame({
       {mode === "playing" ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-7 z-10 text-center text-sm font-semibold text-white/65">
           タップ・クリック・Spaceで積む
+          <span className="mt-1 block text-xs text-[#ffd166]/80">
+            PERFECT {PERFECT_SIZE_UP_INTERVAL}連続でSIZE UP
+          </span>
         </div>
       ) : null}
 

@@ -122,6 +122,7 @@ export async function POST(request: Request) {
     .select("score")
     .eq("user_id", user.id)
     .eq("game_key", "stack_tower")
+    .eq("game_version", STACK_GAME_VERSION)
     .eq("status", "finished")
     .order("score", { ascending: false })
     .limit(1);

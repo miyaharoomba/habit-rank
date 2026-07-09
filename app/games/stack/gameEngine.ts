@@ -1,5 +1,8 @@
-export const STACK_GAME_VERSION = "stack_v1";
+export const STACK_GAME_VERSION = "stack_v2";
 export const BASE_SIZE = 3.2;
+export const MAX_STACK_SIZE = 4.25;
+export const PERFECT_SIZE_UP_INTERVAL = 5;
+export const PERFECT_SIZE_UP_AMOUNT = 0.35;
 export const BLOCK_HEIGHT = 0.52;
 export const TRAVEL_LIMIT = 4.8;
 export const MAX_REPLAY_TAPS = 100;
@@ -25,6 +28,7 @@ export type StackPlacement = {
   cut: StackCut | null;
   combo: number;
   points: number;
+  sizeUp: boolean;
 };
 
 export type StackReplayResult = {
@@ -105,6 +109,15 @@ export function placeBlock({
 
   if (perfect) {
     const nextCombo = combo + 1;
+    const shouldSizeUp = nextCombo % PERFECT_SIZE_UP_INTERVAL === 0;
+    const width = shouldSizeUp
+      ? Math.min(MAX_STACK_SIZE, moving.width + PERFECT_SIZE_UP_AMOUNT)
+      : moving.width;
+    const depth = shouldSizeUp
+      ? Math.min(MAX_STACK_SIZE, moving.depth + PERFECT_SIZE_UP_AMOUNT)
+      : moving.depth;
+    const sizeUp = width > moving.width || depth > moving.depth;
+
     return {
       gameOver: false,
       perfect: true,
@@ -113,10 +126,13 @@ export function placeBlock({
         ...moving,
         x: axis === "x" ? previous.x : moving.x,
         z: axis === "z" ? previous.z : moving.z,
+        width,
+        depth,
       },
       cut: null,
       combo: nextCombo,
-      points: 250 + Math.min(300, nextCombo * 20),
+      points: 250 + Math.min(300, nextCombo * 20) + (sizeUp ? 180 : 0),
+      sizeUp,
     };
   }
 
@@ -130,6 +146,7 @@ export function placeBlock({
       cut: { ...moving, axis },
       combo: 0,
       points: 0,
+      sizeUp: false,
     };
   }
 
@@ -166,6 +183,7 @@ export function placeBlock({
     cut,
     combo: 0,
     points: 80 + Math.round(overlapRatio * 140),
+    sizeUp: false,
   };
 }
 
