@@ -54,8 +54,8 @@ export async function getUserTitleMap(
       throw new Error(bErr.message);
     }
 
-    (badges ?? []).forEach((b: any) => {
-      badgeMap.set(b.id, b as BadgeLiteRow);
+    ((badges ?? []) as BadgeLiteRow[]).forEach((b) => {
+      badgeMap.set(b.id, b);
     });
   }
 
@@ -72,4 +72,3 @@ export async function getUserTitleMap(
 
   return result;
 }
-``

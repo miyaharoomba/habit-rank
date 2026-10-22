@@ -37,6 +37,7 @@ export default function LinkifiedText({
 
   useEffect(() => {
     abortRef.current?.abort();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Invalidates the previous URL cache entry before starting an abortable external request.
     setPreview(null);
     setPreviewFailed(false);
 
@@ -79,8 +80,8 @@ export default function LinkifiedText({
         } else {
           setPreviewFailed(true);
         }
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === "AbortError") return;
         previewCache.set(previewUrl, { ok: false, error: "fetch_failed" });
         setPreviewFailed(true);
       }
@@ -125,4 +126,3 @@ export default function LinkifiedText({
     </div>
   );
 }
-``

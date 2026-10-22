@@ -11,7 +11,7 @@ import {
 
 function parseSessionId(raw: FormDataEntryValue | null) {
   const id = Number(String(raw ?? "").trim());
-  if (!Number.isFinite(id) || id <= 0) {
+  if (!Number.isSafeInteger(id) || id <= 0) {
     throw new Error("session id is invalid");
   }
   return id;
@@ -73,11 +73,11 @@ export async function adjustSessionAction(formData: FormData) {
       editReason,
     });
     await revalidateAll(sessionId, user.id);
-    redirect(`/results/${sessionId}?corrected=adjust`);
   } catch (e: unknown) {
     const message = encodeURIComponent(errorMessage(e, "adjust_failed"));
     redirect(`/results/${sessionId}?correction_error=${message}`);
   }
+  redirect(`/results/${sessionId}?corrected=adjust`);
 }
 
 export async function mergeSessionAction(formData: FormData) {
@@ -85,6 +85,7 @@ export async function mergeSessionAction(formData: FormData) {
   const sessionId = parseSessionId(formData.get("session_id"));
   const editReason = normalizeReason(formData.get("edit_reason"), "merge");
 
+  let keptSessionId: number;
   try {
     const result = await mergeSessionWithNext({
       sessionId,
@@ -93,11 +94,12 @@ export async function mergeSessionAction(formData: FormData) {
     });
     await revalidateAll(sessionId, user.id);
     await revalidateAll(result.keptSessionId, user.id);
-    redirect(`/results/${result.keptSessionId}?corrected=merge`);
+    keptSessionId = result.keptSessionId;
   } catch (e: unknown) {
     const message = encodeURIComponent(errorMessage(e, "merge_failed"));
     redirect(`/results/${sessionId}?correction_error=${message}`);
   }
+  redirect(`/results/${keptSessionId}?corrected=merge`);
 }
 
 export async function splitSessionAction(formData: FormData) {
@@ -113,6 +115,7 @@ export async function splitSessionAction(formData: FormData) {
     redirect(`/results/${sessionId}?correction_error=splitRequired`);
   }
 
+  let secondSessionId: number;
   try {
     const result = await splitFinishedSession({
       sessionId,
@@ -125,9 +128,10 @@ export async function splitSessionAction(formData: FormData) {
     });
     await revalidateAll(sessionId, user.id);
     await revalidateAll(result.secondSessionId, user.id);
-    redirect(`/results/${sessionId}?corrected=split&created=${result.secondSessionId}`);
+    secondSessionId = result.secondSessionId;
   } catch (e: unknown) {
     const message = encodeURIComponent(errorMessage(e, "split_failed"));
     redirect(`/results/${sessionId}?correction_error=${message}`);
   }
+  redirect(`/results/${sessionId}?corrected=split&created=${secondSessionId}`);
 }

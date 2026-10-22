@@ -146,6 +146,7 @@ export default function AppTutorial({ userId }: { userId: string }) {
       const key = storageKey(userId);
       if (window.localStorage.getItem(key) !== "seen") {
         window.localStorage.setItem(key, "seen");
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- One-time hydration from localStorage; this effect never depends on tutorial state.
         setStepIndex(0);
         setOpen(true);
       }

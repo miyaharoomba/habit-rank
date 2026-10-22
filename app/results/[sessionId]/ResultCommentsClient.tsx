@@ -96,7 +96,7 @@ export default function ResultCommentsClient({
   resultOwnerName: string;
   initialComments: ResultCommentItem[];
 }) {
-  const [comments, setComments] = useState(initialComments);
+  const [comments, setComments] = useState(() => sortComments(initialComments));
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState<ResultCommentItem | null>(null);
   const [sending, setSending] = useState(false);
@@ -109,9 +109,11 @@ export default function ResultCommentsClient({
   const lastRefreshAtRef = useRef(0);
   const sendingRef = useRef(false);
 
-  useEffect(() => {
+  const [previousComments, setPreviousComments] = useState(initialComments);
+  if (previousComments !== initialComments) {
+    setPreviousComments(initialComments);
     setComments(sortComments(initialComments));
-  }, [initialComments]);
+  }
 
   const fetchComments = useCallback(
     async ({ force = false }: { force?: boolean } = {}) => {

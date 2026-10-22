@@ -73,6 +73,7 @@ export default async function AdminSessionsPage() {
     });
   }
 
+  // eslint-disable-next-line react-hooks/purity -- Request-time Server Component / Server Action; this timestamp is not client render state.
   const now = Date.now();
   const over24Hours = sessions.filter(
     (row) => now - new Date(row.started_at).getTime() >= 24 * 60 * 60 * 1000

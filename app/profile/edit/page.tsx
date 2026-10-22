@@ -182,6 +182,7 @@ export default async function ProfileEditPage({
       }
 
       const ext = extFromName(avatar.name || "avatar.bin");
+      // eslint-disable-next-line react-hooks/purity -- Request-time Server Component / Server Action; this timestamp is not client render state.
       const path = `${user.id}/${Date.now()}.${ext}`;
       const arrayBuffer = await avatar.arrayBuffer();
 

@@ -3,6 +3,8 @@ import {
   type SupabaseClient,
 } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { randomUUID } from "node:crypto";
+import { deliverPushDevices } from "./deliverPushDevices";
 
 type OutboxRow = {
   id: number;
@@ -10,6 +12,7 @@ type OutboxRow = {
   recipient_id: string | null;
   payload: unknown;
   attempts: number;
+  delivered_to: string[];
 };
 
 type NotificationRow = {
@@ -19,12 +22,6 @@ type NotificationRow = {
   thread_id: string | null;
   session_id: number | string | null;
   message_preview: string | null;
-};
-
-type NotificationPreferenceRow = {
-  user_id: string | null;
-  notification_type: string | null;
-  enabled: boolean | null;
 };
 
 type ProfileRow = {
@@ -54,7 +51,7 @@ export type PushDispatchSummary = {
   error?: string;
 };
 
-export const PUSH_DISPATCH_VERSION = "dispatch_v2026_06_26_preferences";
+export const PUSH_DISPATCH_VERSION = "dispatch_v2026_10_22_leases";
 
 function mustEnv(name: string) {
   const v = process.env[name];
@@ -66,23 +63,6 @@ function errorMessage(e: unknown) {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
   return String(e);
-}
-
-function pushErrorDetails(e: unknown) {
-  if (!e || typeof e !== "object") {
-    return { message: errorMessage(e), statusCode: null };
-  }
-
-  const maybe = e as { body?: unknown; message?: unknown; statusCode?: unknown };
-  const body = typeof maybe.body === "string" ? maybe.body : null;
-  const message = typeof maybe.message === "string" ? maybe.message : null;
-  const statusCode =
-    typeof maybe.statusCode === "number" ? maybe.statusCode : null;
-
-  return {
-    message: body ?? message ?? errorMessage(e),
-    statusCode,
-  };
 }
 
 function textOr(value: unknown, fallback: string) {
@@ -107,96 +87,6 @@ function payloadObject(value: unknown): PushPayload {
     body: textOr(maybe.body, "新しい通知があります"),
     url: textOr(maybe.url, "/app"),
   };
-}
-
-async function filterRowsByNotificationPreferences(
-  supabase: SupabaseClient,
-  rows: OutboxRow[]
-) {
-  const notificationIds = Array.from(
-    new Set(rows.map((row) => row.notification_id).filter(Boolean))
-  );
-  const recipientIds = Array.from(
-    new Set(rows.map((row) => row.recipient_id).filter(Boolean))
-  ) as string[];
-
-  if (notificationIds.length === 0 || recipientIds.length === 0) {
-    return { rows, skipped: 0 };
-  }
-
-  const { data: notifications, error: nErr } = await supabase
-    .from("notifications")
-    .select("id, type")
-    .in("id", notificationIds);
-
-  if (nErr) {
-    console.error("notification preference filter skipped:", nErr.message);
-    return { rows, skipped: 0 };
-  }
-
-  const typeMap = new Map(
-    ((notifications ?? []) as Array<{ id: string; type: string }>).map((n) => [
-      n.id,
-      n.type,
-    ])
-  );
-  const notificationTypes = Array.from(new Set(typeMap.values()));
-  if (notificationTypes.length === 0) {
-    return { rows, skipped: 0 };
-  }
-
-  const { data: preferences, error: pErr } = await supabase
-    .from("notification_preferences")
-    .select("user_id, notification_type, enabled")
-    .in("user_id", recipientIds)
-    .in("notification_type", notificationTypes)
-    .eq("enabled", false);
-
-  if (pErr) {
-    console.error("notification preference fetch failed:", pErr.message);
-    return { rows, skipped: 0 };
-  }
-
-  const disabledSet = new Set(
-    ((preferences ?? []) as NotificationPreferenceRow[])
-      .filter((p) => p.user_id && p.notification_type && p.enabled === false)
-      .map((p) => `${p.user_id}:${p.notification_type}`)
-  );
-
-  if (disabledSet.size === 0) {
-    return { rows, skipped: 0 };
-  }
-
-  const skippedRows: OutboxRow[] = [];
-  const sendableRows: OutboxRow[] = [];
-
-  for (const row of rows) {
-    const type = typeMap.get(row.notification_id);
-    if (row.recipient_id && type && disabledSet.has(`${row.recipient_id}:${type}`)) {
-      skippedRows.push(row);
-    } else {
-      sendableRows.push(row);
-    }
-  }
-
-  if (skippedRows.length > 0) {
-    const { error } = await supabase
-      .from("push_outbox")
-      .update({
-        sent_at: new Date().toISOString(),
-        last_error: "notification disabled by user",
-      })
-      .in(
-        "id",
-        skippedRows.map((row) => row.id)
-      );
-
-    if (error) {
-      console.error("disabled notification outbox update failed:", error.message);
-    }
-  }
-
-  return { rows: sendableRows, skipped: skippedRows.length };
 }
 
 async function buildPayloadMap(
@@ -304,171 +194,86 @@ async function buildPayloadMap(
   return map;
 }
 
-export async function dispatchPendingPush({
-  limit = 25,
-}: {
-  limit?: number;
-} = {}): Promise<PushDispatchSummary> {
-  webpush.setVapidDetails(
-    mustEnv("VAPID_SUBJECT"),
-    mustEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
-    mustEnv("VAPID_PRIVATE_KEY")
-  );
-
-  const supabase = createAdminClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  );
-
-  const batchLimit = Math.max(1, Math.min(limit, 100));
-
-  const { data: outbox, error: oErr } = await supabase
-    .from("push_outbox")
-    .select("id, notification_id, recipient_id, payload, attempts")
-    .is("sent_at", null)
-    .lt("attempts", 8)
-    .order("created_at", { ascending: true })
-    .limit(batchLimit);
-
-  if (oErr) {
-    return {
-      ok: false,
-      version: PUSH_DISPATCH_VERSION,
-      processed: 0,
-      sent: 0,
-      failed: 0,
-      error: oErr.message,
-    };
-  }
-
-  const rows = (outbox ?? []) as OutboxRow[];
-  if (rows.length === 0) {
-    return {
-      ok: true,
-      version: PUSH_DISPATCH_VERSION,
-      processed: 0,
-      sent: 0,
-      failed: 0,
-    };
-  }
-
-  const filtered = await filterRowsByNotificationPreferences(supabase, rows);
-  const rowsToSend = filtered.rows;
-  const payloadMap = await buildPayloadMap(supabase, rowsToSend);
-
-  let processed = filtered.skipped;
+export async function dispatchPendingPush({ limit = 25 }: { limit?: number } = {}): Promise<PushDispatchSummary> {
+  webpush.setVapidDetails(mustEnv("VAPID_SUBJECT"), mustEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY"), mustEnv("VAPID_PRIVATE_KEY"));
+  const supabase = createAdminClient(mustEnv("NEXT_PUBLIC_SUPABASE_URL"), mustEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const worker = randomUUID();
+  const { data, error } = await supabase.rpc("claim_push_outbox", {
+    p_worker: worker, p_limit: Math.max(1, Math.min(limit, 25)),
+  });
+  if (error) return { ok: false, version: PUSH_DISPATCH_VERSION, processed: 0, sent: 0, failed: 0, error: error.message };
+  const rows = (data ?? []) as OutboxRow[];
+  const payloadMap = await buildPayloadMap(supabase, rows);
   let sent = 0;
   let failed = 0;
 
-  for (const row of rowsToSend) {
-    processed++;
+  async function release(row: OutboxRow, values: Record<string, unknown>) {
+    const { error } = await supabase.from("push_outbox").update({
+      ...values, claimed_by: null, claimed_until: null,
+    }).eq("id", row.id).eq("claimed_by", worker);
+    if (error) throw new Error(error.message);
+  }
 
-    if (!row.recipient_id) {
-      await supabase
-        .from("push_outbox")
-        .update({
-          attempts: row.attempts + 1,
-          last_error: "recipient_id is null (skip)",
-        })
-        .eq("id", row.id);
-      failed++;
-      continue;
-    }
-
-    const { data: subs, error: sErr } = await supabase
-      .from("push_subscriptions")
-      .select("endpoint, p256dh, auth")
-      .eq("user_id", row.recipient_id)
-      .eq("disabled", false);
-
-    if (sErr) {
-      await supabase
-        .from("push_outbox")
-        .update({
-          attempts: row.attempts + 1,
-          last_error: sErr.message,
-        })
-        .eq("id", row.id);
-      failed++;
-      continue;
-    }
-
-    const subscriptions = (subs ?? []) as SubRow[];
-    if (subscriptions.length === 0) {
-      await supabase
-        .from("push_outbox")
-        .update({
-          attempts: row.attempts + 1,
-          last_error: "no subscriptions",
-        })
-        .eq("id", row.id);
-      failed++;
-      continue;
-    }
-
-    const payload = JSON.stringify(payloadMap.get(row.id) ?? payloadObject(row.payload));
-
-    let anySent = false;
-    let lastErr: string | null = null;
-
-    for (const sub of subscriptions) {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: {
-              p256dh: sub.p256dh,
-              auth: sub.auth,
-            },
-          } as Parameters<typeof webpush.sendNotification>[0],
-          payload
-        );
-        anySent = true;
-      } catch (e: unknown) {
-        const details = pushErrorDetails(e);
-        lastErr = details.message;
-        const statusCode = details.statusCode;
-
-        if (statusCode === 404 || statusCode === 410) {
-          await supabase
-            .from("push_subscriptions")
-            .update({
-              disabled: true,
-              last_seen_at: new Date().toISOString(),
-            })
-            .eq("user_id", row.recipient_id)
-            .eq("endpoint", sub.endpoint);
-        }
+  async function deliver(row: OutboxRow) {
+    try {
+      if (!row.recipient_id) {
+        await release(row, { sent_at: new Date().toISOString(), last_error: "no recipient" });
+        return;
       }
-    }
-
-    if (anySent) {
-      await supabase
-        .from("push_outbox")
-        .update({
-          sent_at: new Date().toISOString(),
-          last_error: null,
-        })
-        .eq("id", row.id);
-      sent++;
-    } else {
-      await supabase
-        .from("push_outbox")
-        .update({
-          attempts: row.attempts + 1,
-          last_error: lastErr ?? "send failed",
-        })
-        .eq("id", row.id);
+      const { data: notification, error: nErr } = await supabase.from("notifications")
+        .select("type").eq("id", row.notification_id).maybeSingle();
+      if (nErr) throw new Error(nErr.message);
+      if (!notification) {
+        await release(row, { sent_at: new Date().toISOString(), last_error: "notification removed" });
+        return;
+      }
+      const { data: preference, error: pErr } = await supabase.from("notification_preferences")
+        .select("enabled").eq("user_id", row.recipient_id).eq("notification_type", notification.type).maybeSingle();
+      // A preference lookup failure must not send a notification the user disabled.
+      if (pErr) throw new Error(pErr.message);
+      if (preference?.enabled === false) {
+        await release(row, { sent_at: new Date().toISOString(), last_error: "notification disabled by user" });
+        return;
+      }
+      const { data: subs, error: sErr } = await supabase.from("push_subscriptions")
+        .select("endpoint, p256dh, auth").eq("user_id", row.recipient_id).eq("disabled", false);
+      if (sErr) throw new Error(sErr.message);
+      const payload = JSON.stringify({
+        ...(payloadMap.get(row.id) ?? payloadObject(row.payload)), notificationId: row.notification_id,
+      });
+      const {deliveredTo, lastError} = await deliverPushDevices({
+        devices: (subs ?? []) as SubRow[], deliveredTo: row.delivered_to ?? [], payload,
+        send: (sub, message) => webpush.sendNotification({
+          endpoint: sub.endpoint, keys: {p256dh:sub.p256dh,auth:sub.auth},
+        }, message, {timeout:5000}),
+        disable: async (endpoint) => {
+          const {error} = await supabase.from("push_subscriptions").update({disabled:true})
+            .eq("user_id",row.recipient_id).eq("endpoint",endpoint);
+          if(error) throw new Error(error.message);
+        },
+      });
+      await release(row, {
+        delivered_to: deliveredTo, last_error: lastError,
+        next_attempt_at: lastError ? new Date(Date.now() + Math.min(3600000, 60000 * 2 ** (row.attempts - 1))).toISOString() : null,
+        ...(lastError ? {} : { sent_at: new Date().toISOString() }),
+      });
+      if (lastError) failed++; else sent++;
+    } catch (error) {
       failed++;
+      await release(row, { last_error: errorMessage(error).slice(0, 1000),
+        next_attempt_at: new Date(Date.now() + Math.min(3600000, 60000 * 2 ** (row.attempts - 1))).toISOString() });
     }
   }
 
-  return {
-    ok: true,
-    version: PUSH_DISPATCH_VERSION,
-    processed,
-    sent,
-    failed,
-  };
+  // Bound concurrent batches and individual network waits to stay within the lease.
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(5, rows.length) }, async () => {
+    while (cursor < rows.length) {
+      const row = rows[cursor++];
+      await deliver(row);
+    }
+  }));
+  return { ok: failed === 0, version: PUSH_DISPATCH_VERSION, processed: rows.length, sent, failed };
 }

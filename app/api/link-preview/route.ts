@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchPublicHtml, normalizePublicHttpUrl } from "@/lib/http/publicHtml";
 
 type PreviewResponse = {
   ok: true;
@@ -34,6 +35,8 @@ function getCached(url: string) {
 }
 
 function setCached(url: string, value: PreviewResponse | FailResponse) {
+  for (const [key, entry] of cache) if (entry.expiresAt < Date.now()) cache.delete(key);
+  while (cache.size >= 256) cache.delete(cache.keys().next().value!);
   cache.set(url, {
     expiresAt: Date.now() + CACHE_TTL_MS,
     value,
@@ -55,38 +58,10 @@ function collapseWhitespace(input: string) {
 
 function normalizeInputUrl(raw: string) {
   try {
-    const u = new URL(raw);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    return u.toString();
+    return normalizePublicHttpUrl(raw).toString();
   } catch {
     return null;
   }
-}
-
-function isPrivateHostname(hostname: string) {
-  const host = hostname.toLowerCase();
-
-  if (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "0.0.0.0" ||
-    host.endsWith(".local")
-  ) {
-    return true;
-  }
-
-  if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true;
-  if (/^192\.168\.\d+\.\d+$/.test(host)) return true;
-  if (/^127\.\d+\.\d+\.\d+$/.test(host)) return true;
-  if (/^169\.254\.\d+\.\d+$/.test(host)) return true;
-
-  const m172 = host.match(/^172\.(\d+)\.\d+\.\d+$/);
-  if (m172) {
-    const second = Number(m172[1]);
-    if (second >= 16 && second <= 31) return true;
-  }
-
-  return false;
 }
 
 function pickMeta(html: string, keys: string[]) {
@@ -110,43 +85,9 @@ function pickTitle(html: string) {
 function absolutizeMaybe(baseUrl: string, value: string | null) {
   if (!value) return null;
   try {
-    return new URL(value, baseUrl).toString();
+    return normalizePublicHttpUrl(new URL(value, baseUrl).toString()).toString();
   } catch {
     return null;
-  }
-}
-
-async function fetchHtml(targetUrl: string) {
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 5000);
-
-  try {
-    const res = await fetch(targetUrl, {
-      method: "GET",
-      redirect: "follow",
-      signal: ac.signal,
-      headers: {
-        "User-Agent": "habitbase-link-preview/1.0",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      cache: "no-store",
-    });
-
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    if (!contentType.toLowerCase().includes("text/html")) {
-      throw new Error("not_html");
-    }
-
-    const html = await res.text();
-    return {
-      finalUrl: res.url || targetUrl,
-      html,
-    };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -162,14 +103,7 @@ async function buildPreview(url: string): Promise<PreviewResponse | FailResponse
       return fail;
     }
 
-    const parsed = new URL(normalized);
-    if (isPrivateHostname(parsed.hostname)) {
-      const fail: FailResponse = { ok: false, error: "blocked_host" };
-      setCached(url, fail);
-      return fail;
-    }
-
-    const { finalUrl, html } = await fetchHtml(normalized);
+    const { finalUrl, html } = await fetchPublicHtml(normalized);
 
     const title =
       pickMeta(html, ["og:title", "twitter:title"]) || pickTitle(html) || finalUrl;

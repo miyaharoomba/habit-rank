@@ -96,6 +96,7 @@ export default function SessionCameraCapture({
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Camera device startup synchronizes external hardware and its loading state.
     void startCamera(facingMode);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";

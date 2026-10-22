@@ -24,4 +24,3 @@ export async function saveNameAndGo(formData: FormData) {
 
   redirect('/app')
 }
-``

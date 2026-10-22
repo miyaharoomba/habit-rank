@@ -25,4 +25,3 @@ export async function openDm(otherUserId: string) {
 
   redirect(`/dm/${threadId}`); // スレッドへ移動 [1](https://stackoverflow.com/questions/76509197/unable-to-delete-cookie-using-next-js-server-side-action)
 }
-``

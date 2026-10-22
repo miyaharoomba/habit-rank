@@ -726,6 +726,7 @@ export default function GlobalChatBoard({
   }, [limit]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Starts an external polling subscription; loading state belongs to that request.
     fetchMessages();
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;

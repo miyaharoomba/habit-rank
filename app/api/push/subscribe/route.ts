@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { validPushEndpoint, validPushKeys } from "@/lib/push/subscription";
 
 type IncomingSubscription = {
   endpoint?: string;
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
   const p256dh = String(body.keys?.p256dh ?? "").trim();
   const auth = String(body.keys?.auth ?? "").trim();
 
-  if (!endpoint || !p256dh || !auth) {
+  if (!validPushEndpoint(endpoint) || !validPushKeys(p256dh, auth)) {
     return NextResponse.json(
       { ok: false, error: "endpoint/keys are required" },
       { status: 400 }
@@ -64,4 +65,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true });
 }
-``

@@ -1,3 +1,4 @@
+import { applyPulseInput, createPulseState, MAX_PULSE_INPUTS, pulseElapsed, pulseProgress, PULSE_STEP_MS, stepPulse } from "./gameEngine";
 import {
   AIR_JUMP_RINGS,
   AIR_RING_BODY_SIZE,
@@ -13,9 +14,6 @@ import {
   CUBE_PLATFORMS,
   CUBE_PRESS_GATES,
   CUBE_BODY_SIZE,
-  CUBE_GRAVITY,
-  CUBE_JUMP_SPEED,
-  CUBE_MAX_VERTICAL_SPEED,
   CUBE_SPIKE_BEATS,
   DASH_RINGS,
   FLOOR_Y,
@@ -119,6 +117,10 @@ export async function mountPulseRunner({
   const Phaser = (PhaserModule.default ?? PhaserModule) as typeof PhaserModule;
 
   class PulseRunnerScene extends Phaser.Scene {
+    private simulation = createPulseState();
+    private simulationAccumulator = 0;
+    private simulationWallTime = 0;
+    private inputCursor = 0;
     private player!: ArcadeSprite;
     private ground!: import("phaser").GameObjects.Rectangle;
     private ceiling!: import("phaser").GameObjects.Rectangle;
@@ -137,11 +139,7 @@ export async function mountPulseRunner({
     private mode: PulseMode = "cube";
     private gravityDirection: PulseGravity = 1;
     private mini = false;
-    private dashUntil = 0;
-    private dashSpeedMultiplier = 1;
     private pressed = false;
-    private jumpQueuedUntil = 0;
-    private bounceLockedUntil = 0;
     private startedAt = 0;
     private lastProgressAt = 0;
     private inputs: PulseInput[] = [];
@@ -150,7 +148,6 @@ export async function mountPulseRunner({
     private started = false;
     private orientationPaused = false;
     private orientationPausedAt = 0;
-    private debugGhostUntil = 0;
     private debugSpeedMultiplier = 1;
     private beatFlash!: import("phaser").GameObjects.Rectangle;
     private modeLabel!: import("phaser").GameObjects.Text;
@@ -174,101 +171,6 @@ export async function mountPulseRunner({
       this.createPlayer();
       this.bindInput();
 
-      this.physics.add.collider(this.player, this.ground);
-      this.physics.add.collider(this.player, this.ceiling);
-      this.physics.add.collider(this.player, this.platforms, (_player, object) => {
-        const platform = object as import("phaser").GameObjects.Rectangle;
-        const playerBody = this.player.body as ArcadeBody;
-        const platformGravity = Number(platform.getData("gravity")) as PulseGravity;
-        const landedOnSurface =
-          this.mode === "cube" &&
-          this.gravityDirection === platformGravity &&
-          (platformGravity === 1
-            ? playerBody.blocked.down && this.player.y < platform.y
-            : playerBody.blocked.up && this.player.y > platform.y);
-        if (!landedOnSurface) {
-          if (!debugMode) this.finish(false);
-          return;
-        }
-        if (
-          platform.getData("collapsible") === true &&
-          platform.getData("collapseTriggered") !== true
-        ) {
-          const collapseGeneration = Number(platform.getData("collapseGeneration"));
-          platform.setData("collapseTriggered", true);
-          this.time.delayedCall(150, () => {
-            if (Number(platform.getData("collapseGeneration")) !== collapseGeneration) return;
-            const platformBody = platform.body as import("phaser").Physics.Arcade.StaticBody;
-            platformBody.enable = false;
-            this.tweens.add({
-              targets: platform,
-              y: platform.y + 34,
-              angle: platform.x % 2 === 0 ? 9 : -9,
-              alpha: 0,
-              duration: 280,
-            });
-          });
-        }
-      }, debugMode ? (_player, object) => this.canDebugLandOn(object) : undefined);
-      if (debugMode) {
-        const ghostThrough = () => {
-          this.debugGhostUntil = this.time.now + 90;
-        };
-        this.physics.add.overlap(this.player, this.hazards, ghostThrough);
-        this.physics.add.overlap(this.player, this.movingHazards, ghostThrough);
-      } else {
-        this.physics.add.collider(this.player, this.hazards, () => this.finish(false));
-        this.physics.add.collider(this.player, this.movingHazards, () => this.finish(false));
-      }
-      this.physics.add.overlap(this.player, this.bouncePads, (_player, object) => {
-        const pad = object as import("phaser").GameObjects.Rectangle;
-        if (
-          this.mode !== "cube" ||
-          this.gravityDirection !== Number(pad.getData("gravity")) ||
-          pad.getData("used") === true
-        ) return;
-        const body = this.player.body as ArcadeBody;
-        const danger = pad.getData("danger") === true;
-        pad
-          .setData("used", true)
-          .setFillStyle(danger ? 0xff6b7a : 0x7bf1a8, 0.45);
-        this.jumpQueuedUntil = 0;
-        this.bounceLockedUntil = this.time.now + 240;
-        body.setVelocityY(-Number(pad.getData("power")) * this.gravityDirection);
-        this.cameras.main.flash(
-          120,
-          danger ? 255 : 123,
-          danger ? 107 : 241,
-          danger ? 122 : 168,
-          false
-        );
-      });
-      this.physics.add.overlap(this.player, this.coinsGroup, (_player, object) => {
-        const coin = object as import("phaser").Physics.Arcade.Image;
-        if (!coin.active) return;
-        coin.disableBody(true, true);
-        this.coins += 1;
-        this.cameras.main.flash(80, 255, 215, 90, false);
-      });
-      this.physics.add.overlap(this.player, this.airRings, (_player, object) => {
-        const ring = object as import("phaser").Physics.Arcade.Image;
-        if (this.mode !== "cube" || !this.pressed || ring.getData("used") === true) return;
-        ring.setData("used", true).setAlpha(0.28);
-        this.jumpQueuedUntil = 0;
-        (this.player.body as ArcadeBody).setVelocityY(
-          -Number(ring.getData("power")) * this.gravityDirection
-        );
-        this.cameras.main.flash(90, 255, 215, 90, false);
-      });
-      this.physics.add.overlap(this.player, this.dashRings, (_player, object) => {
-        const ring = object as import("phaser").Physics.Arcade.Image;
-        if (this.mode !== "cube" || !this.pressed || ring.getData("used") === true) return;
-        ring.setData("used", true).setAlpha(0.3);
-        this.dashUntil = this.time.now + Number(ring.getData("durationMs"));
-        this.dashSpeedMultiplier = Number(ring.getData("speedMultiplier"));
-        this.cameras.main.flash(120, 98, 216, 255, false);
-      });
-
       this.physics.pause();
       this.verifyRenderedPixels();
       callbacks.onModeChange(this.mode);
@@ -277,117 +179,72 @@ export async function mountPulseRunner({
 
     update(time: number) {
       if (!this.started || this.ended || this.orientationPaused || !this.player?.body) return;
-      const body = this.player.body as ArcadeBody;
-      this.player.setAlpha(debugMode && time < this.debugGhostUntil ? 0.42 : 1);
-      const courseBeat = (this.player.x - LEVEL_START_X) / PX_PER_BEAT;
-      const horizontalSpeed =
-        (time < this.dashUntil ? RUN_SPEED * this.dashSpeedMultiplier : RUN_SPEED) *
-        this.debugSpeedMultiplier;
-      body.setVelocityX(horizontalSpeed);
-
-      const expectedMode = pulseModeAtX(this.player.x);
-      if (expectedMode !== this.mode) this.switchMode(expectedMode);
-      const expectedGravity = this.mode === "cube" ? pulseGravityAtX(this.player.x) : 1;
-      if (expectedGravity !== this.gravityDirection) this.switchGravity(expectedGravity);
-      const expectedMini = this.mode === "cube" && pulseMiniAtX(this.player.x);
-      if (expectedMini !== this.mini) this.switchCubeSize(expectedMini);
-      this.syncSurfaces();
-      this.updateNormalMechanics(courseBeat);
-      this.updateWindEffects(time);
-
-      if (this.mode === "cube") {
-        body.setAccelerationY(CUBE_GRAVITY * this.gravityDirection);
-        body.setMaxVelocity(horizontalSpeed, CUBE_MAX_VERTICAL_SPEED);
-        const grounded =
-          this.gravityDirection === 1
-            ? body.blocked.down || body.touching.down
-            : body.blocked.up || body.touching.up;
-        if (grounded) {
-          this.player.setAngle(Math.round(this.player.angle / 90) * 90);
-          if (time >= this.bounceLockedUntil && (this.pressed || time <= this.jumpQueuedUntil)) {
-            body.setVelocityY(-CUBE_JUMP_SPEED * this.gravityDirection);
-            this.jumpQueuedUntil = 0;
-          }
-        } else {
-          this.player.angle += 260 * this.gravityDirection * (this.game.loop.delta / 1000);
+      const now = performance.now();
+      this.simulationAccumulator += Math.max(0, now - this.simulationWallTime) * this.debugSpeedMultiplier;
+      this.simulationWallTime = now;
+      const state = this.simulation;
+      while (this.simulationAccumulator >= PULSE_STEP_MS && !state.ended) {
+        while (this.inputCursor < this.inputs.length &&
+          this.inputs[this.inputCursor].atMs <= pulseElapsed(state) + .00001) {
+          applyPulseInput(state, this.inputs[this.inputCursor++]);
         }
-      } else {
-        this.updateShipMechanics(courseBeat);
-        const windForce = pulseWindAtBeat(courseBeat);
-        body.setAccelerationY((this.pressed ? -1450 : 1050) + windForce);
-        body.setMaxVelocity(horizontalSpeed, 430);
-        const turbulence = windForce === 0 ? 0 : Math.sin(time * 0.045) * 2.4;
-        this.player.setAngle(
-          Math.max(-24, Math.min(28, body.velocity.y * 0.07 + turbulence))
-        );
-        this.modeLabel
-          .setText(
-            windForce < 0
-              ? "ROCKET // UPDRAFT"
-              : windForce > 0
-                ? "ROCKET // DOWNDRAFT"
-                : "ROCKET MODE"
-          )
-          .setColor(windForce < 0 ? "#8ce6ff" : windForce > 0 ? "#d9b8ff" : "#ff8b98");
-        if (this.pressed && this.time.now % 80 < 20) {
-          const spark = this.add.circle(this.player.x - 32, this.player.y, 5, 0xffd166, 0.9);
-          spark.setDepth(9);
-          this.tweens.add({
-            targets: spark,
-            x: spark.x - 42,
-            alpha: 0,
-            scale: 0.2,
-            duration: 220,
-            onComplete: () => spark.destroy(),
-          });
-        }
+        stepPulse(state, debugMode);
+        this.simulationAccumulator -= PULSE_STEP_MS;
       }
-
-      if (time < this.dashUntil && time % 55 < 18) {
-        const trail = this.add.rectangle(
-          this.player.x - 34,
-          this.player.y,
-          52,
-          this.mini ? 14 : 20,
-          0x62d8ff,
-          0.55
-        );
-        trail.setDepth(8);
-        this.tweens.add({
-          targets: trail,
-          x: trail.x - 90,
-          scaleX: 1.8,
-          alpha: 0,
-          duration: 240,
-          onComplete: () => trail.destroy(),
+      if (state.mode !== this.mode) this.switchMode(state.mode);
+      if (state.gravity !== this.gravityDirection) this.switchGravity(state.gravity);
+      if (state.mini !== this.mini) this.switchCubeSize(state.mini);
+      (this.player.body as ArcadeBody).reset(state.x, state.y);
+      this.coins = state.coins;
+      this.syncSurfaces();
+      const courseBeat = (state.x - LEVEL_START_X) / PX_PER_BEAT;
+      this.updateNormalMechanics(courseBeat);
+      this.updateShipMechanics(courseBeat);
+      this.updateWindEffects(time);
+      if (state.mode === "cube") {
+        if (state.grounded) this.player.setAngle(Math.round(this.player.angle / 90) * 90);
+        else this.player.angle += 260 * state.gravity * this.game.loop.delta / 1000;
+      } else {
+        this.player.setAngle(Math.max(-24, Math.min(28, state.vy * .07)));
+        const wind = pulseWindAtBeat(courseBeat);
+        this.modeLabel.setText(wind < 0 ? "ROCKET // UPDRAFT" : wind > 0 ? "ROCKET // DOWNDRAFT" : "ROCKET MODE");
+      }
+      for (const [prefix, group] of [["air", this.airRings], ["dash", this.dashRings], ["coin", this.coinsGroup]] as const) {
+        group.getChildren().forEach((object, index) => {
+          const sprite = object as import("phaser").Physics.Arcade.Image;
+          if (state.used.includes(prefix + ":" + index)) {
+            if (prefix === "coin") sprite.setVisible(false); else sprite.setAlpha(.28);
+          }
         });
       }
-
-      if (this.player.y < 12 || this.player.y > 528) {
-        if (debugMode) {
-          this.player.y =
-            this.mode === "ship"
-              ? 270
-              : this.gravityDirection === 1
-                ? FLOOR_Y - 72
-                : CEILING_Y + 72;
-          body.setVelocityY(0);
-          this.debugGhostUntil = time + 120;
-        } else {
-          this.finish(false);
-        }
+      for (const object of this.platforms.getChildren()) {
+        const platform = object as import("phaser").GameObjects.Rectangle;
+        if (platform.getData("collapsible") !== true) continue;
+        const index = COLLAPSING_FLOORS.findIndex(p => beatX(p.beat) === platform.x);
+        const remaining = state.collapseAt[index] - pulseElapsed(state);
+        if (remaining < 0) platform.setAlpha(Math.max(0, .92 + remaining / 280));
       }
-      if (this.player.x >= LEVEL_END_X) this.finish(true);
-
-      this.cameras.main.scrollX = Math.max(0, this.player.x - 190);
-      const elapsed = performance.now() - this.startedAt;
-      const beatPhase = (elapsed % BEAT_MS) / BEAT_MS;
-      this.beatFlash.setAlpha(Math.max(0, 0.09 * (1 - beatPhase * 4)));
-
+      this.bouncePads.getChildren().forEach((object, index) => {
+        if (!state.used.includes("pad:" + index)) return;
+        const pad = object as import("phaser").GameObjects.Rectangle;
+        pad.setFillStyle(pad.getData("danger") ? 0xff6b7a : 0x7bf1a8, .45);
+      });
+      if (state.pressed && state.mode === "ship" && time % 80 < 20) {
+        const spark = this.add.circle(state.x - 32, state.y, 5, 0xffd166, .9).setDepth(9);
+        this.tweens.add({targets:spark,x:spark.x-42,alpha:0,scale:.2,duration:220,onComplete:()=>spark.destroy()});
+      }
+      if (pulseElapsed(state) < state.dashUntil && time % 55 < 18) {
+        const trail = this.add.rectangle(state.x-34,state.y,52,state.mini?14:20,0x62d8ff,.55).setDepth(8);
+        this.tweens.add({targets:trail,x:trail.x-90,scaleX:1.8,alpha:0,duration:240,onComplete:()=>trail.destroy()});
+      }
+      this.cameras.main.scrollX = Math.max(0, state.x - 190);
+      const beatPhase = (pulseElapsed(state) % BEAT_MS) / BEAT_MS;
+      this.beatFlash.setAlpha(Math.max(0, .09 * (1 - beatPhase * 4)));
       if (time - this.lastProgressAt > 100) {
         this.lastProgressAt = time;
-        callbacks.onProgress(clampProgress(this.player.x));
+        callbacks.onProgress(pulseProgress(state));
       }
+      if (state.ended) this.finish(state.completed);
     }
 
     private createTextures() {
@@ -439,7 +296,7 @@ export async function mountPulseRunner({
       if (this.started || this.ended) return;
       this.started = true;
       this.startedAt = performance.now();
-      if (!this.orientationPaused) this.physics.resume();
+      this.simulationWallTime = performance.now();
       (this.player.body as ArcadeBody).setVelocityX(RUN_SPEED * this.debugSpeedMultiplier);
     }
 
@@ -458,10 +315,13 @@ export async function mountPulseRunner({
       const targetX = beatX(targetBeat);
 
       this.restoreDebugGimmicks();
-      this.dashUntil = 0;
-      this.dashSpeedMultiplier = 1;
-      this.jumpQueuedUntil = 0;
-      this.bounceLockedUntil = 0;
+      this.simulation = createPulseState();
+      this.simulation.x = targetX;
+      this.simulation.tick = Math.round(targetBeat * BEAT_MS / PULSE_STEP_MS);
+      this.simulationAccumulator = 0;
+      this.simulationWallTime = performance.now();
+      this.inputs = [];
+      this.inputCursor = 0;
       this.pressed = false;
 
       this.player.x = targetX;
@@ -479,6 +339,7 @@ export async function mountPulseRunner({
             ? FLOOR_Y - (targetMini ? 24 : 34)
             : CEILING_Y + (targetMini ? 24 : 34);
       const body = this.player.body as ArcadeBody;
+      this.simulation.y = targetY;
       body.reset(targetX, targetY);
       body.setVelocity(RUN_SPEED * this.debugSpeedMultiplier, 0).setAcceleration(0, 0);
       this.syncSurfaces();
@@ -494,6 +355,7 @@ export async function mountPulseRunner({
       if (this.orientationPaused === paused) return;
       this.orientationPaused = paused;
       if (paused) {
+        if (this.pressed) this.inputs.push({ atMs: Math.floor(pulseElapsed(this.simulation)), action: "up" });
         this.pressed = false;
         if (this.started && !this.ended) this.orientationPausedAt = performance.now();
         this.physics.pause();
@@ -502,7 +364,7 @@ export async function mountPulseRunner({
           this.startedAt += performance.now() - this.orientationPausedAt;
           this.orientationPausedAt = 0;
         }
-        this.physics.resume();
+        this.simulationWallTime = performance.now();
       }
     }
 
@@ -1093,15 +955,15 @@ export async function mountPulseRunner({
     private bindInput() {
       const down = () => {
         if (!this.started || this.ended || this.orientationPaused || this.pressed) return;
+        if (this.inputs.length >= MAX_PULSE_INPUTS - 1) return;
         callbacks.onInteraction();
         this.pressed = true;
-        this.inputs.push({ atMs: Math.round(performance.now() - this.startedAt), action: "down" });
-        if (this.mode === "cube") this.jumpQueuedUntil = this.time.now + 120;
+        this.inputs.push({ atMs: Math.floor(pulseElapsed(this.simulation)), action: "down" });
       };
       const up = () => {
         if (!this.started || this.ended || this.orientationPaused || !this.pressed) return;
         this.pressed = false;
-        this.inputs.push({ atMs: Math.round(performance.now() - this.startedAt), action: "up" });
+        this.inputs.push({ atMs: Math.floor(pulseElapsed(this.simulation)), action: "up" });
       };
       const keyDown = (event: KeyboardEvent) => {
         if (event.code !== "Space") return;
@@ -1233,20 +1095,6 @@ export async function mountPulseRunner({
       (this.ceiling.body as import("phaser").Physics.Arcade.StaticBody).enable = ceilingEnabled;
     }
 
-    private canDebugLandOn(object: unknown) {
-      if (this.mode !== "cube") return false;
-      const platform = object as import("phaser").GameObjects.Rectangle;
-      const platformGravity = Number(platform.getData("gravity")) as PulseGravity;
-      if (platformGravity !== this.gravityDirection) return false;
-
-      const playerBody = this.player.body as ArcadeBody;
-      const platformBody = platform.body as import("phaser").Physics.Arcade.StaticBody;
-      const landingTolerance = 52;
-      return platformGravity === 1
-        ? playerBody.velocity.y >= 0 && playerBody.bottom <= platformBody.top + landingTolerance
-        : playerBody.velocity.y <= 0 && playerBody.top >= platformBody.bottom - landingTolerance;
-    }
-
     private finish(completed: boolean) {
       if (this.ended) return;
       this.ended = true;
@@ -1266,9 +1114,9 @@ export async function mountPulseRunner({
         progressPercent,
         distanceMeters: pulseDistanceFromProgress(progressPercent),
         completed,
-        durationMs: Math.max(0, Math.round(performance.now() - this.startedAt)),
+        durationMs: Math.round(pulseElapsed(this.simulation)),
         coins: this.coins,
-        inputs: this.inputs.slice(0, 500),
+        inputs: this.inputs,
       });
     }
   }

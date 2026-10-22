@@ -1,18 +1,15 @@
+import { replayPulse, validPulseInputs, PULSE_STEP_MS } from "@/app/games/pulse-runner/gameEngine";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   awardPulseRunnerBadges,
   getStackGameAdminClient,
-  jstDayStartIso,
 } from "@/app/lib/stackGameServer";
 import {
-  LEVEL_DURATION_MS,
   PULSE_GAME_VERSION,
   pulseDistanceFromProgress,
   pulseRewardXp,
-  type PulseInput,
 } from "@/app/games/pulse-runner/level";
-import { levelFromProfileXp } from "@/app/lib/leveling";
 import { triggerPushDispatchBestEffort } from "@/lib/push/triggerDispatchSoon";
 
 type FinishBody = {
@@ -23,20 +20,6 @@ type FinishBody = {
   coins?: unknown;
   inputs?: unknown;
 };
-
-function validInputs(value: unknown): value is PulseInput[] {
-  if (!Array.isArray(value) || value.length > 500) return false;
-  let previous = -1;
-  for (const item of value) {
-    if (!item || typeof item !== "object") return false;
-    const row = item as Record<string, unknown>;
-    const atMs = Number(row.atMs);
-    if (!Number.isInteger(atMs) || atMs < previous || atMs > 120_000) return false;
-    if (row.action !== "down" && row.action !== "up") return false;
-    previous = atMs;
-  }
-  return true;
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -65,7 +48,7 @@ export async function POST(request: Request) {
     !Number.isInteger(coins) ||
     coins < 0 ||
     coins > 3 ||
-    !validInputs(body?.inputs)
+    !validPulseInputs(body?.inputs)
   ) {
     return NextResponse.json({ error: "invalid run" }, { status: 400 });
   }
@@ -79,59 +62,30 @@ export async function POST(request: Request) {
     .eq("game_key", "pulse_runner")
     .maybeSingle();
   if (runError) return NextResponse.json({ error: runError.message }, { status: 500 });
-  if (!run || run.status !== "started" || run.game_version !== PULSE_GAME_VERSION) {
+  if (!run || !["started", "finished"].includes(run.status) || run.game_version !== PULSE_GAME_VERSION) {
     return NextResponse.json({ error: "run is not active" }, { status: 409 });
   }
 
   const ageMs = Date.now() - new Date(run.started_at).getTime();
-  const expectedMaxProgress = Math.min(100, (durationMs / LEVEL_DURATION_MS) * 100 + 4);
-  if (
-    durationMs > ageMs + 2_000 ||
-    ageMs > 20 * 60_000 ||
-    progress > expectedMaxProgress ||
-    (completed && (progress < 99.5 || durationMs < LEVEL_DURATION_MS * 0.82))
-  ) {
+  if (durationMs > ageMs + 2_000 || (run.status === "started" && ageMs > 20 * 60_000)) {
     return NextResponse.json({ error: "invalid run timing" }, { status: 400 });
   }
-
-  const { data: profileBefore } = await admin
-    .from("profiles")
-    .select("xp_total, level")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const { count: runsToday, error: countError } = await admin
-    .from("minigame_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("game_key", "pulse_runner")
-    .eq("status", "finished")
-    .gte("finished_at", jstDayStartIso());
-  if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
-
-  const rewardEligible = (runsToday ?? 0) < 3;
-  const rewardXp = rewardEligible ? pulseRewardXp(progress, completed, coins) : 0;
-  const distanceMeters = pulseDistanceFromProgress(progress);
-  const { data: updatedRun, error: updateError } = await admin
-    .from("minigame_runs")
-    .update({
-      status: "finished",
-      score: distanceMeters,
-      progress_percent: progress,
-      completed,
-      completion_ms: completed ? durationMs : null,
-      coins_collected: coins,
-      reward_xp: rewardXp,
-      replay: body.inputs,
-      finished_at: new Date().toISOString(),
-    })
-    .eq("id", run.id)
-    .eq("status", "started")
-    .select("id")
-    .maybeSingle();
-  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
-  if (!updatedRun) {
-    return NextResponse.json({ error: "run is not active" }, { status: 409 });
+  const verified = replayPulse(body.inputs, durationMs);
+  if (!verified.finished || Math.abs(verified.durationMs - durationMs) > PULSE_STEP_MS ||
+      Math.abs(verified.progressPercent - progress) > .02 || verified.coins !== coins ||
+      verified.completed !== completed || verified.consumedInputs !== body.inputs.length) {
+    return NextResponse.json({ error: "replay does not match result" }, { status: 400 });
+  }
+  const distanceMeters = pulseDistanceFromProgress(verified.progressPercent);
+  const { data: saved, error: saveError } = await admin.rpc("finalize_minigame_run", {
+    p_run_id: run.id, p_user_id: user.id, p_game_key: "pulse_runner", p_game_version: PULSE_GAME_VERSION,
+    p_result: { score: distanceMeters, progress: verified.progressPercent, completed: verified.completed,
+      completionMs: completed ? verified.durationMs : null, coins: verified.coins },
+    p_replay: body.inputs, p_reward: pulseRewardXp(verified.progressPercent, verified.completed, verified.coins),
+  });
+  if (saveError || !saved) {
+    console.error("pulse finalization failed:", saveError);
+    return NextResponse.json({ error: "記録の保存に失敗しました。もう一度お試しください。" }, { status: 500 });
   }
 
   const { data: bestRows, error: bestError } = await admin
@@ -139,10 +93,11 @@ export async function POST(request: Request) {
     .select("progress_percent")
     .eq("user_id", user.id)
     .eq("game_key", "pulse_runner")
+    .eq("game_version", PULSE_GAME_VERSION)
     .eq("status", "finished")
     .order("progress_percent", { ascending: false })
     .limit(1);
-  if (bestError) return NextResponse.json({ error: bestError.message }, { status: 500 });
+  if (bestError) console.error("pulse best lookup failed after save:", bestError);
 
   const bestProgress = Number(bestRows?.[0]?.progress_percent ?? progress);
   let unlocked: Awaited<ReturnType<typeof awardPulseRunnerBadges>> = [];
@@ -151,19 +106,7 @@ export async function POST(request: Request) {
   } catch (badgeError) {
     console.error("pulse runner badge award failed after run save:", badgeError);
   }
-  const { data: profileAfter } = await admin
-    .from("profiles")
-    .select("xp_total, level")
-    .eq("id", user.id)
-    .maybeSingle();
-
   if (unlocked.length > 0) await triggerPushDispatchBestEffort("pulse-runner-badge");
-
-  const levelBefore = levelFromProfileXp(profileBefore?.xp_total ?? 0, profileBefore?.level ?? 1);
-  const levelAfter = levelFromProfileXp(
-    profileAfter?.xp_total ?? profileBefore?.xp_total ?? 0,
-    profileAfter?.level ?? levelBefore
-  );
 
   return NextResponse.json({
     ok: true,
@@ -173,11 +116,7 @@ export async function POST(request: Request) {
     distanceMeters,
     coins,
     bestProgress,
-    rewardXp,
-    rewardEligible,
-    rewardedRunsToday: Math.min(3, (runsToday ?? 0) + 1),
-    levelBefore,
-    levelAfter,
+    ...saved,
     unlocked: unlocked.map((badge) => ({
       title: badge.title,
       titleLabel: badge.title_label,

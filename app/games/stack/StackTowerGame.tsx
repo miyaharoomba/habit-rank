@@ -9,6 +9,7 @@ import {
   axisForStage,
   BLOCK_HEIGHT,
   initialStack,
+  MAX_REPLAY_TAPS,
   movingBlock,
   PERFECT_SIZE_UP_START,
   placeBlock,
@@ -585,6 +586,13 @@ export default function StackTowerGame({
     });
     if (placement.perfect && navigator.vibrate) navigator.vibrate(18);
 
+    if (tapsRef.current.length >= MAX_REPLAY_TAPS) {
+      setFeedback({ id: Date.now(), text: `${MAX_REPLAY_TAPS} BLOCKS // COMPLETE!` });
+      focusTowerOverview();
+      audio.stopBgm();
+      void finishRun();
+      return;
+    }
     addMovingMesh(stage + 1);
     placementUnlockTimerRef.current = window.setTimeout(() => {
       placementUnlockTimerRef.current = null;

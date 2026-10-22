@@ -68,7 +68,8 @@ async function suppressStreakEndNotification(sessionId: string, userId: string) 
 }
 
 async function refreshProfileLevel(userId: string) {
-  const supabase = await createClient();
+  // Called only after the user is authenticated; aggregate refresh is a private RPC.
+  const supabase = getAdminClient();
   const { error } = await supabase.rpc("refresh_profile_level", {
     p_user_id: userId,
   });

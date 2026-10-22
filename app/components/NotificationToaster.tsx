@@ -290,6 +290,7 @@ export default function NotificationToaster({
       const timers = timersRef.current;
       timers.forEach((t) => window.clearTimeout(t));
       timers.clear();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear queued external notifications when the route disables this subscription.
       setToasts([]);
       return;
     }

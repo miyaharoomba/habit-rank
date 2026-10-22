@@ -5,7 +5,8 @@ export const PERFECT_SIZE_UP_START = 5;
 export const PERFECT_SIZE_UP_AMOUNT = 0.35;
 export const BLOCK_HEIGHT = 0.52;
 export const TRAVEL_LIMIT = 4.8;
-export const MAX_REPLAY_TAPS = 100;
+// A tap includes the final miss. The same limit is enforced by the client and API.
+export const MAX_REPLAY_TAPS = 1024;
 
 export type StackAxis = "x" | "z";
 
@@ -218,7 +219,7 @@ export function evaluateReplay(tapsMs: number[], seed: number): StackReplayResul
     blocks: stack.length - 1,
     perfects,
     maxCombo,
-    gameOver,
+    gameOver: gameOver || tapsMs.length >= MAX_REPLAY_TAPS,
     stack,
   };
 }

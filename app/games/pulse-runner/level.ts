@@ -1,4 +1,4 @@
-export const PULSE_GAME_VERSION = "pulse_runner_v10";
+export const PULSE_GAME_VERSION = "pulse_runner_v11";
 export const PULSE_BPM = 140;
 export const BEAT_MS = 60_000 / PULSE_BPM;
 export const PX_PER_BEAT = 190;

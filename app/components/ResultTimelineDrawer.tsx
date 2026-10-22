@@ -115,6 +115,7 @@ export default function ResultTimelineDrawer({ myUserId }: { myUserId: string })
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Opening the drawer starts an external polling request and loading state.
     void load();
     const timer = window.setInterval(() => void load({ quiet: true }), 15000);
     return () => window.clearInterval(timer);

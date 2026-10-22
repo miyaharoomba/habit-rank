@@ -1006,6 +1006,7 @@ export default function DmChatClient({
 
   useEffect(() => {
     const serverIds = new Set(messages.map((m) => m.id));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reconcile optimistic uploads after the server confirms their IDs.
     setLocalUploads((prev) => prev.filter((u) => !serverIds.has(u.id)));
   }, [messages]);
 

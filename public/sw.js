@@ -23,6 +23,28 @@ self.addEventListener("fetch", () => {});
  * }
  */
 
+function claimNotification(id) {
+  if (!id || typeof indexedDB === "undefined") return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const open = indexedDB.open("habitbase-push-seen", 1);
+    open.onupgradeneeded = () => open.result.createObjectStore("seen");
+    open.onerror = () => resolve(true);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction("seen", "readwrite");
+      const store = tx.objectStore("seen");
+      const read = store.get(id);
+      let fresh = false;
+      read.onsuccess = () => {
+        fresh = read.result === undefined;
+        if (fresh) store.put(Date.now(), id);
+      };
+      tx.oncomplete = () => { db.close(); resolve(fresh); };
+      tx.onerror = () => { db.close(); resolve(true); };
+    };
+  });
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -42,11 +64,13 @@ self.addEventListener("push", (event) => {
     data: {
       url,
     },
-    renotify: true,
-    tag: data.tag || `notif:${url}`, // 同系統をまとめたい場合に使える
+    renotify: false,
+    tag: data.notificationId ? `notif:${data.notificationId}` : data.tag || `notif:${url}`,
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    if (await claimNotification(data.notificationId)) await self.registration.showNotification(title, options);
+  })());
 });
 
 /**
@@ -91,7 +115,7 @@ self.addEventListener("notificationclick", (event) => {
  * （任意）subscription が更新された時のイベント
  * ブラウザによっては発火しない/挙動が違うので、まずは空でOK
  */
-self.addEventListener("pushsubscriptionchange", (event) => {
+self.addEventListener("pushsubscriptionchange", () => {
   // ここで再購読してサーバーへ登録し直す設計も可能
   // ただし実装は後段でOK
 });

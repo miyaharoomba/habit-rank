@@ -51,8 +51,8 @@ export default function TitleSettingCard({
 
       setActiveId(badgeId);
       router.refresh();
-    } catch (e: any) {
-      setError(e?.message ?? "称号設定に失敗しました。");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "称号設定に失敗しました。");
     } finally {
       setSavingId(null);
     }
@@ -76,8 +76,8 @@ export default function TitleSettingCard({
 
       setActiveId(null);
       router.refresh();
-    } catch (e: any) {
-      setError(e?.message ?? "称号解除に失敗しました。");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "称号解除に失敗しました。");
     } finally {
       setSavingId(null);
     }

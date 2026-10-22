@@ -376,6 +376,7 @@ export default function PulseRunnerGame({
     const isTouchDevice =
       window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
     if (isTouchDevice && window.matchMedia("(orientation: portrait)").matches) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronize the device orientation API after mounting.
       void requestLandscape(false);
     }
 

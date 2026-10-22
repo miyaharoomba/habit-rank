@@ -28,6 +28,7 @@ export default function PushEnableCard() {
       "serviceWorker" in navigator &&
       "PushManager" in window &&
       "Notification" in window;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate browser-only capability and permission state after SSR.
     setSupported(ok);
     if (typeof window !== "undefined" && "Notification" in window) {
       setPermission(Notification.permission);
@@ -49,7 +50,7 @@ export default function PushEnableCard() {
     setBusy(true);
     try {
       // 1) Service Worker 登録（Push受信に必須）[1](https://github.com/vipulmesh/AttendEase)[2](https://github.com/taniken-dev/attend_app)
-      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       const ready = await navigator.serviceWorker.ready;
 
       // 2) 通知許可（ユーザー操作で要求する）[2](https://github.com/taniken-dev/attend_app)[1](https://github.com/vipulmesh/AttendEase)
@@ -77,7 +78,7 @@ export default function PushEnableCard() {
           endpoint: subscription.endpoint,
           keys: subscription.toJSON().keys,
           userAgent: navigator.userAgent,
-          platform: (navigator as any).userAgentData?.platform ?? "",
+          platform: (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? "",
         }),
       });
 
@@ -88,8 +89,8 @@ export default function PushEnableCard() {
 
       // iOS向け注意（PWA要件あり）[3](https://supabase.com/docs/guides/auth/quickstarts/nextjs)[4](https://shiftb.dev/articles/nextjs-supabase-indie-dev)
       setMsg("端末通知を有効化しました。iPhoneはホーム画面に追加したPWAで動作します。");
-    } catch (e: any) {
-      setMsg(e?.message ?? "登録に失敗しました。");
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : "登録に失敗しました。");
     } finally {
       setBusy(false);
     }
@@ -131,4 +132,3 @@ export default function PushEnableCard() {
     </div>
   );
 }
-``

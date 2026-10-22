@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   normalizeReactionSummaries,
   REACTION_EMOJIS,
@@ -57,9 +57,11 @@ function useReactionController({
   const [pendingEmoji, setPendingEmoji] = useState<ReactionEmoji | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [previousReactions, setPreviousReactions] = useState(initialReactions);
+  if (previousReactions !== initialReactions) {
+    setPreviousReactions(initialReactions);
     setItems(normalizeReactionSummaries(initialReactions));
-  }, [initialReactions]);
+  }
 
   const updateItems = (nextItems: ReactionSummary[]) => {
     setItems(nextItems);
@@ -229,9 +231,11 @@ export function ReactionPanel({
     normalizeReactionSummaries(initialReactions)
   );
 
-  useEffect(() => {
+  const [previousReactions, setPreviousReactions] = useState(initialReactions);
+  if (previousReactions !== initialReactions) {
+    setPreviousReactions(initialReactions);
     setItems(normalizeReactionSummaries(initialReactions));
-  }, [initialReactions]);
+  }
 
   return (
     <div className={["flex flex-col gap-3", className].join(" ")}>

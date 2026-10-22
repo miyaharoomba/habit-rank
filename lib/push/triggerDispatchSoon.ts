@@ -1,52 +1,26 @@
+import { after } from "next/server";
 import { dispatchPendingPush } from "@/lib/push/dispatchPendingPush";
 
-export type PushDispatchResult = {
-  ok: boolean;
-  status: number;
-  body: string;
-};
+export type PushDispatchResult = { ok: boolean; status: number; body: string };
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function triggerPushDispatchSoon({
-  baseUrl,
-  delayMs = 500,
-}: {
-  baseUrl?: string;
-  delayMs?: number;
-} = {}): Promise<PushDispatchResult> {
-  if (delayMs > 0) {
-    await sleep(delayMs);
-  }
-
-  // Kept for older callers; direct dispatch no longer needs a public base URL.
+// The outbox is durable. Notification delivery must not hold up saving a record
+// or sending a message; the scheduled dispatcher also recovers pending work.
+export async function triggerPushDispatchSoon({ baseUrl, delayMs }: { baseUrl?: string; delayMs?: number } = {}): Promise<PushDispatchResult> {
   void baseUrl;
-
-  const result = await dispatchPendingPush();
-  const body = JSON.stringify(result);
-
-  return {
-    ok: result.ok,
-    status: result.ok ? 200 : 500,
-    body,
-  };
+  void delayMs;
+  after(async () => {
+    try {
+      const result = await dispatchPendingPush();
+      if (!result.ok) console.error("background push dispatch failed:", result.error ?? result.failed);
+    } catch (error) { console.error("background push dispatch failed:", error); }
+  });
+  return { ok: true, status: 202, body: "queued" };
 }
 
 export async function triggerPushDispatchBestEffort(label: string, baseUrl?: string) {
-  try {
-    const result = await triggerPushDispatchSoon({ baseUrl });
-    if (!result.ok) {
-      console.error(
-        `${label} push dispatch failed:`,
-        result.status,
-        result.body.slice(0, 500)
-      );
-    }
-    return result;
-  } catch (e) {
-    console.error(`${label} push dispatch failed:`, e);
+  try { return await triggerPushDispatchSoon({ baseUrl }); }
+  catch (error) {
+    console.error(label + " push dispatch scheduling failed:", error);
     return null;
   }
 }

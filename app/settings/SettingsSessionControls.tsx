@@ -115,6 +115,7 @@ export default function SettingsSessionControls() {
       setDeleting(false);
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydration flag and browser page lifecycle recovery are intentionally client-only.
     setMounted(true);
     resetTransientState();
 

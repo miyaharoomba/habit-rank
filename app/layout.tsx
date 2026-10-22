@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
 import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
 import "./globals.css";
@@ -40,11 +40,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  display: "swap",
-  subsets: ["latin"],
-});
+// The official package bundles font files: builds no longer contact Google Fonts.
+const geistSans = GeistSans;
 
 export default function RootLayout({
   children,

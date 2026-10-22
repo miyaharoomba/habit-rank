@@ -231,6 +231,7 @@ export default async function AdminPage() {
   }
 
   const admin = getAdminClient();
+  // eslint-disable-next-line react-hooks/purity -- Request-time Server Component / Server Action; this timestamp is not client render state.
   const now = Date.now();
   const since24Hours = new Date(now - 24 * 60 * 60 * 1000).toISOString();
   const since7Days = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
