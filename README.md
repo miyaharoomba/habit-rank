@@ -80,11 +80,12 @@ npm run lint
 npm run typecheck
 npm run build
 npm audit --omit=dev
+npm run audit:check
 ```
 
 テストには実際の API ハンドラー、PGlite 上のアプリ用 SQL、補正の失敗注入、RLS/権限、通知の担当・端末再送、ゲームの全コース再生が含まれる。
 PGlite テストは Supabase 管理スキーマの最小スタブを使う。実際のメール送信、Web Push、端末の向きや実機の音声は別途確認が必要。
-CI は push / pull request 時に秘密鍵なしでテスト・lint・ビルドを実行する。
+CI は push / pull request 時に秘密鍵なしで依存監査・テスト・警告ゼロのlint・ビルドを実行する。
 
 コース変更時は node --import tsx scripts/plan-pulse-course.mjs で通過可能な操作履歴を探索できる。
 生成した fixture を更新し、通常速度・長押し・変身・空中ジャンプの回帰テストも確認する。
@@ -93,12 +94,20 @@ CI は push / pull request 時に秘密鍵なしでテスト・lint・ビルド�
 
 2026-10-22 時点で本番依存の npm audit は 0 件。
 開発依存の braces には修正版が公開されていない高深度パターンによる DoS が残る（GHSA-vfj7-8cjw-p6xm）。
+これは関連パッケージへの波及を含めて 7 件。未修正であり、監査結果を 0 件とは扱わない。
 ブラウザ向け API が利用者のパターンをこのライブラリへ渡す実装はない。信頼できないリポジトリ内のパターンをビルドする際は注意する。
+信頼できないコードやファイルを本番の権限・秘密鍵を持つ環境でビルドしない。
+`npm run audit:check` は本番の全指摘と新しい開発依存の指摘で失敗する。
+例外はこの advisory、確認済みの開発依存 7 パッケージの場所、braces 3.0.3 に限定し、2026-11-21 UTC に失効する。
+失効時は上流の修正版を再確認し、更新・テストする。自動延長しない。通信失敗も成功扱いにしない。
+確認先: https://github.com/advisories/GHSA-vfj7-8cjw-p6xm と https://github.com/micromatch/braces/issues/84 。
 audit fix --force による Next のダウングレードや Tailwind の無検証なメジャー更新はしない。
 postcss-selector-parser は overrides で修正版を固定し、実ビルドで互換性を検証する。
 
 lint の外部 API 同期・SSR 後初期化の限定除外には理由を記載している。規則全体は無効化しない。
-private / blob メディアなど既存の img に関する最適化警告は残る。
+画像は next/image を使用し、固定アバターの表示寸法を予約する。
+private / 署名付き添付画像・外部 OGP 画像は unoptimized とし、公開の画像最適化サーバーへ転送しない。
+添付画像は自然な縦横比を反映し、拡大表示は object-contain で全体を表示する。
 
 ## リリース前の確認
 

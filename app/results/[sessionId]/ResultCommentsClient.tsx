@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -71,7 +72,10 @@ function Avatar({
   return (
     <Link href={href} className="shrink-0">
       {url ? (
-        <img
+        <Image
+          width={40}
+          height={40}
+          unoptimized
           src={url}
           alt={name}
           loading="lazy"

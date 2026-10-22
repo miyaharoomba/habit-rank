@@ -2,6 +2,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardHeader, CardBody } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { formatJst } from "@/lib/time";
 import TitleBadge from "@/app/components/TitleBadge";
@@ -178,7 +179,10 @@ export default async function DmListPage() {
                         <div className="flex items-start gap-3">
                           <div className="shrink-0">
                             {avatar ? (
-                              <img
+                              <Image
+                                width={48}
+                                height={48}
+                                unoptimized
                                 src={avatar}
                                 alt={t.other_display_name || "avatar"}
                                 loading="lazy"

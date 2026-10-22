@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import ChatImage from "@/app/components/ChatImage";
 import {
   useEffect,
   useCallback,
@@ -148,7 +150,10 @@ function Avatar({
       aria-label={`${userName} のプロフィールへ`}
     >
       {avatarUrl ? (
-        <img
+        <Image
+          width={36}
+          height={36}
+          unoptimized
           src={avatarUrl}
           alt={userName}
           loading="lazy"
@@ -445,12 +450,10 @@ function ImageBubble({
         className="block w-full max-w-full overflow-hidden rounded-xl border border-border text-left"
         aria-label="画像を拡大表示"
       >
-        <img
+        <ChatImage
           src={item.image_url}
           alt="chat image"
-          loading="lazy"
-          decoding="async"
-          className="block h-auto max-h-[28rem] w-full object-cover"
+          className="max-h-[28rem]"
         />
       </button>
 
@@ -1016,20 +1019,23 @@ export default function GlobalChatBoard({
             className="absolute inset-0"
             aria-label="閉じる"
           />
-          <div className="relative z-[121] flex max-h-full w-full max-w-5xl items-center justify-center">
+          <div className={`relative z-[121] flex max-h-full w-full max-w-5xl items-center justify-center ${modal.kind === "image" ? "h-[90vh]" : ""}`}>
             <button
               type="button"
               onClick={() => setModal(null)}
-              className="absolute right-0 top-0 rounded-lg bg-black/50 px-3 py-2 text-sm text-white/90 hover:text-white"
+              className="absolute right-0 top-0 z-10 rounded-lg bg-black/50 px-3 py-2 text-sm text-white/90 hover:text-white"
             >
               閉じる ✕
             </button>
 
             {modal.kind === "image" ? (
-              <img
+              <Image
+                fill
+                unoptimized
+                sizes="(max-width: 1024px) 92vw, 1024px"
                 src={modal.url}
                 alt="preview"
-                className="max-h-[90vh] max-w-full rounded-xl object-contain"
+                className="rounded-xl object-contain"
               />
             ) : (
               <video

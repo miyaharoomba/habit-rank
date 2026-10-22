@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 export type OgpPreview = {
   ok: true;
@@ -32,11 +33,14 @@ export default function OgpCard({
     >
       <div className="flex min-w-0 flex-col sm:flex-row">
         {preview.image ? (
-          <div className="shrink-0 sm:w-40">
-            <img
+          <div className="relative h-40 shrink-0 sm:h-auto sm:w-40">
+            <Image
+              fill
+              unoptimized
+              sizes="(max-width: 640px) 100vw, 160px"
               src={preview.image}
               alt=""
-              className="h-40 w-full object-cover sm:h-full"
+              className="object-cover"
               loading="lazy"
             />
           </div>

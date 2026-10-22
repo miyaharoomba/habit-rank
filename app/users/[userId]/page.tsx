@@ -4,6 +4,7 @@ import LinkifiedText from "@/app/components/LinkifiedText";
 import TitleBadge from "@/app/components/TitleBadge";
 import LevelBadge from "@/app/components/LevelBadge";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatJst } from "@/lib/time";
@@ -252,7 +253,10 @@ export default async function UserProfilePage({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div className="shrink-0">
                 {avatar ? (
-                  <img
+                  <Image
+                    width={96}
+                    height={96}
+                    unoptimized
                     src={avatar}
                     alt={(row.display_name ?? "").trim() || "avatar"}
                     className="h-24 w-24 rounded-full object-cover border border-border"

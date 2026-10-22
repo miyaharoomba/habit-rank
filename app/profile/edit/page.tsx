@@ -2,6 +2,7 @@ import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import TitleSettingCard from "./TitleSettingCard";
@@ -278,7 +279,10 @@ export default async function ProfileEditPage({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <div className="shrink-0">
                     {avatarUrl ? (
-                      <img
+                      <Image
+                        width={96}
+                        height={96}
+                        unoptimized
                         src={avatarUrl}
                         alt="Avatar"
                         className="h-24 w-24 rounded-full border border-border object-cover"

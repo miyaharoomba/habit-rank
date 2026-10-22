@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import ChatImage from "@/app/components/ChatImage";
 import {
   useCallback,
   useEffect,
@@ -123,7 +125,10 @@ function AvatarLink({
   return (
     <Link href={href} className="shrink-0">
       {url ? (
-        <img
+        <Image
+          width={36}
+          height={36}
+          unoptimized
           src={url}
           alt={name || "avatar"}
           loading="lazy"
@@ -607,12 +612,10 @@ function BubbleImage({
           aria-label="画像を拡大表示"
           title="タップで拡大"
         >
-          <img
+          <ChatImage
             src={url}
             alt={caption || "image"}
-            loading="lazy"
-            decoding="async"
-            className="block max-h-[360px] w-full object-cover"
+            className="max-h-[360px]"
           />
         </button>
 
@@ -1303,7 +1306,7 @@ export default function DmChatClient({
             aria-hidden="true"
           />
           <div className="absolute inset-4 flex items-center justify-center">
-            <div className="relative max-h-full max-w-full">
+            <div className={`relative max-h-full max-w-full ${modal.kind === "image" ? "h-[85vh] w-[92vw]" : ""}`}>
               <button
                 type="button"
                 onClick={() => setModal(null)}
@@ -1313,10 +1316,13 @@ export default function DmChatClient({
               </button>
 
               {modal.kind === "image" ? (
-                <img
+                <Image
+                  fill
+                  unoptimized
+                  sizes="92vw"
                   src={modal.url}
                   alt="preview"
-                  className="max-h-[85vh] max-w-[92vw] rounded-xl object-contain"
+                  className="rounded-xl object-contain"
                 />
               ) : (
                 <video

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TitleBadge from "@/app/components/TitleBadge";
@@ -133,7 +134,10 @@ export default function ParticipantsClient({
                     className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                   >
                     {avatar ? (
-                      <img
+                      <Image
+                        width={48}
+                        height={48}
+                        unoptimized
                         src={avatar}
                         alt={p.display_name || "avatar"}
                         className="h-12 w-12 rounded-full object-cover border border-border"

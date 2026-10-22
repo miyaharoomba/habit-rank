@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import Container from "@/app/components/ui/Container";
 import Card, { CardBody, CardHeader } from "@/app/components/ui/Card";
 import {
@@ -100,7 +101,10 @@ function Avatar({
   return (
     <Link href={href} className="shrink-0">
       {avatar ? (
-        <img
+        <Image
+          width={48}
+          height={48}
+          unoptimized
           src={avatar}
           alt={displayName || "avatar"}
           className="h-12 w-12 rounded-full object-cover border border-border"
