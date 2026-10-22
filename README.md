@@ -100,6 +100,8 @@ CI は push / pull request 時に秘密鍵なしで依存監査・テスト・�
 `npm run audit:check` は本番の全指摘と新しい開発依存の指摘で失敗する。
 例外はこの advisory、確認済みの開発依存 7 パッケージの場所、braces 3.0.3 に限定し、2026-11-21 UTC に失効する。
 失効時は上流の修正版を再確認し、更新・テストする。自動延長しない。通信失敗も成功扱いにしない。
+CI の npm ci では重複する暗黙の監査を省き、直後に明示的な監査を必須で実行する。
+監査の通信は 15 秒単位・プロセス全体は 90 秒を上限とし、通信失敗時は 1 回だけ再試行する。
 確認先: https://github.com/advisories/GHSA-vfj7-8cjw-p6xm と https://github.com/micromatch/braces/issues/84 。
 audit fix --force による Next のダウングレードや Tailwind の無検証なメジャー更新はしない。
 postcss-selector-parser は overrides で修正版を固定し、実ビルドで互換性を検証する。

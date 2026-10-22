@@ -61,28 +61,44 @@ export function evaluateAudit(fullReport, productionReport, lock, now = new Date
   return { failures, deferred };
 }
 
-async function audit(npmCli, args) {
+export async function readAudit(npmCli, args, run = promisify(execFile)) {
   let stdout;
   try {
-    ({ stdout } = await promisify(execFile)(process.execPath, [npmCli, "audit", "--json", ...args], {
+    ({ stdout } = await run(process.execPath, [npmCli, "audit", "--json", ...args,
+      "--fetch-timeout=15000", "--fetch-retries=1",
+      "--fetch-retry-mintimeout=1000", "--fetch-retry-maxtimeout=2000",
+    ], {
       timeout: 90_000,
       maxBuffer: 4 * 1024 * 1024,
       windowsHide: true,
     }));
   } catch (error) {
     // npm returns 1 for a valid report with findings. Every other failure is fatal.
-    if (error.code !== 1 || error.killed || !error.stdout) throw error;
+    if (error.code !== 1 || error.killed || !error.stdout) {
+      throw new Error(`npm audit could not complete (${error.killed ? "90s timeout" : error.code || "execution failure"}).`);
+    }
     stdout = error.stdout;
   }
-  return JSON.parse(stdout);
+  const report = JSON.parse(stdout);
+  vulnerabilities(report);
+  return report;
+}
+
+export async function auditWithRetry(npmCli, args, attempt = readAudit) {
+  try {
+    return await attempt(npmCli, args);
+  } catch (error) {
+    console.warn(`Audit request failed; retrying once: ${error.message}`);
+    return attempt(npmCli, args);
+  }
 }
 
 async function main() {
   const npmCli = process.env.npm_execpath;
   if (!npmCli) throw new Error("Run via npm run audit:check.");
   const [full, production, lock] = await Promise.all([
-    audit(npmCli, []),
-    audit(npmCli, ["--omit=dev"]),
+    auditWithRetry(npmCli, []),
+    auditWithRetry(npmCli, ["--omit=dev"]),
     readFile(new URL("../package-lock.json", import.meta.url), "utf8").then(JSON.parse),
   ]);
   const result = evaluateAudit(full, production, lock);

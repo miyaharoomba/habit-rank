@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BRACES_EXCEPTION, evaluateAudit } from "../scripts/check-dependency-audit.mjs";
+import { BRACES_EXCEPTION, evaluateAudit, readAudit, auditWithRetry } from "../scripts/check-dependency-audit.mjs";
 
 const now = new Date("2026-10-22T00:00:00Z");
 const report = (vulnerabilities = {}) => ({
@@ -62,4 +62,34 @@ test("audit exception expires, fails closed, and does not exempt future versions
     if (invalid.metadata) invalid.metadata.vulnerabilities.total = 0;
     assert.throws(() => evaluateAudit(invalid, report(), lock, now), /Invalid/);
   }
+});
+
+test("audit accepts npm exit 1 findings but rejects timeouts, broken JSON and registry errors", async () => {
+  const { full } = reviewed();
+  const result = await readAudit("npm-cli.js", [], async (_file, args, options) => {
+    assert.ok(args.includes("--fetch-timeout=15000"));
+    assert.equal(options.timeout, 90_000);
+    throw { code: 1, stdout: JSON.stringify(full) };
+  });
+  assert.deepEqual(result, full);
+  for (const error of [{ code: 1, killed: true, stdout: JSON.stringify(full) }, { code: "ENOENT" }]) {
+    await assert.rejects(readAudit("npm-cli.js", [], async () => { throw error; }), /could not complete/);
+  }
+  await assert.rejects(readAudit("npm-cli.js", [], async () => ({ stdout: "not JSON" })));
+  await assert.rejects(readAudit("npm-cli.js", [], async () => ({ stdout: JSON.stringify({ error: "registry unavailable" }) })), /Invalid/);
+});
+
+test("audit retries transport failures once, never silently accepting a failed retry", async () => {
+  let attempts = 0;
+  assert.deepEqual(await auditWithRetry("npm-cli.js", [], async () => {
+    if (++attempts === 1) throw new Error("temporary registry failure");
+    return report();
+  }), report());
+  assert.equal(attempts, 2);
+  attempts = 0;
+  await assert.rejects(auditWithRetry("npm-cli.js", [], async () => {
+    attempts++;
+    throw new Error("registry unavailable");
+  }), /registry unavailable/);
+  assert.equal(attempts, 2);
 });
